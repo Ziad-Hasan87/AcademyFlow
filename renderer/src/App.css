@@ -1,0 +1,188 @@
+/* Reset and global styles */
+* {
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  margin: 0;
+  height: 100%;
+}
+
+/* App container */
+.app {
+  height: 100vh;
+  width: 100vw;
+  display: flex;
+  flex-direction: row;
+  background: #1e1e1e;
+  color: #ddd;
+  font-family: system-ui, sans-serif;
+  overflow: hidden; /* prevent overflowing content */
+}
+
+/* Top horizontal container: left, main, right */
+.top {
+  display: flex;
+  flex: 1; /* fills vertical space above bottom bar */
+  overflow: hidden;
+}
+
+/* Sidebars */
+.sidebar {
+  background: #252526;
+  padding: 10px;
+  overflow: auto;
+  flex-shrink: 0; /* prevent shrinking */
+  height: 100%;
+}
+
+.sidebar-left {
+  border-right: 1px solid #333;
+}
+
+.right-wrapper {
+  display: flex;
+  height: 100%;
+  flex-shrink: 0;  /* take it out of normal flow */
+  top: 0;
+  right: 0;     
+}
+.left-group{
+  display: flex;
+  height:100%;
+  width: 100%;
+  flex-direction: column;
+}
+.sidebar-right {
+  flex-shrink: 0;
+  width: 300px; /* default width, controlled by state */
+  height: 100%;
+  background: #252526;
+  border-left: 1px solid #333;
+  overflow: auto;
+}
+
+/* Main content area */
+.main-content {
+  flex: 1; /* fills remaining horizontal space */
+  background: #1e1e1e;
+  padding: 12px;
+  overflow: auto;
+}
+
+/* Bottom sidebar */
+.sidebar-bottom {
+  
+  background: #252526;
+  border-top: 1px solid #333;
+  padding: 8px;
+  overflow: auto;
+  flex-shrink: 0;
+}
+
+/* Vertical resizer (for left/right) */
+.resizer.vertical {
+  width: 5px;          /* must be >0 */
+  cursor: col-resize;
+  background: #999;    /* visible for testing */
+  z-index: 20;         /* on top of MainContent */
+  flex-shrink: 0;
+}
+
+/* Horizontal resizer (for bottom) */
+.resizer.horizontal {
+  height: 5px;
+  cursor: row-resize;
+  background: #333;
+  width: 100%;
+  z-index: 20; /* above main content */
+}
+.monthly-calendar {
+  display: flex;
+  flex-direction: column;
+  padding: 8px;
+  overflow: auto;
+}
+
+.calendar-header {
+  text-align: center;
+  margin-bottom: 8px;
+  font-size: 16px;
+  font-weight: 600;
+  color: #ddd;
+}
+
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+}
+
+.calendar-day {
+  min-height: 40px;
+  padding: 2px 4px;
+  border-radius: 4px;
+  background: #1e1e1e;
+  color: #ddd;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.calendar-day:hover {
+  background: #333;
+}
+.calendar-day.selected {
+  background-color: #ffffffbb; /* white-ish with transparency */
+  color: #000; /* dark text for contrast */
+}
+
+.day-number {
+  font-weight: bold;
+}
+
+.day-event {
+  font-size: 10px;
+  background: #646cff44;
+  color: #fff;
+  padding: 1px 2px;
+  border-radius: 2px;
+  margin-top: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.day-event-more {
+  font-size: 9px;
+  color: #aaa;
+}
+
+
+/* Optional extras */
+.logo {
+  height: 6em;
+  padding: 1.5em;
+  will-change: filter;
+  transition: filter 300ms;
+}
+.logo:hover {
+  filter: drop-shadow(0 0 2em #646cffaa);
+}
+.logo.react:hover {
+  filter: drop-shadow(0 0 2em #61dafbaa);
+}
+
+/* Animation */
+@keyframes logo-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+@media (prefers-reduced-motion: no-preference) {
+  a:nth-of-type(2) .logo {
+    animation: logo-spin infinite 20s linear;
+  }
+}
+
+/* Cards and docs */
+.card { padding: 2em; }
+.read-the-docs { color: #888; }
