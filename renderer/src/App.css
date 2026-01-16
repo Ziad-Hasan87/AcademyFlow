@@ -8,6 +8,113 @@ html, body, #root {
   height: 100%;
 }
 
+/* Login Page */
+.login-page {
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background: linear-gradient(135deg, #1e1e1e 0%, #2d2d30 100%);
+}
+
+.login-container {
+  width: 100%;
+  max-width: 420px;
+  padding: 20px;
+}
+
+.login-box {
+  background: #252526;
+  padding: 48px 40px;
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  border: 1px solid #3c3c3c;
+}
+
+.login-title {
+  font-size: 32px;
+  font-weight: 700;
+  color: #fff;
+  margin: 0 0 8px 0;
+  text-align: center;
+}
+
+.login-subtitle {
+  font-size: 14px;
+  color: #aaa;
+  margin: 0 0 32px 0;
+  text-align: center;
+}
+
+.login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.form-group label {
+  font-size: 14px;
+  font-weight: 500;
+  color: #ddd;
+}
+
+.form-input {
+  padding: 12px 16px;
+  font-size: 14px;
+  background: #1e1e1e;
+  border: 1px solid #3c3c3c;
+  border-radius: 6px;
+  color: #ddd;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.form-input:focus {
+  border-color: #007acc;
+}
+
+.form-input::placeholder {
+  color: #666;
+}
+
+.error-message {
+  padding: 10px;
+  background: #5a1e1e;
+  border: 1px solid #8b2e2e;
+  border-radius: 6px;
+  color: #ff6b6b;
+  font-size: 13px;
+  text-align: center;
+}
+
+.login-button {
+  padding: 12px 24px;
+  font-size: 15px;
+  font-weight: 600;
+  background: #007acc;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  margin-top: 8px;
+}
+
+.login-button:hover {
+  background: #005a9e;
+}
+
+.login-button:active {
+  background: #004578;
+}
+
 /* App container */
 .app {
   height: 100vh;
@@ -38,6 +145,24 @@ html, body, #root {
 
 .sidebar-left {
   border-right: 1px solid #333;
+}
+
+.page-content {
+  padding: 20px;
+  color: #ddd;
+}
+
+.page-content h2 {
+  font-size: 20px;
+  font-weight: 600;
+  margin-bottom: 12px;
+  color: #fff;
+}
+
+.page-content p {
+  font-size: 14px;
+  color: #aaa;
+  line-height: 1.5;
 }
 
 .right-wrapper {
@@ -97,6 +222,75 @@ html, body, #root {
   width: 100%;
   z-index: 20; /* above main content */
 }
+
+/* Icon Sidebar */
+.icon-sidebar {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 48px;
+  height: 100vh;
+  background: #181818;
+  border-right: 1px solid #2b2b2b;
+  display: flex;
+  flex-direction: column;
+  z-index: 100;
+  padding: 8px 0;
+}
+
+.icon-sidebar-top {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.icon-item {
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  position: relative;
+  transition: background-color 0.2s;
+  border-left: 2px solid transparent;
+}
+
+.icon-item:hover {
+  background-color: #2a2a2a;
+}
+
+.icon-item.active {
+  background-color: #2a2a2a;
+  border-left: 2px solid #007acc;
+}
+
+.icon-item .icon {
+  font-size: 20px;
+  user-select: none;
+}
+
+/* Tooltip on hover */
+.icon-item:hover::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  left: 52px;
+  background: #2b2b2b;
+  color: #ddd;
+  padding: 6px 10px;
+  border-radius: 4px;
+  white-space: nowrap;
+  font-size: 12px;
+  z-index: 1000;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+  pointer-events: none;
+}
+
+/* Adjust left sidebar to account for icon sidebar */
+.left-group {
+  margin-left: 48px;
+}
+
 .monthly-calendar-container {
   display: flex;
   flex-direction: column;

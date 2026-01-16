@@ -8,6 +8,7 @@ import HorizontalResizer from "../components/HorizontalResizer";
 import VerticalResizer from "../components/VerticalResizer";
 import MainContent from "../components/MainContent";
 import CreateRoutineModal from "../components/CreateRoutine"; // ✅ import modal
+import IconSidebar from "../components/IconSidebar"; // ✅ import icon sidebar
 
 export default function AppLayout() {
   const [leftWidth, setLeftWidth] = useState(240);
@@ -15,16 +16,19 @@ export default function AppLayout() {
   const [bottomHeight, setBottomHeight] = useState(200);
 
   const [showCreateRoutine, setShowCreateRoutine] = useState(false); // ✅ modal state
+  const [activePage, setActivePage] = useState(null); // active page state
 
   return (
     <>
       {/* MAIN APP */}
       <div className={`app ${showCreateRoutine ? "blurred" : ""}`}>
+        <IconSidebar onIconClick={setActivePage} activePage={activePage} />
         <div className="left-group">
           <div className="top">
             <LeftSidebar
               width={leftWidth}
               onCreateClick={() => setShowCreateRoutine(true)} // ✅ PASS IT
+              activePage={activePage}
             />
 
             <VerticalResizer
