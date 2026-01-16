@@ -13,8 +13,9 @@ html, body, #root {
 /* App container */
 .app {
   height: 100vh;
+  width: 100vw;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   background: #1e1e1e;
   color: #ddd;
   font-family: system-ui, sans-serif;
@@ -44,9 +45,16 @@ html, body, #root {
 .right-wrapper {
   display: flex;
   height: 100%;
-  flex-shrink: 0; /* don't collapse */
+  flex-shrink: 0;  /* take it out of normal flow */
+  top: 0;
+  right: 0;     
 }
-
+.left-group{
+  display: flex;
+  height:100%;
+  width: 100%;
+  flex-direction: column;
+}
 .sidebar-right {
   flex-shrink: 0;
   width: 300px; /* default width, controlled by state */
@@ -66,6 +74,7 @@ html, body, #root {
 
 /* Bottom sidebar */
 .sidebar-bottom {
+  
   background: #252526;
   border-top: 1px solid #333;
   padding: 8px;
@@ -89,6 +98,262 @@ html, body, #root {
   background: #333;
   width: 100%;
   z-index: 20; /* above main content */
+}
+.monthly-calendar-container {
+  display: flex;
+  flex-direction: column;
+  height:max-content;
+  overflow: hidden;
+}
+
+.calendar-controls {
+  padding: 12px 16px;
+  background: #252526;
+  border-bottom: 1px solid #3c3c3c;
+  flex-shrink: 0;
+}
+
+.month-year-display {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.month-year-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.month-year-text {
+  font-size: 16px;
+  font-weight: 600;
+  color: #ddd;
+}
+
+.today-date-small {
+  font-size: 11px;
+  color: #888;
+  font-weight: 400;
+}
+
+.nav-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.nav-button {
+  background: transparent;
+  border: none;
+  color: #888;
+  font-size: 12px;
+  cursor: pointer;
+  padding: 2px 8px;
+  transition: color 0.2s;
+}
+
+.nav-button:hover {
+  color: #ddd;
+}
+
+.nav-button:active {
+  color: #fff;
+}
+
+.date-selector {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: center;
+}
+
+.month-selector,
+.year-selector {
+  padding: 6px 12px;
+  background: #3c3c3c;
+  color: #ddd;
+  border: 1px solid #555;
+  border-radius: 4px;
+  font-size: 14px;
+  cursor: pointer;
+  outline: none;
+  font-weight: 600;
+}
+
+.month-selector:hover,
+.year-selector:hover {
+  background: #4a4a4a;
+  border-color: #646cff;
+}
+
+.month-selector:focus,
+.year-selector:focus {
+  border-color: #646cff;
+}
+
+.month-selector {
+  flex: 1;
+  max-width: 140px;
+}
+
+.year-selector {
+  max-width: 90px;
+}
+
+.calendar-scroll-container {
+  flex: 1;
+  overflow: hidden;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+}
+
+.single-month-calendar {
+  margin-bottom: 24px;
+}
+
+.monthly-calendar {
+  display: flex;
+  flex-direction: column;
+  padding: 8px;
+  overflow: auto;
+}
+
+.calendar-header {
+  text-align: center;
+  margin-bottom: 8px;
+  font-size: 16px;
+  font-weight: 600;
+  color: #ddd;
+}
+
+.calendar-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+  margin-bottom: 4px;
+  text-align: center;
+  font-size: 11px;
+  font-weight: 600;
+  color: #888;
+  padding: 8px 0;
+}
+
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+}
+
+.calendar-day {
+  min-height: 50px;
+  padding: 4px;
+  border-radius: 4px;
+  background: #1e1e1e;
+  color: #ddd;
+  cursor: pointer;
+  font-size: 13px;
+  transition: background-color 0.2s;
+}
+
+.calendar-day:hover {
+  background: #333;
+}
+
+.calendar-day.today {
+  background-color: #3a5a7a;
+  border: 2px solid #5a9fd4;
+}
+
+.calendar-day.selected {
+  background-color: white;
+  color: #000;
+}
+
+.calendar-day.week-selected {
+  background-color: #3c3c3c;
+}
+
+.calendar-day.today.week-selected {
+  background-color: #3a5a7a;
+  border: 2px solid #5a9fd4;
+}
+
+.calendar-day.selected.week-selected {
+  background-color: white;
+}
+
+.calendar-day.today.selected {
+  background-color: #4a9eff;
+  border: 2px solid #fff;
+}
+
+.day-number {
+  font-weight: bold;
+  margin-bottom: 2px;
+}
+
+.day-event {
+  font-size: 10px;
+  background: #646cff44;
+  color: #fff;
+  padding: 1px 2px;
+  border-radius: 2px;
+  margin-top: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.day-event-more {
+  font-size: 9px;
+  color: #aaa;
+}
+.create-button {
+  width: 100%;
+  font-size: 64px;
+  font-weight: 300;
+  background: none;
+  border: 5px solid ghostwhite;
+  cursor: pointer;
+  color: #555;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.create-button:hover {
+  background-color: gray;
+}
+/* Blur background */
+.app-content.blurred {
+  filter: blur(4px);
+  pointer-events: none;
+  user-select: none;
+}
+
+/* Backdrop */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+/* Modal box */
+.modal-content {
+  background: white;
+  border-radius: 8px;
+  padding: 24px;
+  min-width: 400px;
+  max-width: 80vw;
+  max-height: 80vh;
+  overflow-y: auto;
 }
 
 /* Optional extras */
@@ -124,108 +389,11 @@ html, body, #root {
 
 App.jsx:
 ///
-import React from "react";
-import { useState } from "react";
-import "./App.css";
-
-import LeftSidebar from "./components/leftsidebar";
-import RightSidebar from "./components/rightsidebar";
-import BottomSidebar from "./components/BottomSideBar";
-import HorizontalResizer from "./components/HorizontalResizer";
-import VerticalResizer from "./components/VerticalResizer";
-import MainContent from "./components/MainContent";
+import AppLayout from "./layouts/AppLayout";
 
 export default function App() {
-  const [leftWidth, setLeftWidth] = useState(240);
-  const [rightWidth, setRightWidth] = useState(300);
-  const [bottomHeight, setBottomHeight] = useState(200);
-
-  return (
-    <div className="app">
-      <div className="top">
-        <LeftSidebar width={leftWidth} />
-        <VerticalResizer onDrag={dx => setLeftWidth(w => Math.max(120, w + dx))} />
-
-        <MainContent />
-
-        <div className="right-wrapper">
-          <VerticalResizer onDrag={dx => setRightWidth(w => Math.max(180, w - dx))} />
-          <RightSidebar width={rightWidth} />
-        </div>
-      </div>
-
-      <HorizontalResizer onDrag={dy => setBottomHeight(h => Math.max(120, h - dy))} />
-      <BottomSidebar height={bottomHeight} />
-    </div>
-  );
+  return <AppLayout />;
 }
-///
-
-DaySidebar.jsx:
-///
-export default function DaySidebar({ date, events, onClose }) {
-  if (!date) return null;
-
-  return (
-    <div style={styles.sidebar}>
-      <div style={styles.header}>
-        <h3>{formatDate(date)}</h3>
-        <button onClick={onClose} style={styles.closeBtn}>✕</button>
-      </div>
-
-      {events.length === 0 && (
-        <p style={{ color: "#777" }}>No events</p>
-      )}
-
-      {events.map((e, i) => (
-        <div key={i} style={styles.eventCard}>
-          <strong>{e.title}</strong>
-          <div style={styles.meta}>Type: {e.type}</div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function formatDate(dateStr) {
-  return new Date(dateStr).toLocaleDateString(undefined, {
-    weekday: "long",
-    year: "numeric",
-    month: "long",
-    day: "numeric"
-  });
-}
-
-const styles = {
-  sidebar: {
-    width: 320,
-    borderLeft: "1px solid #ddd",
-    padding: 16,
-    background: "#fafafa"
-  },
-  header: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center"
-  },
-  closeBtn: {
-    border: "none",
-    background: "transparent",
-    fontSize: 18,
-    cursor: "pointer"
-  },
-  eventCard: {
-    marginTop: 12,
-    padding: 10,
-    borderRadius: 6,
-    background: "#fff",
-    boxShadow: "0 1px 3px rgba(0,0,0,0.1)"
-  },
-  meta: {
-    fontSize: 12,
-    color: "#555"
-  }
-};
 
 ///
 
@@ -317,138 +485,37 @@ ReactDOM.createRoot(document.getElementById("root")).render(
 
 ///
 
-MonthlyCalendar.jsx:
-///
-export default function MonthlyCalendar({ year, month, events = [], onSelectDate }) {
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const firstDay = new Date(year, month, 1).getDay();
-
-  const cells = [];
-
-  for (let i = 0; i < firstDay; i++) {
-    cells.push(<div key={`empty-${i}`} />);
-  }
-
-  for (let day = 1; day <= daysInMonth; day++) {
-    const date = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-    const dayEvents = events.filter(e => e.date === date);
-
-    cells.push(
-      <div
-        key={day}
-        style={styles.day}
-        onClick={() => onSelectDate(date)}
-      >
-        <div style={styles.dayNumber}>{day}</div>
-
-        {dayEvents.slice(0, 2).map((e, i) => (
-          <div key={i} style={styles.event}>
-            {e.title}
-          </div>
-        ))}
-
-        {dayEvents.length > 2 && (
-          <div style={styles.moreEvents}>
-            +{dayEvents.length - 2} more
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  return (
-    <div style={styles.page}>
-      <div style={styles.calendarWrapper}>
-        <h2 style={styles.header}>
-          {new Date(year, month).toLocaleString("default", { month: "long" })} {year}
-        </h2>
-        <div style={styles.grid}>{cells}</div>
-      </div>
-    </div>
-  );
-}
-
-/* ===================== STYLES ===================== */
-
-const styles = {
-  page: {
-    display: "flex",
-    justifyContent: "center",
-    alignItems: "flex-start",
-    paddingTop: 40,
-    minHeight: "100vh",
-    background: "linear-gradient(180deg, #f4f6f8, #ffffff)"
-  },
-
-  calendarWrapper: {
-    width: "100%",
-    maxWidth: 900,
-    background: "#ffffff",
-    borderRadius: 16,
-    padding: 20,
-    boxShadow: "0 10px 30px rgba(0,0,0,0.08)"
-  },
-
-  header: {
-    textAlign: "center",
-    marginBottom: 20,
-    fontSize: 22,
-    fontWeight: 600,
-    color: "#333"
-  },
-
-  grid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(7, 1fr)",
-    gap: 10
-  },
-
-  day: {
-    minHeight: 110,
-    padding: 10,
-    borderRadius: 12,
-    cursor: "pointer",
-    background: "#fafafa",
-    transition: "all 0.2s ease",
-    boxShadow: "0 2px 4px rgba(0,0,0,0.06)"
-  },
-
-  dayNumber: {
-    fontWeight: 600,
-    marginBottom: 6,
-    fontSize: 14,
-    color: "#444"
-  },
-
-  event: {
-    fontSize: 12,
-    padding: "2px 6px",
-    borderRadius: 6,
-    background: "#e3f2fd",
-    color: "#1976d2",
-    marginBottom: 4,
-    whiteSpace: "nowrap",
-    overflow: "hidden",
-    textOverflow: "ellipsis"
-  },
-
-  moreEvents: {
-    fontSize: 11,
-    color: "#777",
-    marginTop: 4
-  }
-};
-
-///
-
 components\BottomSidebar.jsx:
 ///
 export default function BottomSidebar({ height }) {
+    
     return (
         <div className="sidebar-bottom" style={{ height: `${height}px` }}>
             <h1>This bar contains applied filters and other things</h1>
         </div>
     );
+}
+
+///
+
+components\CreateRoutine.jsx:
+///
+export default function CreateRoutineModal({ onClose }) {
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div
+        className="modal-content"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h2>Create Routine</h2>
+
+        {/* Your form goes here */}
+        <p>Routine creation form…</p>
+
+        <button onClick={onClose}>Close</button>
+      </div>
+    </div>
+  );
 }
 
 ///
@@ -484,13 +551,20 @@ export default function HorizontalResizer({ onDrag }) {
 
 components\LeftSidebar.jsx:
 ///
-export default function LeftSidebar({width}){
-    return (
-    <div className="sidebar-left"  style={{width: `${width}px`}}>
-        <h3>This is the left sidebar</h3>
+export default function LeftSidebar({ width, onCreateClick }) {
+  return (
+    <div className="sidebar-left" style={{ width: `${width}px` }}>
+      <button
+        className="create-button"
+        onClick={onCreateClick}
+        aria-label="Create Routine"
+      >
+        +
+      </button>
     </div>
-    )
+  );
 }
+
 ///
 
 components\MainContent.jsx:
@@ -504,12 +578,249 @@ export default function MainContent(){
 }
 ///
 
+components\MonthlyCalendar.jsx:
+///
+import React, { useRef, useState, useEffect } from "react";
+
+function SingleMonthCalendar({ year, month, events = [], onSelectDate, selectedDate }) {
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const firstDay = new Date(year, month, 1).getDay();
+
+  // Get today's date for comparison
+  const today = new Date();
+  const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+
+  // Calculate which week the selected date belongs to
+  const getWeekOfMonth = (dateStr) => {
+    if (!dateStr) return null;
+    const [y, m, d] = dateStr.split("-").map(Number);
+    if (y !== year || m !== month + 1) return null;
+    
+    const date = new Date(y, m - 1, d);
+    const dayOfWeek = date.getDay();
+    
+    // Calculate the row (week) in the calendar grid
+    const dayIndex = d - 1;
+    const weekRow = Math.floor((firstDay + dayIndex) / 7);
+    
+    return weekRow;
+  };
+
+  const selectedWeek = getWeekOfMonth(selectedDate);
+
+  const cells = [];
+  let currentWeek = -1;
+
+  for (let i = 0; i < firstDay; i++) {
+    if (i % 7 === 0) currentWeek++;
+    const isWeekSelected = selectedWeek !== null && currentWeek === selectedWeek;
+    cells.push(<div key={`empty-${i}`} className={isWeekSelected ? "week-selected" : ""} />);
+  }
+
+  for (let day = 1; day <= daysInMonth; day++) {
+    const totalIndex = firstDay + day - 1;
+    currentWeek = Math.floor(totalIndex / 7);
+    const isWeekSelected = selectedWeek !== null && currentWeek === selectedWeek;
+    
+    const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+    const dayEvents = events.filter((e) => e.date === dateStr);
+    const isSelected = selectedDate === dateStr;
+    const isToday = dateStr === todayStr;
+
+    cells.push(
+      <div
+        key={day}
+        className={`calendar-day ${isToday ? "today" : ""} ${isSelected ? "selected" : ""} ${isWeekSelected ? "week-selected" : ""}`}
+        onClick={() => onSelectDate?.(dateStr)}
+      >
+        <div className="day-number"> {day} </div>
+        {dayEvents.length > 2 && (
+          <div className="day-event"> +{dayEvents.length - 2} more </div>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="single-month-calendar">
+      <div className="calendar-weekdays">
+        <div>Su</div>
+        <div>Mo</div>
+        <div>Tu</div>
+        <div>We</div>
+        <div>Th</div>
+        <div>Fr</div>
+        <div>Sa</div>
+      </div>
+      <div className="calendar-grid">{cells}</div>
+    </div>
+  );
+}
+
+export default function MonthlyCalendar({
+  currentYear,
+  currentMonth,
+  events = [],
+  onSelectDate,
+  selectedDate,
+  onMonthYearChange,
+}) {
+  const months = [
+    "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December"
+  ];
+
+  const days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+
+  // Generate years from 2020 to 2030
+  const years = Array.from({ length: 11 }, (_, i) => 2020 + i);
+
+  const scrollContainerRef = useRef(null);
+  const isScrolling = useRef(false);
+
+  // Get today's date formatted
+  const today = new Date();
+  const todayFormatted = `${days[today.getDay()]}, ${months[today.getMonth()]} ${today.getDate()}`;
+
+  const handleMonthChange = (e) => {
+    const newMonth = parseInt(e.target.value);
+    onMonthYearChange?.(currentYear, newMonth);
+  };
+
+  const handleYearChange = (e) => {
+    const newYear = parseInt(e.target.value);
+    onMonthYearChange?.(newYear, currentMonth);
+  };
+
+  const goToPreviousMonth = () => {
+    const prevMonth = currentMonth - 1;
+    if (prevMonth < 0) {
+      onMonthYearChange?.(currentYear - 1, 11);
+    } else {
+      onMonthYearChange?.(currentYear, prevMonth);
+    }
+  };
+
+  const goToNextMonth = () => {
+    const nextMonth = currentMonth + 1;
+    if (nextMonth > 11) {
+      onMonthYearChange?.(currentYear + 1, 0);
+    } else {
+      onMonthYearChange?.(currentYear, nextMonth);
+    }
+  };
+
+  const handleWheel = (e) => {
+    if (isScrolling.current) return;
+    
+    e.preventDefault();
+    isScrolling.current = true;
+
+    if (e.deltaY > 0) {
+      goToNextMonth();
+    } else {
+      goToPreviousMonth();
+    }
+
+    // Debounce: prevent rapid scrolling
+    setTimeout(() => {
+      isScrolling.current = false;
+    }, 300);
+  };
+
+  useEffect(() => {
+    const container = scrollContainerRef.current;
+    if (container) {
+      container.addEventListener('wheel', handleWheel, { passive: false });
+      return () => {
+        container.removeEventListener('wheel', handleWheel);
+      };
+    }
+  }, [currentYear, currentMonth]);
+
+  return (
+    <div className="monthly-calendar-container">
+      <div className="calendar-controls">
+        <div className="month-year-display">
+          <div className="month-year-info">
+            <span className="month-year-text">
+              {months[currentMonth]} {currentYear}
+            </span>
+            <span className="today-date-small">{todayFormatted}</span>
+          </div>
+          <div className="nav-buttons">
+            <button className="nav-button up" onClick={goToPreviousMonth}>▲</button>
+            <button className="nav-button down" onClick={goToNextMonth}>▼</button>
+          </div>
+        </div>
+      </div>
+
+      <div className="calendar-scroll-container" ref={scrollContainerRef}>
+        <SingleMonthCalendar
+          year={currentYear}
+          month={currentMonth}
+          events={events}
+          onSelectDate={onSelectDate}
+          selectedDate={selectedDate}
+        />
+      </div>
+    </div>
+  );
+}
+///
+
 components\RightSidebar.jsx:
 ///
+import React, {useState} from "react";
+import MonthlyCalendar from "./MonthlyCalendar";
+
 export default function RightSidebar({ width }) {
+
+    const [selectedDate, setSelectedDate] = useState(null);
+    
+    const today = new Date();
+    const [currentYear, setCurrentYear] = useState(today.getFullYear());
+    const [currentMonth, setCurrentMonth] = useState(today.getMonth());
+
+    const events = [
+        { date: "2026-01-10", title: "Meeting" },
+        { date: "2026-01-15", title: "Project Due" },
+        { date: "2026-01-19", title: "Call" },
+    ];
+
+    const handleMonthYearChange = (year, month) => {
+        setCurrentYear(year);
+        setCurrentMonth(month);
+    };
+
+    const handleDateSelect = (date) => {
+        // Toggle: if clicking the same date, unselect it
+        if (selectedDate === date) {
+            setSelectedDate(null);
+        } else {
+            setSelectedDate(date);
+        }
+    };
+
     return (
-        <div className="sidebar-right" style={{ width: `${width}px` }}>
-            <h1>calendar and events</h1>
+        <div 
+            className="sidebar-right"
+            style={{ 
+                width: `${width}px`,
+                display: "flex",
+                flexDirection: "column",
+                height: "100%", }}>
+             <MonthlyCalendar
+                currentYear={currentYear}
+                currentMonth={currentMonth}
+                events={events}
+                selectedDate={selectedDate}
+                onSelectDate={handleDateSelect}
+                onMonthYearChange={handleMonthYearChange}
+            />
+            <div style={{ padding: 8, borderTop: "1px solid #333", borderBottom: "1px solid #333",fontSize: 12 }}>
+                Selected date: {selectedDate ? selectedDate : "No date selected"}
+            </div>
         </div>
     );
 }

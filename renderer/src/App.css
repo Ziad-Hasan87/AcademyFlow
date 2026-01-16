@@ -100,7 +100,7 @@ html, body, #root {
 .monthly-calendar-container {
   display: flex;
   flex-direction: column;
-  height: 100%;
+  height:max-content;
   overflow: hidden;
 }
 
@@ -266,8 +266,8 @@ html, body, #root {
 }
 
 .calendar-day.selected {
-  background-color: #4a9eff;
-  color: #fff;
+  background-color: white;
+  color: #000;
 }
 
 .calendar-day.week-selected {
@@ -280,7 +280,7 @@ html, body, #root {
 }
 
 .calendar-day.selected.week-selected {
-  background-color: #4a9eff;
+  background-color: white;
 }
 
 .calendar-day.today.selected {
@@ -309,7 +309,53 @@ html, body, #root {
   font-size: 9px;
   color: #aaa;
 }
+.create-button {
+  transition: all 0.3s;
+  width: 100%;
+  font-size: 64px;
+  font-weight: 300;
+  background: none;
+  border: 5px solid ghostwhite;
+  cursor: pointer;
+  color: #555;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
 
+.create-button:hover {
+  transition: all 0.3s;
+  background-color: gray;
+}
+/* Blur background */
+.app.blurred {
+  filter: blur(4px);
+  transition: all 0.3s;
+  pointer-events: none;
+  user-select: none;
+}
+
+/* Backdrop */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+/* Modal box */
+.modal-content {
+  background: white;
+  border-radius: 8px;
+  padding: 24px;
+  min-width: 400px;
+  max-width: 80vw;
+  max-height: 80vh;
+  overflow-y: auto;
+}
 
 /* Optional extras */
 .logo {

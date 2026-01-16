@@ -52,11 +52,6 @@ function SingleMonthCalendar({ year, month, events = [], onSelectDate, selectedD
         onClick={() => onSelectDate?.(dateStr)}
       >
         <div className="day-number"> {day} </div>
-        {dayEvents.slice(0, 2).map((e, i) => (
-          <div key={i} className="day-event">
-            {e.title}
-          </div>
-        ))}
         {dayEvents.length > 2 && (
           <div className="day-event"> +{dayEvents.length - 2} more </div>
         )}
