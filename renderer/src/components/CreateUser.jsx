@@ -1,21 +1,18 @@
-import { useEffect, useState } from "react";
-import supabase from "../utils/supabase";
+import { useState, useEffect } from "react";
 import { createUser } from "../utils/authentication";
 import { ROLES } from "../utils/types";
 import { MdOutlineEmail } from "react-icons/md";
 
-
 export default function CreateUserForm() {
+  // Get current user's institute from localStorage
+  const currentInstituteId = localStorage.getItem("institute_id");
+
   const [form, setForm] = useState({
     role: "",
-    institute_id: "",
+    institute_id: currentInstituteId || "",
     password: "",
     email: "",
   });
-
-  const [instituteQuery, setInstituteQuery] = useState("");
-  const [institutes, setInstitutes] = useState([]);
-  const [loadingInstitutes, setLoadingInstitutes] = useState(false);
 
   // Student-specific fields
   const [studentInfo, setStudentInfo] = useState({
@@ -24,38 +21,18 @@ export default function CreateUserForm() {
   });
 
   /* ----------------------------------
-     Institute search (autocomplete)
-  ---------------------------------- */
-  useEffect(() => {
-    if (instituteQuery.length < 2) {
-      setInstitutes([]);
-      return;
-    }
-
-    const fetchInstitutes = async () => {
-      setLoadingInstitutes(true);
-
-      const { data, error } = await supabase
-        .from("institutes")
-        .select("id, name")
-        .ilike("name", `%${instituteQuery}%`)
-        .limit(10);
-
-      if (!error) setInstitutes(data || []);
-      setLoadingInstitutes(false);
-    };
-
-    fetchInstitutes();
-  }, [instituteQuery]);
-
-  /* ----------------------------------
      Submit handler
   ---------------------------------- */
   const handleSubmit = async (e) => {
     e.preventDefault();
 
+    if (!form.institute_id) {
+      alert("Current user's institute not found. Cannot create user.");
+      return;
+    }
+
     try {
-      // Use authentication function to create user
+      // Create user
       const user = await createUser({
         email: form.email || `user-${Date.now()}@academy.local`,
         password: form.password,
@@ -66,7 +43,7 @@ export default function CreateUserForm() {
       // If role is Student, insert into student table
       if (form.role === "Student") {
         const { error: studentError } = await supabase
-          .from("student")
+          .from("students") // corrected table name
           .insert([
             {
               id: user.id,
@@ -83,10 +60,10 @@ export default function CreateUserForm() {
       }
 
       alert("User created successfully");
+
       // Reset form
-      setForm({ role: "", institute_id: "", password: "" });
+      setForm({ role: "", institute_id: currentInstituteId, password: "", email: "" });
       setStudentInfo({ program_id: "", is_representative: false });
-      setInstituteQuery("");
     } catch (error) {
       console.error(error);
       alert(`Failed to create user: ${error.message}`);
@@ -96,12 +73,13 @@ export default function CreateUserForm() {
   return (
     <form onSubmit={handleSubmit} className="form">
       <h2 className="form-title">Create User</h2>
-      <div className="form-field">
-                <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap:5}}>
-        <MdOutlineEmail />
-        <span>E-mail</span>
-        </div>
 
+      {/* Email */}
+      <div className="form-field">
+        <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap:5}}>
+          <MdOutlineEmail />
+          <span>E-mail</span>
+        </div>
         <input
           id="email"
           type="text"
@@ -112,7 +90,6 @@ export default function CreateUserForm() {
         />
       </div>
 
-      {/* 
       {/* Role */}
       <div className="form-field">
         <label htmlFor="role">Role</label>
@@ -132,43 +109,21 @@ export default function CreateUserForm() {
         </select>
       </div>
 
-      {/* Institute Search */}
-      <div className="form-field">
-        <label htmlFor="institute">Institute</label>
-        <div className="autocomplete-container">
-          <input
-            id="institute"
-            type="text"
-            className="form-input"
-            placeholder="Search institute (e.g. Har...)"
-            value={instituteQuery}
-            onChange={(e) => setInstituteQuery(e.target.value)}
-            autoComplete="off"
-          />
-
-          {institutes.length > 0 && (
-            <ul className="autocomplete-list">
-              {institutes.map((inst) => (
-                <li
-                  key={inst.id}
-                  className="autocomplete-item"
-                  onClick={() => {
-                    setForm({ ...form, institute_id: inst.id });
-                    setInstituteQuery(inst.name);
-                    setInstitutes([]);
-                  }}
-                >
-                  {inst.name}
-                </li>
-              ))}
-            </ul>
-          )}
-
-          {loadingInstitutes && (
-            <div className="autocomplete-loading">Searching…</div>
-          )}
+      {/* Display current institute */}
+        <div className="form-field">
+        <label>Institute</label>
+        <div
+            style={{
+            padding: "8px",
+            backgroundColor: "#f0f0f0",
+            color: "#555",
+            borderRadius: "4px",
+            fontStyle: "bold",
+            }}
+        >
+            {localStorage.getItem("institute_name") || form.institute_id}
         </div>
-      </div>
+    </div>
 
       {/* Password */}
       <div className="form-field">

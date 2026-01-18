@@ -10,14 +10,121 @@ html, body, #root {
   height: 100%;
 }
 
+/* Login Page */
+.login-page {
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background: linear-gradient(135deg, #f5f5f7 0%, #ffffff 100%);
+}
+
+.login-container {
+  width: 100%;
+  max-width: 420px;
+  padding: 20px;
+}
+
+.login-box {
+  background: #ffffff;
+  padding: 48px 40px;
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+  border: 1px solid #e0e0e0;
+}
+
+.login-title {
+  font-size: 32px;
+  font-weight: 700;
+  color: #1a1a1a;
+  margin: 0 0 8px 0;
+  text-align: center;
+}
+
+.login-subtitle {
+  font-size: 14px;
+  color: #666666;
+  margin: 0 0 32px 0;
+  text-align: center;
+}
+
+.login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.form-group label {
+  font-size: 14px;
+  font-weight: 500;
+  color: #333333;
+}
+
+.form-input {
+  padding: 12px 16px;
+  font-size: 14px;
+  background: #ffffff;
+  border: 1px solid #d0d0d0;
+  border-radius: 6px;
+  color: #1a1a1a;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.form-input:focus {
+  border-color: #007acc;
+}
+
+.form-input::placeholder {
+  color: #999999;
+}
+
+.error-message {
+  padding: 10px;
+  background: #fde8e8;
+  border: 1px solid #f5b0b0;
+  border-radius: 6px;
+  color: #d32f2f;
+  font-size: 13px;
+  text-align: center;
+}
+
+.login-button {
+  padding: 12px 24px;
+  font-size: 15px;
+  font-weight: 600;
+  background: #007acc;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  margin-top: 8px;
+}
+
+.login-button:hover {
+  background: #005a9e;
+}
+
+.login-button:active {
+  background: #004578;
+}
+
 /* App container */
 .app {
   height: 100vh;
   width: 100vw;
   display: flex;
   flex-direction: row;
-  background: #1e1e1e;
-  color: #ddd;
+  background: #f5f5f7;
+  color: #1a1a1a;
   font-family: system-ui, sans-serif;
   overflow: hidden; /* prevent overflowing content */
 }
@@ -31,7 +138,7 @@ html, body, #root {
 
 /* Sidebars */
 .sidebar {
-  background: #252526;
+  background: #ffffff;
   padding: 10px;
   overflow: auto;
   flex-shrink: 0; /* prevent shrinking */
@@ -39,7 +146,25 @@ html, body, #root {
 }
 
 .sidebar-left {
-  border-right: 1px solid #333;
+  border-right: 1px solid #e0e0e0;
+}
+
+.page-content {
+  padding: 20px;
+  color: #1a1a1a;
+}
+
+.page-content h2 {
+  font-size: 20px;
+  font-weight: 600;
+  margin-bottom: 12px;
+  color: #1a1a1a;
+}
+
+.page-content p {
+  font-size: 14px;
+  color: #666666;
+  line-height: 1.5;
 }
 
 .right-wrapper {
@@ -59,15 +184,15 @@ html, body, #root {
   flex-shrink: 0;
   width: 300px; /* default width, controlled by state */
   height: 100%;
-  background: #252526;
-  border-left: 1px solid #333;
+  background: #ffffff;
+  border-left: 1px solid #e0e0e0;
   overflow: auto;
 }
 
 /* Main content area */
 .main-content {
   flex: 1; /* fills remaining horizontal space */
-  background: #1e1e1e;
+  background: #f5f5f7;
   padding: 12px;
   overflow: auto;
 }
@@ -75,8 +200,8 @@ html, body, #root {
 /* Bottom sidebar */
 .sidebar-bottom {
   
-  background: #252526;
-  border-top: 1px solid #333;
+  background: #ffffff;
+  border-top: 1px solid #e0e0e0;
   padding: 8px;
   overflow: auto;
   flex-shrink: 0;
@@ -86,7 +211,7 @@ html, body, #root {
 .resizer.vertical {
   width: 5px;          /* must be >0 */
   cursor: col-resize;
-  background: #999;    /* visible for testing */
+  background: #cccccc;    /* visible for testing */
   z-index: 20;         /* on top of MainContent */
   flex-shrink: 0;
 }
@@ -95,10 +220,81 @@ html, body, #root {
 .resizer.horizontal {
   height: 5px;
   cursor: row-resize;
-  background: #333;
+  background: #d0d0d0;
   width: 100%;
   z-index: 20; /* above main content */
 }
+
+/* Icon Sidebar */
+.icon-sidebar {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 48px;
+  height: 100vh;
+  background: #2c2c2c;
+  border-right: 1px solid #e0e0e0;
+  display: flex;
+  flex-direction: column;
+  z-index: 100;
+  padding: 8px 0;
+}
+
+.icon-sidebar-top {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.icon-item {
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  position: relative;
+  transition: background-color 0.2s;
+  border-left: 2px solid transparent;
+}
+
+.icon-item:hover {
+  background-color: #e8e8e8;
+}
+
+.icon-item.active {
+  background-color: #e8e8e8;
+  border-left: 2px solid #007acc;
+}
+
+.icon-item .icon {
+  font-size: 20px;
+  user-select: none;
+  color: #4a4a4a;
+}
+
+/* Tooltip on hover */
+.icon-item:hover::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  left: 52px;
+  background: #ffffff;
+  color: #1a1a1a;
+  padding: 6px 10px;
+  border-radius: 4px;
+  white-space: nowrap;
+  font-size: 12px;
+  z-index: 1000;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  pointer-events: none;
+  border: 1px solid #e0e0e0;
+}
+
+/* Adjust left sidebar to account for icon sidebar */
+.left-group {
+  margin-left: 48px;
+}
+
 .monthly-calendar-container {
   display: flex;
   flex-direction: column;
@@ -108,8 +304,8 @@ html, body, #root {
 
 .calendar-controls {
   padding: 12px 16px;
-  background: #252526;
-  border-bottom: 1px solid #3c3c3c;
+  background: #ffffff;
+  border-bottom: 1px solid #e0e0e0;
   flex-shrink: 0;
 }
 
@@ -128,12 +324,12 @@ html, body, #root {
 .month-year-text {
   font-size: 16px;
   font-weight: 600;
-  color: #ddd;
+  color: #1a1a1a;
 }
 
 .today-date-small {
   font-size: 11px;
-  color: #888;
+  color: #999999;
   font-weight: 400;
 }
 
@@ -146,7 +342,7 @@ html, body, #root {
 .nav-button {
   background: transparent;
   border: none;
-  color: #888;
+  color: #999999;
   font-size: 12px;
   cursor: pointer;
   padding: 2px 8px;
@@ -154,11 +350,11 @@ html, body, #root {
 }
 
 .nav-button:hover {
-  color: #ddd;
+  color: #1a1a1a;
 }
 
 .nav-button:active {
-  color: #fff;
+  color: #1a1a1a;
 }
 
 .date-selector {
@@ -171,9 +367,9 @@ html, body, #root {
 .month-selector,
 .year-selector {
   padding: 6px 12px;
-  background: #3c3c3c;
-  color: #ddd;
-  border: 1px solid #555;
+  background: #ffffff;
+  color: #1a1a1a;
+  border: 1px solid #d0d0d0;
   border-radius: 4px;
   font-size: 14px;
   cursor: pointer;
@@ -183,13 +379,13 @@ html, body, #root {
 
 .month-selector:hover,
 .year-selector:hover {
-  background: #4a4a4a;
-  border-color: #646cff;
+  background: #f5f5f7;
+  border-color: #007acc;
 }
 
 .month-selector:focus,
 .year-selector:focus {
-  border-color: #646cff;
+  border-color: #007acc;
 }
 
 .month-selector {
@@ -226,7 +422,7 @@ html, body, #root {
   margin-bottom: 8px;
   font-size: 16px;
   font-weight: 600;
-  color: #ddd;
+  color: #1a1a1a;
 }
 
 .calendar-weekdays {
@@ -237,7 +433,7 @@ html, body, #root {
   text-align: center;
   font-size: 11px;
   font-weight: 600;
-  color: #888;
+  color: #999999;
   padding: 8px 0;
 }
 
@@ -251,43 +447,45 @@ html, body, #root {
   min-height: 50px;
   padding: 4px;
   border-radius: 4px;
-  background: #1e1e1e;
-  color: #ddd;
+  background: #ffffff;
+  color: #1a1a1a;
   cursor: pointer;
   font-size: 13px;
   transition: background-color 0.2s;
 }
 
 .calendar-day:hover {
-  background: #333;
+  background: #f0f0f0;
 }
 
 .calendar-day.today {
-  background-color: #3a5a7a;
-  border: 2px solid #5a9fd4;
+  background-color: #e3f2fd;
+  border: 2px solid #2196f3;
 }
 
 .calendar-day.selected {
-  background-color: white;
-  color: #000;
+  background-color: #1976d2;
+  color: #ffffff;
 }
 
 .calendar-day.week-selected {
-  background-color: #3c3c3c;
+  background-color: #f5f5f7;
 }
 
 .calendar-day.today.week-selected {
-  background-color: #3a5a7a;
-  border: 2px solid #5a9fd4;
+  background-color: #e3f2fd;
+  border: 2px solid #2196f3;
 }
 
 .calendar-day.selected.week-selected {
-  background-color: white;
+  background-color: #1976d2;
+  color: #ffffff;
 }
 
 .calendar-day.today.selected {
-  background-color: #4a9eff;
-  border: 2px solid #fff;
+  background-color: #1565c0;
+  border: 2px solid #ffffff;
+  color: #ffffff;
 }
 
 .day-number {
@@ -309,27 +507,32 @@ html, body, #root {
 
 .day-event-more {
   font-size: 9px;
-  color: #aaa;
+  color: #666666;
 }
 .create-button {
+  transition: all 0.3s;
   width: 100%;
   font-size: 64px;
   font-weight: 300;
   background: none;
-  border: 5px solid ghostwhite;
+  border: 5px solid #d0d0d0;
   cursor: pointer;
-  color: #555;
+  color: #999999;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
 .create-button:hover {
-  background-color: gray;
+  transition: all 0.3s;
+  background-color: #f5f5f7;
+  border-color: #007acc;
+  color: #1a1a1a;
 }
 /* Blur background */
-.app-content.blurred {
+.app.blurred {
   filter: blur(4px);
+  transition: all 0.3s;
   pointer-events: none;
   user-select: none;
 }
@@ -354,6 +557,35 @@ html, body, #root {
   max-width: 80vw;
   max-height: 80vh;
   overflow-y: auto;
+}
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.5); /* Dimmed background */
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.modal-content {
+  background: white;
+  padding: 20px;
+  border-radius: 8px;
+  width: 500px;
+  max-width: 90%;
+  box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid #e0e0e0;
+  margin-bottom: 15px;
 }
 
 /* Optional extras */
@@ -383,16 +615,204 @@ html, body, #root {
 
 /* Cards and docs */
 .card { padding: 2em; }
-.read-the-docs { color: #888; }
+.read-the-docs { color: #999999; }
+
+/* ===================================
+   FORM STYLES
+   =================================== */
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  max-width: 600px;
+}
+
+.form-section {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.form-field label {
+  font-size: 14px;
+  font-weight: 500;
+  color: #333333;
+}
+
+.form-input,
+.form-select {
+  padding: 12px 16px;
+  font-size: 14px;
+  background: #ffffff;
+  border: 1px solid #d0d0d0;
+  border-radius: 6px;
+  color: #1a1a1a;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.form-input:focus,
+.form-select:focus {
+  border-color: #007acc;
+}
+
+.form-input::placeholder {
+  color: #999999;
+}
+
+.form-select {
+  cursor: pointer;
+}
+
+.form-select option {
+  background: #ffffff;
+  color: #1a1a1a;
+}
+
+.form-submit {
+  padding: 12px 24px;
+  font-size: 15px;
+  font-weight: 600;
+  background: #007acc;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  width: 100%;
+}
+
+.form-submit:hover {
+  background: #005a9e;
+}
+
+.form-submit:active {
+  background: #004578;
+}
+
+.form-title {
+  font-size: 20px;
+  font-weight: 600;
+  color: #1a1a1a;
+  margin: 0;
+}
+
+.form-section-title {
+  font-size: 16px;
+  font-weight: 500;
+  color: #1a1a1a;
+  margin: 0;
+}
+
+.form-group-box {
+  border: 1px solid #e0e0e0;
+  padding: 16px;
+  border-radius: 6px;
+  background: #ffffff;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.form-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.form-checkbox input[type="checkbox"] {
+  cursor: pointer;
+  width: 16px;
+  height: 16px;
+}
+
+.form-checkbox label {
+  margin: 0;
+  cursor: pointer;
+  font-size: 14px;
+  color: #1a1a1a;
+}
+
+/* Autocomplete dropdown */
+.autocomplete-container {
+  position: relative;
+  width: 100%;
+}
+
+.autocomplete-list {
+  position: absolute;
+  z-index: 10;
+  width: 100%;
+  background: #ffffff;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  margin-top: 4px;
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.autocomplete-item {
+  padding: 12px 16px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  color: #1a1a1a;
+}
+
+.autocomplete-item:hover {
+  background: #f5f5f7;
+}
+
+.autocomplete-loading {
+  font-size: 12px;
+  color: #999999;
+  margin-top: 8px;
+}
 
 ///
 
 App.jsx:
 ///
-import AppLayout from "./layouts/AppLayout";
+import { useState } from "react";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import AppLayout from "./layout/AppLayout";
+import LoginPage from "./pages/LoginPage";
+
+// Protected Route Component
+function ProtectedRoute({ children }) {
+  const isAuthenticated = localStorage.getItem("isAuthenticated") === "true";
+  
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace />;
+  }
+  
+  return children;
+}
 
 export default function App() {
-  return <AppLayout />;
+  return (
+    <BrowserRouter>
+      <Routes>
+        <Route path="/login" element={<LoginPage />} />
+        <Route
+          path="/home"
+          element={
+            <ProtectedRoute>
+              <AppLayout />
+            </ProtectedRoute>
+          }
+        />
+        <Route path="/" element={<Navigate to="/login" replace />} />
+      </Routes>
+    </BrowserRouter>
+  );
 }
 
 ///
@@ -498,9 +918,285 @@ export default function BottomSidebar({ height }) {
 
 ///
 
+components\CreateCourses.jsx:
+///
+
+///
+
+components\CreateOperations.jsx:
+///
+import { useEffect, useState } from "react";
+import supabase from "../utils/supabase";
+
+export default function CreateOperations() {
+  const [form, setForm] = useState({
+    name: "",
+    program_id: "",
+    status: "active",
+  });
+
+  const [programQuery, setProgramQuery] = useState("");
+  const [programs, setPrograms] = useState([]);
+  const [loadingPrograms, setLoadingPrograms] = useState(false);
+
+  /* ----------------------------------
+     Program search (autocomplete)
+  ---------------------------------- */
+  useEffect(() => {
+    if (programQuery.length < 2) {
+      setPrograms([]);
+      return;
+    }
+
+    const fetchPrograms = async () => {
+      setLoadingPrograms(true);
+
+      const { data, error } = await supabase
+        .from("programs")
+        .select("id, name")
+        .ilike("name", `%${programQuery}%`)
+        .limit(10);
+
+      if (!error) setPrograms(data || []);
+      setLoadingPrograms(false);
+    };
+
+    fetchPrograms();
+  }, [programQuery]);
+
+  /* ----------------------------------
+     Submit handler
+  ---------------------------------- */
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+
+    const { error } = await supabase.from("operations").insert([
+      {
+        name: form.name,
+        program_id: form.program_id,
+        status: form.status,
+      },
+    ]);
+
+    if (error) {
+      alert(`Failed to create operation: ${error.message}`);
+      return;
+    }
+
+    alert("Operation created successfully");
+    setForm({ name: "", program_id: "", status: "active" });
+    setProgramQuery("");
+    setPrograms([]);
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="form">
+      <h2 className="form-title">Create Operation (Semester)</h2>
+
+      <div className="form-field">
+        <label>Operation Name</label>
+        <input
+          className="form-input"
+          placeholder="Fall 2025"
+          value={form.name}
+          onChange={(e) => setForm({ ...form, name: e.target.value })}
+          required
+        />
+      </div>
+
+      <div className="form-field">
+        <label>Program</label>
+
+        <input
+          className="form-input"
+          placeholder="Search program"
+          value={programQuery}
+          onChange={(e) => setProgramQuery(e.target.value)}
+        />
+
+        {programs.length > 0 && (
+          <ul className="autocomplete-list">
+            {programs.map((prog) => (
+              <li
+                key={prog.id}
+                className="autocomplete-item"
+                onClick={() => {
+                  setForm({ ...form, program_id: prog.id });
+                  setProgramQuery(prog.name);
+                  setPrograms([]);
+                }}
+              >
+                {prog.name}
+              </li>
+            ))}
+          </ul>
+        )}
+
+        {loadingPrograms && (
+          <div className="autocomplete-loading">Searching…</div>
+        )}
+      </div>
+
+      <div className="form-field">
+        <label>Status</label>
+        <select
+          className="form-select"
+          value={form.status}
+          onChange={(e) => setForm({ ...form, status: e.target.value })}
+        >
+          <option value="planned">Planned</option>
+          <option value="active">Active</option>
+          <option value="completed">Completed</option>
+        </select>
+      </div>
+
+      <button type="submit" className="form-submit">
+        Create Operation
+      </button>
+    </form>
+  );
+}
+
+///
+
+components\CreatePrograms.jsx:
+///
+import { useEffect, useState } from "react";
+import supabase from "../utils/supabase";
+
+export default function CreatePrograms() {
+  const [form, setForm] = useState({
+    name: "",
+    institution_id: "",
+    is_active: true,
+  });
+
+  const [instituteQuery, setInstituteQuery] = useState("");
+  const [institutes, setInstitutes] = useState([]);
+  const [loadingInstitutes, setLoadingInstitutes] = useState(false);
+
+  /* ----------------------------------
+     Institution search (autocomplete)
+  ---------------------------------- */
+  useEffect(() => {
+    if (instituteQuery.length < 2) {
+      setInstitutes([]);
+      return;
+    }
+
+    const fetchInstitutes = async () => {
+      setLoadingInstitutes(true);
+
+      const { data, error } = await supabase
+        .from("institutes")
+        .select("id, name")
+        .ilike("name", `%${instituteQuery}%`)
+        .limit(10);
+
+      if (!error) setInstitutes(data || []);
+      setLoadingInstitutes(false);
+    };
+
+    fetchInstitutes();
+  }, [instituteQuery]);
+
+  /* ----------------------------------
+     Submit handler
+  ---------------------------------- */
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+
+    const { error } = await supabase.from("programs").insert([
+      {
+        name: form.name,
+        institution_id: form.institution_id,
+        is_active: form.is_active,
+      },
+    ]);
+
+    if (error) {
+      alert(`Failed to create program: ${error.message}`);
+      return;
+    }
+
+    alert("Program created successfully");
+    setForm({ name: "", institution_id: "", is_active: true });
+    setInstituteQuery("");
+    setInstitutes([]);
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="form">
+      <h2 className="form-title">Create Program</h2>
+
+      <div className="form-field">
+        <label>Program Name</label>
+        <input
+          className="form-input"
+          value={form.name}
+          onChange={(e) => setForm({ ...form, name: e.target.value })}
+          required
+        />
+      </div>
+
+      <div className="form-field">
+        <label>Institution</label>
+
+        <input
+          className="form-input"
+          placeholder="Search institution"
+          value={instituteQuery}
+          onChange={(e) => setInstituteQuery(e.target.value)}
+        />
+
+        {institutes.length > 0 && (
+          <ul className="autocomplete-list">
+            {institutes.map((inst) => (
+              <li
+                key={inst.id}
+                className="autocomplete-item"
+                onClick={() => {
+                  setForm({ ...form, institution_id: inst.id });
+                  setInstituteQuery(inst.name);
+                  setInstitutes([]);
+                }}
+              >
+                {inst.name}
+              </li>
+            ))}
+          </ul>
+        )}
+
+        {loadingInstitutes && (
+          <div className="autocomplete-loading">Searching…</div>
+        )}
+      </div>
+
+      <button type="submit" className="form-submit">
+        Create Program
+      </button>
+    </form>
+  );
+}
+
+///
+
 components\CreateRoutine.jsx:
 ///
+import supabase from "../utils/supabase";
+
 export default function CreateRoutineModal({ onClose }) {
+
+  async function createInstitution(){
+    
+    const { data, error } = await supabase
+      .from('institute')
+      .insert([
+        {  },
+      ])
+      .select()
+            
+  }
   return (
     <div className="modal-backdrop" onClick={onClose}>
       <div
@@ -509,12 +1205,204 @@ export default function CreateRoutineModal({ onClose }) {
       >
         <h2>Create Routine</h2>
 
-        {/* Your form goes here */}
+        <button className="create-button" 
+            onClick={createInstitution}>
+              Create new Institution
+            </button>
         <p>Routine creation form…</p>
 
         <button onClick={onClose}>Close</button>
       </div>
     </div>
+  );
+}
+
+///
+
+components\CreateUser.jsx:
+///
+import { useState, useEffect } from "react";
+import { createUser } from "../utils/authentication";
+import { ROLES } from "../utils/types";
+import { MdOutlineEmail } from "react-icons/md";
+
+export default function CreateUserForm() {
+  // Get current user's institute from localStorage
+  const currentInstituteId = localStorage.getItem("institute_id");
+
+  const [form, setForm] = useState({
+    role: "",
+    institute_id: currentInstituteId || "",
+    password: "",
+    email: "",
+  });
+
+  // Student-specific fields
+  const [studentInfo, setStudentInfo] = useState({
+    program_id: "",
+    is_representative: false,
+  });
+
+  /* ----------------------------------
+     Submit handler
+  ---------------------------------- */
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+
+    if (!form.institute_id) {
+      alert("Current user's institute not found. Cannot create user.");
+      return;
+    }
+
+    try {
+      // Create user
+      const user = await createUser({
+        email: form.email || `user-${Date.now()}@academy.local`,
+        password: form.password,
+        role: form.role,
+        institute_id: form.institute_id,
+      });
+
+      // If role is Student, insert into student table
+      if (form.role === "Student") {
+        const { error: studentError } = await supabase
+          .from("students") // corrected table name
+          .insert([
+            {
+              id: user.id,
+              program_id: studentInfo.program_id,
+              is_representative: studentInfo.is_representative,
+            },
+          ]);
+
+        if (studentError) {
+          console.error(studentError);
+          alert("User created, but student info failed");
+          return;
+        }
+      }
+
+      alert("User created successfully");
+
+      // Reset form
+      setForm({ role: "", institute_id: currentInstituteId, password: "", email: "" });
+      setStudentInfo({ program_id: "", is_representative: false });
+    } catch (error) {
+      console.error(error);
+      alert(`Failed to create user: ${error.message}`);
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="form">
+      <h2 className="form-title">Create User</h2>
+
+      {/* Email */}
+      <div className="form-field">
+        <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap:5}}>
+          <MdOutlineEmail />
+          <span>E-mail</span>
+        </div>
+        <input
+          id="email"
+          type="text"
+          className="form-input"
+          placeholder="Leave blank for auto-generated"
+          value={form.email}
+          onChange={(e) => setForm({ ...form, email: e.target.value })}
+        />
+      </div>
+
+      {/* Role */}
+      <div className="form-field">
+        <label htmlFor="role">Role</label>
+        <select
+          id="role"
+          className="form-select"
+          value={form.role}
+          onChange={(e) => setForm({ ...form, role: e.target.value })}
+          required
+        >
+          <option value="">Select role</option>
+          {ROLES.map((role) => (
+            <option key={role} value={role}>
+              {role}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {/* Display current institute */}
+        <div className="form-field">
+        <label>Institute</label>
+        <div
+            style={{
+            padding: "8px",
+            backgroundColor: "#f0f0f0",
+            color: "#555",
+            borderRadius: "4px",
+            fontStyle: "bold",
+            }}
+        >
+            {localStorage.getItem("institute_name") || form.institute_id}
+        </div>
+    </div>
+
+      {/* Password */}
+      <div className="form-field">
+        <label htmlFor="password">Password</label>
+        <input
+          id="password"
+          type="password"
+          className="form-input"
+          placeholder="Enter password"
+          value={form.password}
+          onChange={(e) => setForm({ ...form, password: e.target.value })}
+          required
+        />
+      </div>
+
+      {/* Student-only fields */}
+      {form.role === "Student" && (
+        <div className="form-group-box">
+          <h3 className="form-section-title">Student Details</h3>
+
+          <div className="form-field">
+            <label htmlFor="program-id">Program ID (uuid)</label>
+            <input
+              id="program-id"
+              type="text"
+              className="form-input"
+              placeholder="Enter program ID"
+              value={studentInfo.program_id}
+              onChange={(e) =>
+                setStudentInfo({ ...studentInfo, program_id: e.target.value })
+              }
+              required
+            />
+          </div>
+
+          <div className="form-checkbox">
+            <input
+              id="is-representative"
+              type="checkbox"
+              checked={studentInfo.is_representative}
+              onChange={(e) =>
+                setStudentInfo({
+                  ...studentInfo,
+                  is_representative: e.target.checked,
+                })
+              }
+            />
+            <label htmlFor="is-representative">Is representative</label>
+          </div>
+        </div>
+      )}
+
+      <button type="submit" className="form-submit">
+        Create User
+      </button>
+    </form>
   );
 }
 
@@ -549,18 +1437,112 @@ export default function HorizontalResizer({ onDrag }) {
 
 ///
 
+components\IconSidebar.jsx:
+///
+import React from "react";
+import { FiUsers, FiShield, FiActivity, FiBook, FiBookOpen, FiSun, FiLogOut } from "react-icons/fi";
+import { useNavigate } from "react-router-dom";
+import supabase from "../utils/supabase"; // for auth logout
+
+export default function IconSidebar({ onIconClick, activePage }) {
+  const navigate = useNavigate();
+
+  const topIcons = [
+    { id: "users", icon: FiUsers, name: "Users" },
+    { id: "moderators", icon: FiShield, name: "Moderators" },
+    { id: "operations", icon: FiActivity, name: "Operations" },
+    { id: "programs", icon: FiBook, name: "Programs" },
+    { id: "courses", icon: FiBookOpen, name: "Courses" },
+    { id: "vacations", icon: FiSun, name: "Vacations" },
+  ];
+
+  // Logout function
+  const handleLogout = async () => {
+    try {
+      await supabase.auth.signOut();
+      localStorage.clear();
+      navigate("/login");
+    } catch (error) {
+      console.error("Logout failed:", error);
+      alert("Failed to logout. Please try again.");
+    }
+  };
+
+  return (
+    <div
+      className="icon-sidebar"
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        justifyContent: "space-between",
+        height: "100%",
+      }}
+    >
+      {/* Top icons */}
+      <div className="icon-sidebar-top">
+        {topIcons.map((item) => {
+          const IconComponent = item.icon;
+          const isActive = activePage === item.id;
+          return (
+            <div
+              key={item.id}
+              className={`icon-item ${isActive ? "active" : ""}`}
+              onClick={() => onIconClick(item.id)}
+              data-tooltip={item.name}
+            >
+              <IconComponent color={isActive ? "blue" : "white"} size={20} />
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Logout button at bottom */}
+      <div
+        className="icon-sidebar-bottom"
+        style={{ padding: "10px", cursor: "pointer" }}
+        onClick={handleLogout}
+        title="Logout"
+      >
+        <FiLogOut color="white" size={20} />
+      </div>
+    </div>
+  );
+}
+
+///
+
 components\LeftSidebar.jsx:
 ///
-export default function LeftSidebar({ width, onCreateClick }) {
+import UsersPage from "../pages/UsersPage";
+import ModeratorsPage from "../pages/ModeratorsPage";
+import OperationsPage from "../pages/OperationsPage";
+import ProgramsPage from "../pages/ProgramsPage";
+import CoursesPage from "../pages/CoursesPage";
+import VacationsPage from "../pages/VacationsPage";
+
+export default function LeftSidebar({ width, onCreateClick, activePage }) {
+  const renderPage = () => {
+    switch (activePage) {
+      case "users":
+        return <UsersPage />;
+      case "moderators":
+        return <ModeratorsPage />;
+      case "operations":
+        return <OperationsPage />;
+      case "programs":
+        return <ProgramsPage />;
+      case "courses":
+        return <CoursesPage />;
+      case "vacations":
+        return <VacationsPage />;
+      default:
+        return null;
+    }
+  };
+
   return (
     <div className="sidebar-left" style={{ width: `${width}px` }}>
-      <button
-        className="create-button"
-        onClick={onCreateClick}
-        aria-label="Create Routine"
-      >
-        +
-      </button>
+      {renderPage()}
     </div>
   );
 }
@@ -576,6 +1558,34 @@ export default function MainContent(){
         </div>
     )
 }
+///
+
+components\Modal.jsx:
+///
+import React from 'react';
+import ReactDOM from 'react-dom';
+
+const Modal = ({ isOpen, onClose, title, children }) => {
+  if (!isOpen) return null;
+
+  return ReactDOM.createPortal(
+    <div className="modal-overlay" onClick={onClose}>
+      {/* stopPropagation prevents the modal from closing when clicking inside the content */}
+      <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header">
+          <h2>{title}</h2>
+          <button className="close-btn" onClick={onClose}>&times;</button>
+        </div>
+        <div className="modal-body">
+          {children}
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+};
+
+export default Modal;
 ///
 
 components\MonthlyCalendar.jsx:

@@ -23,10 +23,16 @@ export default function LoginPage() {
       // 1️⃣ Authenticate user
       const user = await logIn(email, password);
 
-      // 2️⃣ Fetch user profile from public.users
+      // 2️⃣ Fetch user profile from public.users along with institute name
       const { data: profile, error: profileError } = await supabase
         .from("users")
-        .select("id, role, institute_id, name")
+        .select(`
+          id,
+          role,
+          institute_id,
+          name,
+          institutes!inner(name)  -- join with institutes table
+        `)
         .eq("id", user.id)
         .single();
 
@@ -38,6 +44,10 @@ export default function LoginPage() {
       localStorage.setItem("role", profile.role);
       localStorage.setItem("institute_id", profile.institute_id);
       localStorage.setItem("name", profile.name || "");
+      localStorage.setItem(
+        "institute_name",
+        profile.institutes?.name || "Unknown Institute"
+      );
 
       // Optional: store full profile
       localStorage.setItem("user", JSON.stringify(profile));
@@ -49,6 +59,7 @@ export default function LoginPage() {
       setError(err.message || "Login failed");
     }
   };
+
 
   return (
     <div className="login-page">
