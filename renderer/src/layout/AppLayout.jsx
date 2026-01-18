@@ -15,7 +15,8 @@ export default function AppLayout() {
   const [rightWidth, setRightWidth] = useState(300);
   const [bottomHeight, setBottomHeight] = useState(200);
 
-  const [showCreateRoutine, setShowCreateRoutine] = useState(false); // ✅ modal state
+  const [showCreateRoutine, setShowCreateRoutine] = useState(false); 
+  const [showCreateUser, setShowCreateUser] = useState(false); // ✅ modal state
   const [activePage, setActivePage] = useState(null); // active page state
 
   return (
@@ -65,11 +66,7 @@ export default function AppLayout() {
       </div>
 
       {/* MODAL OVERLAY */}
-      {showCreateRoutine && (
-        <CreateRoutineModal
-          onClose={() => setShowCreateRoutine(false)}
-        />
-      )}
+      
     </>
   );
 }
