@@ -16,7 +16,7 @@ export default function CreateOperations() {
      Program search (autocomplete)
   ---------------------------------- */
   useEffect(() => {
-    if (programQuery.length < 2) {
+    if (programQuery.trim() === "") {
       setPrograms([]);
       return;
     }
@@ -24,13 +24,19 @@ export default function CreateOperations() {
     const fetchPrograms = async () => {
       setLoadingPrograms(true);
 
+      const currentInstituteId = localStorage.getItem("institute_id");
       const { data, error } = await supabase
         .from("programs")
-        .select("id, name")
-        .ilike("name", `%${programQuery}%`)
-        .limit(10);
+        .select("id, name, departments(name)")
+        .eq("institution_id", currentInstituteId)
+        .eq("is_active", true)
+        .ilike("name", `%${programQuery}%`);
 
-      if (!error) setPrograms(data || []);
+      if (error) {
+        console.error("Error fetching programs:", error);
+      } else {
+        setPrograms(data || []);
+      }
       setLoadingPrograms(false);
     };
 
@@ -77,36 +83,45 @@ export default function CreateOperations() {
         />
       </div>
 
-      <div className="form-field">
+      <div className="form-field autocomplete-container">
         <label>Program</label>
-
         <input
           className="form-input"
-          placeholder="Search program"
           value={programQuery}
-          onChange={(e) => setProgramQuery(e.target.value)}
+          onChange={(e) => {
+            setProgramQuery(e.target.value);
+            setForm({ ...form, program_id: "" });
+          }}
+          placeholder="Type program name..."
+          required
         />
 
+        {loadingPrograms && (
+          <div className="autocomplete-loading">Searching...</div>
+        )}
+
         {programs.length > 0 && (
-          <ul className="autocomplete-list">
+          <div className="autocomplete-list">
             {programs.map((prog) => (
-              <li
+              <div
                 key={prog.id}
                 className="autocomplete-item"
-                onClick={() => {
-                  setForm({ ...form, program_id: prog.id });
+                onMouseDown={() => {
                   setProgramQuery(prog.name);
+                  setForm({ ...form, program_id: prog.id });
                   setPrograms([]);
                 }}
               >
                 {prog.name}
-              </li>
+                {prog.departments?.name && (
+                  <span style={{ color: "#999", fontSize: "12px" }}>
+                    {" "}
+                    ({prog.departments.name})
+                  </span>
+                )}
+              </div>
             ))}
-          </ul>
-        )}
-
-        {loadingPrograms && (
-          <div className="autocomplete-loading">Searching…</div>
+          </div>
         )}
       </div>
 
@@ -121,6 +136,21 @@ export default function CreateOperations() {
           <option value="active">Active</option>
           <option value="completed">Completed</option>
         </select>
+      </div>
+
+      <div className="form-field">
+        <label>Institute</label>
+        <div
+          style={{
+            padding: "8px",
+            backgroundColor: "#f0f0f0",
+            color: "#555",
+            borderRadius: "4px",
+            fontStyle: "bold",
+          }}
+        >
+          {localStorage.getItem("institute_name") || localStorage.getItem("institute_id")}
+        </div>
       </div>
 
       <button type="submit" className="form-submit">

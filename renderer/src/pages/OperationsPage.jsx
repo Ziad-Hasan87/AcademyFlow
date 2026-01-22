@@ -1,30 +1,160 @@
 import Modal from "../components/Modal";
 import CreateOperations from "../components/CreateOperations";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import supabase from "../utils/supabase";
+import EditOperations from "../components/EditOperations";
 
 export default function OperationsPage() {
+  const [isCreateOpen, setisCreateOpen] = useState(false);
+  const [isEditOpen, setisEditOpen] = useState(false);
+  const [operations, setOperations] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [programs, setPrograms] = useState([]);
+  const [selectedProgram, setSelectedProgram] = useState("");
+  const [selectedOperationId, setSelectedOperationId] = useState(null);
 
-  const [isOpen, setIsOpen] = useState(false);
+  const fetchPrograms = async () => {
+    const currentInstituteId = localStorage.getItem("institute_id");
+    const { data, error } = await supabase
+      .from("programs")
+      .select("id, name")
+      .eq("institution_id", currentInstituteId)
+      .eq("is_active", true)
+      .order("name");
+
+    if (error) {
+      console.error("Error fetching programs:", error);
+    } else {
+      setPrograms(data);
+    }
+  };
+
+  const fetchOperations = async (programId = "") => {
+    setLoading(true);
+
+    const currentInstituteId = localStorage.getItem("institute_id");
+
+    let query = supabase
+      .from("operations")
+      .select(`
+        id,
+        name,
+        status,
+        created_at,
+        program_id,
+        programs (
+          name,
+          institution_id
+        )
+      `)
+      .eq("programs.institution_id", currentInstituteId)
+      .order("status", { ascending: true })
+      .order("created_at", { ascending: false });
+
+    if (programId) {
+      query = query.eq("program_id", programId);
+    }
+
+    const { data, error } = await query;
+
+    if (error) {
+      console.error("Error fetching operations:", error);
+    } else {
+      setOperations(data);
+    }
+
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    fetchOperations();
+    fetchPrograms();
+  }, [isEditOpen, isCreateOpen]);
   
-  async function onCreateClick() {
-    // Logic to handle creation of a new operation
-    console.log("Create Operation button clicked");
-  }
+   useEffect(() => {
+    fetchOperations();
+    fetchPrograms();
+  }, []);
+
   return (
     <div className="page-content">
       <button
         className="create-button"
-        onClick={() => setIsOpen(true)}
+        onClick={() => setisCreateOpen(true)}
         aria-label="Create Operation"
       >
-        +
+        + Add
       </button>
-      <Modal isOpen={isOpen} title="Create Operation" onClose={()=> setIsOpen(false)}>  
+      <Modal
+        isOpen={isCreateOpen}
+        title="Create Operation"
+        onClose={() => {
+          setisCreateOpen(false);
+          fetchOperations();
+        }}
+      >
         <CreateOperations />
       </Modal>
-      <h2>Operations Management</h2>
-      <p>This is Operations page</p>
-      <div className="operations-list">
+      <Modal
+        isOpen={isEditOpen}
+        title="Edit Operation"
+        onClose={() => {
+          setisEditOpen(false);
+          fetchOperations();
+        }}
+      >
+        <EditOperations
+          operationId={selectedOperationId}
+          onCancel={() => setisEditOpen(false)}
+        />
+      </Modal>
+      <div>
+        <h2>Operations</h2>
+        <div
+          className="form-field"
+          style={{ maxWidth: "300px", marginBottom: "16px" }}
+        >
+          <select
+            className="form-select"
+            value={selectedProgram}
+            onChange={(e) => {
+              const progId = e.target.value;
+              setSelectedProgram(progId);
+              fetchOperations(progId);
+            }}
+          >
+            <option value="">All Programs</option>
+            {programs.map((prog) => (
+              <option key={prog.id} value={prog.id}>
+                {prog.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+      {loading && <p>Loading…</p>}
+
+      <div className="lists-container">
+        {operations.map((operation) => (
+          <div
+            key={operation.id}
+            className={
+              operation.status === "active"
+                ? "list-item"
+                : "list-item-inactive"
+            }
+            onClick={() => {
+              setSelectedOperationId(operation.id);
+              setisEditOpen(true);
+            }}
+          >
+            <h3>{operation.name}</h3>
+            <p>{operation.programs?.name}</p>
+            <p style={{ fontSize: "0.85em", color: "#666", textTransform: "capitalize" }}>
+              Status: {operation.status}
+            </p>
+          </div>
+        ))}
       </div>
     </div>
   );
