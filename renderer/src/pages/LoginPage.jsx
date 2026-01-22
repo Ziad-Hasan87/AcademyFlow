@@ -53,7 +53,7 @@ export default function LoginPage() {
       localStorage.setItem("user", JSON.stringify(profile));
 
       // 4️⃣ Redirect
-      navigate("/home");
+      navigate("/dashboard");
     } catch (err) {
       console.error(err);
       setError(err.message || "Login failed");

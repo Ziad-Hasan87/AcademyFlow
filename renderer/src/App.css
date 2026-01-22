@@ -24,6 +24,7 @@ html, body, #root {
   padding: 20px;
 }
 
+
 .login-box {
   background: #ffffff;
   padding: 48px 40px;
@@ -148,7 +149,7 @@ html, body, #root {
 }
 
 .page-content {
-  padding: 20px;
+  padding: 20px 5px 5px 5px;
   color: #1a1a1a;
 }
 
@@ -585,6 +586,96 @@ html, body, #root {
   border-bottom: 1px solid #e0e0e0;
   margin-bottom: 15px;
 }
+/* ===========================
+   Lists (Departments, etc.)
+   =========================== */
+
+.lists-container {
+  display: flex;
+  flex-direction: column;
+  gap: 0px;
+  margin-top: 0px;
+}
+
+
+.list-item {
+  background: #EEF6EE;
+  border: 1px solid #e0e0e0;
+  border-radius: 0px;
+  padding: 14px 16px;
+  transition: background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+
+.list-item h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: #1a1a1a;
+}
+
+.list-item p {
+  margin: 4px 0 0 0;
+  font-size: 13px;
+  color: #666666;
+  line-height: 1.4;
+}
+
+
+/* Hover & focus feedback */
+.list-item:hover {
+  background: #DDFFDD;
+  border-color: #cfd8dc;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+}
+
+/* Optional: clickable rows */
+.list-item.clickable {
+  cursor: pointer;
+}
+.list-item.clickable:hover {
+  background: #DDFFDD;
+  border-color: #007acc;
+}
+.list-item-inactive {
+  background: #F6EEEE;
+  border: 1px solid #e0e0e0;
+  border-radius: 0px;
+  padding: 14px 16px;
+  transition: background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.list-item-inactive h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: #555555;
+}
+
+.list-item-inactive p {
+  margin: 4px 0 0 0;
+  font-size: 13px;
+  color: #999999;
+  line-height: 1.4;
+}
+.list-item-inactive:hover {
+  background: #F5DDE3;
+  border-color: #cfd8dc;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+}
+.list-item-inactive.clickable {
+  cursor: pointer;
+}
+.list-item-inactive.clickable:hover {
+  background: #eef5ff;
+  border-color: #007acc;
+}
+
+/* Optional: active/selected state */
+.list-item.active {
+  background: #e3f2fd;
+  border-color: #2196f3;
+}
+
 
 /* Optional extras */
 .logo {
@@ -679,6 +770,18 @@ html, body, #root {
   font-weight: 600;
   background: #007acc;
   color: #fff;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  width: 100%;
+}
+.form-cancel {
+  padding: 12px 24px;
+  font-size: 15px;
+  font-weight: 600;
+  background: #DDDDDD;
+  color: #555555;
   border: none;
   border-radius: 6px;
   cursor: pointer;

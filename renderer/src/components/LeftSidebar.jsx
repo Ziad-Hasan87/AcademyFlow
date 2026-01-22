@@ -4,6 +4,7 @@ import OperationsPage from "../pages/OperationsPage";
 import ProgramsPage from "../pages/ProgramsPage";
 import CoursesPage from "../pages/CoursesPage";
 import VacationsPage from "../pages/VacationsPage";
+import DepartmentsPage from "../pages/DepartmentsPage";
 
 export default function LeftSidebar({ width, onCreateClick, activePage }) {
   const renderPage = () => {
@@ -20,6 +21,8 @@ export default function LeftSidebar({ width, onCreateClick, activePage }) {
         return <CoursesPage />;
       case "vacations":
         return <VacationsPage />;
+      case "departments":
+        return <DepartmentsPage />;
       default:
         return null;
     }

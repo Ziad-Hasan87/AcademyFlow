@@ -14,7 +14,7 @@ export default function UsersPage() {
       <button
         className="create-button"
         onClick={() => setIsOpen(true)}
-        aria-label="Create Routine"
+        aria-label="Create User"
       >
         +
       </button>

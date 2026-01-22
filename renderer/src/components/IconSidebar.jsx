@@ -13,6 +13,7 @@ export default function IconSidebar({ onIconClick, activePage }) {
     { id: "programs", icon: FiBook, name: "Programs" },
     { id: "courses", icon: FiBookOpen, name: "Courses" },
     { id: "vacations", icon: FiSun, name: "Vacations" },
+    { id: "departments", icon: FiBookOpen, name: "Departments" },
   ];
 
   // Logout function

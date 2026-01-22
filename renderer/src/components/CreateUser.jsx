@@ -34,7 +34,7 @@ export default function CreateUserForm() {
     try {
       // Create user
       const user = await createUser({
-        email: form.email || `user-${Date.now()}@academy.local`,
+        email: form.email,
         password: form.password,
         role: form.role,
         institute_id: form.institute_id,
