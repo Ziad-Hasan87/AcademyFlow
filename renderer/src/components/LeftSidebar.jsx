@@ -3,6 +3,8 @@ import ModeratorsPage from "../pages/ModeratorsPage";
 import OperationsPage from "../pages/OperationsPage";
 import ProgramsPage from "../pages/ProgramsPage";
 import CoursesPage from "../pages/CoursesPage";
+import GroupsPage from "../pages/GroupsPage";
+import SubgroupsPage from "../pages/SubgroupsPage";
 import VacationsPage from "../pages/VacationsPage";
 import DepartmentsPage from "../pages/DepartmentsPage";
 
@@ -19,6 +21,10 @@ export default function LeftSidebar({ width, onCreateClick, activePage }) {
         return <ProgramsPage />;
       case "courses":
         return <CoursesPage />;
+      case "groups":
+        return <GroupsPage />;
+      case "subgroups":
+        return <SubgroupsPage />;
       case "vacations":
         return <VacationsPage />;
       case "departments":

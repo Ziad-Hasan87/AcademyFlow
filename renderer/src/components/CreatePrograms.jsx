@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import supabase from "../utils/supabase";
+import { showToast } from "../utils/toast";
 
 export default function CreatePrograms() {
   const currentInstituteId = localStorage.getItem("institute_id");
@@ -55,7 +56,7 @@ export default function CreatePrograms() {
       return;
     }
 
-    alert("Program created successfully");
+    showToast("Program created successfully");
     setForm({ name: "", institution_id: "", is_active: true });
   };
 

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import supabase from "../utils/supabase";
+import { showToast } from "../utils/toast";
 
 export default function CreateOperations() {
   const [form, setForm] = useState({
@@ -62,7 +63,7 @@ export default function CreateOperations() {
       return;
     }
 
-    alert("Operation created successfully");
+    showToast("Operation created successfully");
     setForm({ name: "", program_id: "", status: "active" });
     setProgramQuery("");
     setPrograms([]);

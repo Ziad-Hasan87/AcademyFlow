@@ -1,7 +1,10 @@
 import React from "react";
 import { FiUsers, FiShield, FiActivity, FiBook, FiBookOpen, FiSun, FiLogOut  } from "react-icons/fi";
 import { GoOrganization } from "react-icons/go";
-import { FaRegCalendarTimes,FaUsersCog } from "react-icons/fa";
+import { FaRegCalendarTimes, FaCog, FaLayerGroup,FaRegUser   } from "react-icons/fa";
+import { FaPeopleRoof } from "react-icons/fa6";
+import { MdOutlineGroupWork } from "react-icons/md";
+import { GrGroup } from "react-icons/gr";
 import { useNavigate } from "react-router-dom";
 import supabase from "../utils/supabase"; // for auth logout
 
@@ -9,11 +12,13 @@ export default function IconSidebar({ onIconClick, activePage }) {
   const navigate = useNavigate();
 
   const topIcons = [
-    { id: "users", icon: FiUsers, name: "Users" },
+    { id: "users", icon: FaRegUser, name: "Users" },
     { id: "moderators", icon: FiShield, name: "Moderators" },
-    { id: "operations", icon: FaUsersCog, name: "Operations" },
+    { id: "operations", icon: FaCog, name: "Operations" },
     { id: "programs", icon: FiBook, name: "Programs" },
     { id: "courses", icon: FiBookOpen, name: "Courses" },
+    { id: "groups", icon: GrGroup, name: "Groups" },
+    { id: "subgroups", icon: FaPeopleRoof , name: "Subgroups" },
     { id: "vacations", icon: FaRegCalendarTimes, name: "Vacations" },
     { id: "departments", icon: GoOrganization, name: "Departments" },
   ];

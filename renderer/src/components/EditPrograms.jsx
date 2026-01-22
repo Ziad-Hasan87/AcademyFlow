@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import supabase from "../utils/supabase";
+import { showToast } from "../utils/toast";
 
 export default function EditPrograms({ programId, onCancel }) {
   const currentInstituteId = localStorage.getItem("institute_id");
@@ -90,7 +91,7 @@ export default function EditPrograms({ programId, onCancel }) {
     if (error) {
       alert("Failed to update program: " + error.message);
     } else {
-      alert("Program updated successfully!");
+      showToast("Program updated successfully!");
     }
   };
 

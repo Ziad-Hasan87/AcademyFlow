@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import supabase from "../utils/supabase";
+import { showToast } from "../utils/toast";
 
 export default function EditOperations({ operationId, onCancel }) {
   const currentInstituteId = localStorage.getItem("institute_id");
@@ -90,7 +91,7 @@ export default function EditOperations({ operationId, onCancel }) {
     if (error) {
       alert("Failed to update operation: " + error.message);
     } else {
-      alert("Operation updated successfully!");
+      showToast("Operation updated successfully!");
     }
   };
 
@@ -108,7 +109,7 @@ export default function EditOperations({ operationId, onCancel }) {
     if (error) {
       alert("Failed to delete operation: " + error.message);
     } else {
-      alert("Operation deleted successfully!");
+      showToast("Operation deleted successfully!");
       onCancel();
     }
   };

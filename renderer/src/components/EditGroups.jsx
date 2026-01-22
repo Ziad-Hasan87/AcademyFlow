@@ -2,121 +2,124 @@ import { useEffect, useState } from "react";
 import supabase from "../utils/supabase";
 import { showToast } from "../utils/toast";
 
-export default function EditCourses({ courseId, onCancel }) {
+export default function EditGroups({ groupId, onCancel }) {
   const currentInstituteId = localStorage.getItem("institute_id");
-  const [operationQuery, setOperationQuery] = useState("");
-  const [operationResults, setOperationResults] = useState([]);
-  const [loadingOperations, setLoadingOperations] = useState(false);
+  const [programQuery, setProgramQuery] = useState("");
+  const [programResults, setProgramResults] = useState([]);
+  const [loadingPrograms, setLoadingPrograms] = useState(false);
 
   const [form, setForm] = useState({
     id: "",
     name: "",
-    operation_id: "",
+    program_id: "",
     created_at: "",
   });
 
-  // Fetch course by ID
-  const fetchCourse = async () => {
-    if (!courseId) return;
+  // Fetch group by ID
+  const fetchGroup = async () => {
+    if (!groupId) return;
 
     const { data, error } = await supabase
-      .from("courses")
+      .from("groups")
       .select(`
         id,
         name,
+        program_id,
         created_at,
-        operation_id,
-        operations ( name )
+        programs ( name )
       `)
-      .eq("id", courseId)
+      .eq("id", groupId)
       .single();
 
     if (error) {
-      console.error("Error fetching course:", error);
+      console.error("Error fetching group:", error);
       return;
     }
 
     setForm({
       id: data.id,
       name: data.name,
-      operation_id: data.operation_id,
+      program_id: data.program_id,
       created_at: data.created_at,
     });
 
-    setOperationQuery(data.operations?.name || "");
+    setProgramQuery(data.programs?.name || "");
   };
 
-  // Fetch operations for autocomplete
+  // Fetch programs for autocomplete
   useEffect(() => {
-    if (operationQuery.trim() === "") {
-      setOperationResults([]);
+    if (programQuery.trim() === "") {
+      setProgramResults([]);
       return;
     }
 
-    const fetchOperations = async () => {
-      setLoadingOperations(true);
+    const fetchPrograms = async () => {
+      setLoadingPrograms(true);
       const { data, error } = await supabase
-        .from("operations")
-        .select("id, name, status, programs(name, institution_id)")
-        .eq("programs.institution_id", currentInstituteId)
-        .eq("status", "active")
-        .ilike("name", `%${operationQuery}%`);
+        .from("programs")
+        .select("id, name, departments(name)")
+        .eq("institution_id", currentInstituteId)
+        .eq("is_active", true)
+        .ilike("name", `%${programQuery}%`);
 
       if (error) {
-        console.error("Error fetching operations:", error);
+        console.error("Error fetching programs:", error);
       } else {
-        setOperationResults(data);
+        setProgramResults(data);
       }
-      setLoadingOperations(false);
+      setLoadingPrograms(false);
     };
 
-    fetchOperations();
-  }, [operationQuery, currentInstituteId]);
+    fetchPrograms();
+  }, [programQuery, currentInstituteId]);
 
   // Submit update
   const handleSubmit = async (e) => {
     e.preventDefault();
     const { error } = await supabase
-      .from("courses")
+      .from("groups")
       .update({
         name: form.name,
-        operation_id: form.operation_id,
+        program_id: form.program_id,
       })
       .eq("id", form.id);
 
     if (error) {
-      alert("Failed to update course: " + error.message);
+      alert("Failed to update group: " + error.message);
     } else {
-      showToast("Course updated successfully!");
+      showToast("Group updated successfully!");
     }
   };
 
-  // Delete course
+  // Delete group
   const handleDelete = async () => {
-    if (!confirm("Are you sure you want to delete this course?")) {
+    if (!confirm("Are you sure you want to delete this group? This may affect related subgroups and students.")) {
       return;
     }
 
-    const { error } = await supabase.from("courses").delete().eq("id", form.id);
+    const { error } = await supabase
+      .from("groups")
+      .delete()
+      .eq("id", form.id);
 
     if (error) {
-      alert("Failed to delete course: " + error.message);
+      alert("Failed to delete group: " + error.message);
     } else {
-      showToast("Course deleted successfully!");
+      showToast("Group deleted successfully!");
       onCancel();
     }
   };
 
   useEffect(() => {
-    fetchCourse();
-  }, [courseId]);
+    fetchGroup();
+  }, [groupId]);
 
   return (
     <form onSubmit={handleSubmit} className="form">
-      <h2 className="form-title">Edit Course</h2>
+      <h2 className="form-title">Edit Group</h2>
 
       <div className="form-field">
-        <label>Course ID</label>
+        <label>Group ID</label>
         <div
           style={{
             padding: "8px",
@@ -132,54 +135,53 @@ export default function EditCourses({ courseId, onCancel }) {
       </div>
 
       <div className="form-field">
-        <label>Course Name</label>
+        <label>Group Name</label>
         <input
           className="form-input"
           value={form.name}
           onChange={(e) => setForm({ ...form, name: e.target.value })}
-          placeholder="Enter course name..."
+          placeholder="Enter group name..."
           required
         />
       </div>
 
       <div className="form-field autocomplete-container">
-        <label>Operation</label>
+        <label>Program</label>
         <input
           className="form-input"
-          value={operationQuery}
+          value={programQuery}
           onChange={(e) => {
-            setOperationQuery(e.target.value);
-            setForm({ ...form, operation_id: "" });
+            setProgramQuery(e.target.value);
+            setForm({ ...form, program_id: "" });
           }}
-          placeholder="Type operation name..."
+          placeholder="Type program name..."
           required
         />
 
-        {loadingOperations && (
+        {loadingPrograms && (
           <div className="autocomplete-loading">Searching...</div>
         )}
 
-        {operationResults.length > 0 && (
+        {programResults.length > 0 && (
           <div className="autocomplete-list">
-            {operationResults.map((op) => (
+            {programResults.map((prog) => (
               <div
-                key={op.id}
+                key={prog.id}
                 className="autocomplete-item"
                 onMouseDown={(e) => {
                   e.preventDefault();
-                  setOperationQuery(op.name);
+                  setProgramQuery(prog.name);
                   setForm((prev) => ({
                     ...prev,
-                    operation_id: op.id,
+                    program_id: prog.id,
                   }));
-                  setOperationResults([]);
+                  setProgramResults([]);
                 }}
               >
-                {op.name}
-                {op.programs?.name && (
+                {prog.name}{" "}
+                {prog.departments?.name && (
                   <span style={{ color: "#999", fontSize: "12px" }}>
-                    {" "}
-                    ({op.programs.name})
+                    ({prog.departments.name})
                   </span>
                 )}
               </div>
@@ -221,7 +223,7 @@ export default function EditCourses({ courseId, onCancel }) {
       </div>
 
       <button type="submit" className="form-submit">
-        Save Course
+        Save Group
       </button>
       <button type="button" className="form-cancel" onClick={onCancel}>
         Cancel
@@ -232,7 +234,7 @@ export default function EditCourses({ courseId, onCancel }) {
         style={{ backgroundColor: "#dc3545", marginTop: "10px" }}
         onClick={handleDelete}
       >
-        Delete Course
+        Delete Group
       </button>
     </form>
   );

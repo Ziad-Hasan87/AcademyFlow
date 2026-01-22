@@ -2,6 +2,8 @@ import { useState, useEffect } from "react";
 import { createUser } from "../utils/authentication";
 import { ROLES } from "../utils/types";
 import { MdOutlineEmail } from "react-icons/md";
+import supabase from "../utils/supabase";
+import { showToast } from "../utils/toast";
 
 export default function CreateUserForm() {
   // Get current user's institute from localStorage
@@ -18,7 +20,132 @@ export default function CreateUserForm() {
   const [studentInfo, setStudentInfo] = useState({
     program_id: "",
     is_representative: false,
+    operation_id: "",
+    roll_no: "",
+    group_id: "",
+    subgroup_id: "",
   });
+
+  // Autocomplete states
+  const [programQuery, setProgramQuery] = useState("");
+  const [programResults, setProgramResults] = useState([]);
+  const [loadingPrograms, setLoadingPrograms] = useState(false);
+
+  const [operationQuery, setOperationQuery] = useState("");
+  const [operationResults, setOperationResults] = useState([]);
+  const [loadingOperations, setLoadingOperations] = useState(false);
+
+  // Dropdown states
+  const [groups, setGroups] = useState([]);
+  const [subgroups, setSubgroups] = useState([]);
+  const [loadingGroups, setLoadingGroups] = useState(false);
+  const [loadingSubgroups, setLoadingSubgroups] = useState(false);
+
+  // Fetch programs for autocomplete
+  useEffect(() => {
+    if (programQuery.trim() === "") {
+      setProgramResults([]);
+      return;
+    }
+
+    const fetchPrograms = async () => {
+      setLoadingPrograms(true);
+      const { data, error } = await supabase
+        .from("programs")
+        .select("id, name, departments(name)")
+        .eq("institution_id", currentInstituteId)
+        .eq("is_active", true)
+        .ilike("name", `%${programQuery}%`);
+
+      if (error) {
+        console.error("Error fetching programs:", error);
+      } else {
+        setProgramResults(data);
+      }
+      setLoadingPrograms(false);
+    };
+
+    fetchPrograms();
+  }, [programQuery, currentInstituteId]);
+
+  // Fetch operations for autocomplete based on selected program
+  useEffect(() => {
+    if (operationQuery.trim() === "" || !studentInfo.program_id) {
+      setOperationResults([]);
+      return;
+    }
+
+    const fetchOperations = async () => {
+      setLoadingOperations(true);
+      const { data, error } = await supabase
+        .from("operations")
+        .select("id, name, status")
+        .eq("program_id", studentInfo.program_id)
+        .eq("status", "active")
+        .ilike("name", `%${operationQuery}%`);
+
+      if (error) {
+        console.error("Error fetching operations:", error);
+      } else {
+        setOperationResults(data);
+      }
+      setLoadingOperations(false);
+    };
+
+    fetchOperations();
+  }, [operationQuery, studentInfo.program_id]);
+
+  // Fetch groups when program is selected
+  useEffect(() => {
+    if (!studentInfo.program_id) {
+      setGroups([]);
+      return;
+    }
+
+    const fetchGroups = async () => {
+      setLoadingGroups(true);
+      const { data, error } = await supabase
+        .from("groups")
+        .select("id, name")
+        .eq("program_id", studentInfo.program_id)
+        .order("name");
+
+      if (error) {
+        console.error("Error fetching groups:", error);
+      } else {
+        setGroups(data || []);
+      }
+      setLoadingGroups(false);
+    };
+
+    fetchGroups();
+  }, [studentInfo.program_id]);
+
+  // Fetch subgroups when group is selected
+  useEffect(() => {
+    if (!studentInfo.group_id) {
+      setSubgroups([]);
+      return;
+    }
+
+    const fetchSubgroups = async () => {
+      setLoadingSubgroups(true);
+      const { data, error } = await supabase
+        .from("subgroups")
+        .select("id, name")
+        .eq("group_id", studentInfo.group_id)
+        .order("name");
+
+      if (error) {
+        console.error("Error fetching subgroups:", error);
+      } else {
+        setSubgroups(data || []);
+      }
+      setLoadingSubgroups(false);
+    };
+
+    fetchSubgroups();
+  }, [studentInfo.group_id]);
 
   /* ----------------------------------
      Submit handler
@@ -43,12 +170,16 @@ export default function CreateUserForm() {
       // If role is Student, insert into student table
       if (form.role === "Student") {
         const { error: studentError } = await supabase
-          .from("students") // corrected table name
+          .from("students")
           .insert([
             {
               id: user.id,
               program_id: studentInfo.program_id,
               is_representative: studentInfo.is_representative,
+              operation_id: studentInfo.operation_id,
+              roll_no: studentInfo.roll_no,
+              group_id: studentInfo.group_id || null,
+              subgroup_id: studentInfo.subgroup_id || null,
             },
           ]);
 
@@ -59,11 +190,20 @@ export default function CreateUserForm() {
         }
       }
 
-      alert("User created successfully");
+      showToast("User created successfully");
 
       // Reset form
       setForm({ role: "", institute_id: currentInstituteId, password: "", email: "" });
-      setStudentInfo({ program_id: "", is_representative: false });
+      setStudentInfo({
+        program_id: "",
+        is_representative: false,
+        operation_id: "",
+        roll_no: "",
+        group_id: "",
+        subgroup_id: "",
+      });
+      setProgramQuery("");
+      setOperationQuery("");
     } catch (error) {
       console.error(error);
       alert(`Failed to create user: ${error.message}`);
@@ -144,34 +284,170 @@ export default function CreateUserForm() {
         <div className="form-group-box">
           <h3 className="form-section-title">Student Details</h3>
 
-          <div className="form-field">
-            <label htmlFor="program-id">Program ID (uuid)</label>
+          <div className="form-field autocomplete-container">
+            <label>Program</label>
             <input
-              id="program-id"
-              type="text"
               className="form-input"
-              placeholder="Enter program ID"
-              value={studentInfo.program_id}
+              value={programQuery}
+              onChange={(e) => {
+                setProgramQuery(e.target.value);
+                setStudentInfo({
+                  ...studentInfo,
+                  program_id: "",
+                  operation_id: "",
+                  group_id: "",
+                  subgroup_id: "",
+                });
+                setOperationQuery("");
+              }}
+              placeholder="Type program name..."
+              required
+            />
+
+            {loadingPrograms && (
+              <div className="autocomplete-loading">Searching...</div>
+            )}
+
+            {programResults.length > 0 && (
+              <div className="autocomplete-list">
+                {programResults.map((prog) => (
+                  <div
+                    key={prog.id}
+                    className="autocomplete-item"
+                    onMouseDown={() => {
+                      setProgramQuery(prog.name);
+                      setStudentInfo({
+                        ...studentInfo,
+                        program_id: prog.id,
+                        operation_id: "",
+                        group_id: "",
+                        subgroup_id: "",
+                      });
+                      setProgramResults([]);
+                      setOperationQuery("");
+                    }}
+                  >
+                    {prog.name}
+                    {prog.departments?.name && (
+                      <span style={{ color: "#999", fontSize: "12px" }}>
+                        {" "}
+                        ({prog.departments.name})
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="form-field autocomplete-container">
+            <label>Operation</label>
+            <input
+              className="form-input"
+              value={operationQuery}
+              onChange={(e) => {
+                setOperationQuery(e.target.value);
+                setStudentInfo({ ...studentInfo, operation_id: "" });
+              }}
+              placeholder="Type operation name..."
+              disabled={!studentInfo.program_id}
+              required
+            />
+
+            {loadingOperations && (
+              <div className="autocomplete-loading">Searching...</div>
+            )}
+
+            {operationResults.length > 0 && (
+              <div className="autocomplete-list">
+                {operationResults.map((op) => (
+                  <div
+                    key={op.id}
+                    className="autocomplete-item"
+                    onMouseDown={() => {
+                      setOperationQuery(op.name);
+                      setStudentInfo({ ...studentInfo, operation_id: op.id });
+                      setOperationResults([]);
+                    }}
+                  >
+                    {op.name}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="form-field">
+            <label>Roll Number</label>
+            <input
+              className="form-input"
+              value={studentInfo.roll_no}
               onChange={(e) =>
-                setStudentInfo({ ...studentInfo, program_id: e.target.value })
+                setStudentInfo({ ...studentInfo, roll_no: e.target.value })
               }
+              placeholder="Enter roll number..."
               required
             />
           </div>
 
-          <div className="form-checkbox">
-            <input
-              id="is-representative"
-              type="checkbox"
-              checked={studentInfo.is_representative}
+          <div className="form-field">
+            <label>Class Representative</label>
+            <select
+              className="form-select"
+              value={studentInfo.is_representative ? "yes" : "no"}
               onChange={(e) =>
                 setStudentInfo({
                   ...studentInfo,
-                  is_representative: e.target.checked,
+                  is_representative: e.target.value === "yes",
                 })
               }
-            />
-            <label htmlFor="is-representative">Is representative</label>
+              required
+            >
+              <option value="no">No</option>
+              <option value="yes">Yes</option>
+            </select>
+          </div>
+
+          <div className="form-field">
+            <label>Group (Optional)</label>
+            <select
+              className="form-select"
+              value={studentInfo.group_id}
+              onChange={(e) => {
+                setStudentInfo({
+                  ...studentInfo,
+                  group_id: e.target.value,
+                  subgroup_id: "",
+                });
+              }}
+              disabled={!studentInfo.program_id || loadingGroups}
+            >
+              <option value="">Select a group</option>
+              {groups.map((grp) => (
+                <option key={grp.id} value={grp.id}>
+                  {grp.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="form-field">
+            <label>Subgroup (Optional)</label>
+            <select
+              className="form-select"
+              value={studentInfo.subgroup_id}
+              onChange={(e) =>
+                setStudentInfo({ ...studentInfo, subgroup_id: e.target.value })
+              }
+              disabled={!studentInfo.group_id || loadingSubgroups}
+            >
+              <option value="">Select a subgroup</option>
+              {subgroups.map((sub) => (
+                <option key={sub.id} value={sub.id}>
+                  {sub.name}
+                </option>
+              ))}
+            </select>
           </div>
         </div>
       )}

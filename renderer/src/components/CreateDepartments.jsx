@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import supabase from "../utils/supabase";
 import { ROLES } from "../utils/types";
+import { showToast } from "../utils/toast";
 
 export default function CreateDepartments() {
     const currentInstituteId = localStorage.getItem("institute_id");
@@ -26,7 +27,7 @@ export default function CreateDepartments() {
             alert("Department code already exists in this institute.");
             return;
         }
-        alert("Department created successfully");
+        showToast("Department created successfully");
     };
     return (
         <form onSubmit={handleSubmit} className="form">

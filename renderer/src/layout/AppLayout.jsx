@@ -9,6 +9,7 @@ import VerticalResizer from "../components/VerticalResizer";
 import MainContent from "../components/MainContent";
 import CreateRoutineModal from "../components/CreateRoutine"; // ✅ import modal
 import IconSidebar from "../components/IconSidebar"; // ✅ import icon sidebar
+import Toast from "../components/Toast";
 
 export default function AppLayout() {
   const [leftWidth, setLeftWidth] = useState(240);
@@ -67,6 +68,8 @@ export default function AppLayout() {
 
       {/* MODAL OVERLAY */}
       
+      {/* Toast Notifications */}
+      <Toast />
     </>
   );
 }
