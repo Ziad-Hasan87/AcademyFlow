@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { logIn } from "../utils/authentication";
+import { useAuth } from "../contexts/AuthContext";
 import supabase from "../utils/supabase";
 import "../App.css";
 
@@ -9,6 +10,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const navigate = useNavigate();
+  const { login } = useAuth();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -38,19 +40,11 @@ export default function LoginPage() {
 
       if (profileError) throw profileError;
 
-      // 3️⃣ Store auth + profile info in browser storage
+      // 3️⃣ Store auth in browser storage & update context
       localStorage.setItem("isAuthenticated", "true");
-      localStorage.setItem("user_id", profile.id);
-      localStorage.setItem("role", profile.role);
-      localStorage.setItem("institute_id", profile.institute_id);
-      localStorage.setItem("name", profile.name || "");
-      localStorage.setItem(
-        "institute_name",
-        profile.institutes?.name || "Unknown Institute"
-      );
-
-      // Optional: store full profile
-      localStorage.setItem("user", JSON.stringify(profile));
+      
+      // Update auth context with user data
+      await login();
 
       // 4️⃣ Redirect
       navigate("/dashboard");

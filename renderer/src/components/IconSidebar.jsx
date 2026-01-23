@@ -6,28 +6,37 @@ import { FaPeopleRoof } from "react-icons/fa6";
 import { MdOutlineGroupWork } from "react-icons/md";
 import { GrGroup } from "react-icons/gr";
 import { useNavigate } from "react-router-dom";
-import supabase from "../utils/supabase"; // for auth logout
+import { useAuth } from "../contexts/AuthContext";
+import supabase from "../utils/supabase";
+import { hasPermission } from "../utils/types";
 
 export default function IconSidebar({ onIconClick, activePage }) {
   const navigate = useNavigate();
+  const { userData, logout } = useAuth();
 
   const topIcons = [
-    { id: "users", icon: FaRegUser, name: "Users" },
-    { id: "moderators", icon: FiShield, name: "Moderators" },
-    { id: "operations", icon: FaCog, name: "Operations" },
-    { id: "programs", icon: FiBook, name: "Programs" },
-    { id: "courses", icon: FiBookOpen, name: "Courses" },
-    { id: "groups", icon: GrGroup, name: "Groups" },
-    { id: "subgroups", icon: FaPeopleRoof , name: "Subgroups" },
-    { id: "vacations", icon: FaRegCalendarTimes, name: "Vacations" },
-    { id: "departments", icon: GoOrganization, name: "Departments" },
+    { id: "users", icon: FaRegUser, name: "Users", minRole: "Admin" },
+    { id: "moderators", icon: FiShield, name: "Moderators", minRole: "Moderator" },
+    { id: "operations", icon: FaCog, name: "Operations" , minRole: "Moderator" },
+    { id: "programs", icon: FiBook, name: "Programs", minRole: "Admin" },
+    { id: "courses", icon: FiBookOpen, name: "Courses" , minRole: "Moderator"},
+    { id: "groups", icon: GrGroup, name: "Groups", minRole: "Moderator" },
+    { id: "subgroups", icon: FaPeopleRoof , name: "Subgroups", minRole: "Moderator" },
+    { id: "vacations", icon: FaRegCalendarTimes, name: "Vacations", minRole: "Moderator" },
+    { id: "departments", icon: GoOrganization, name: "Departments", minRole: "Admin" },
   ];
-
-  // Logout function
+  
+  const userRole = userData?.role;
+  
+  const visibleIcons = topIcons.filter(item =>{
+    const access = hasPermission(userRole, item.minRole);
+    return access;
+  }
+    
+  );
   const handleLogout = async () => {
     try {
-      await supabase.auth.signOut();
-      localStorage.clear();
+      await logout();
       navigate("/login");
     } catch (error) {
       console.error("Logout failed:", error);
@@ -47,7 +56,7 @@ export default function IconSidebar({ onIconClick, activePage }) {
     >
       {/* Top icons */}
       <div className="icon-sidebar-top">
-        {topIcons.map((item) => {
+        {visibleIcons.map((item) => {
           const IconComponent = item.icon;
           const isActive = activePage === item.id;
           return (

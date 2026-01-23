@@ -3,8 +3,10 @@ import CreateOperations from "../components/CreateOperations";
 import { useEffect, useState } from "react";
 import supabase from "../utils/supabase";
 import EditOperations from "../components/EditOperations";
+import { useAuth } from "../contexts/AuthContext";
 
 export default function OperationsPage() {
+  const { userData } = useAuth();
   const [isCreateOpen, setisCreateOpen] = useState(false);
   const [isEditOpen, setisEditOpen] = useState(false);
   const [operations, setOperations] = useState([]);
@@ -14,7 +16,7 @@ export default function OperationsPage() {
   const [selectedOperationId, setSelectedOperationId] = useState(null);
 
   const fetchPrograms = async () => {
-    const currentInstituteId = localStorage.getItem("institute_id");
+    const currentInstituteId = userData?.institute_id;
     const { data, error } = await supabase
       .from("programs")
       .select("id, name")
@@ -32,7 +34,7 @@ export default function OperationsPage() {
   const fetchOperations = async (programId = "") => {
     setLoading(true);
 
-    const currentInstituteId = localStorage.getItem("institute_id");
+    const currentInstituteId = userData?.institute_id;
 
     let query = supabase
       .from("operations")

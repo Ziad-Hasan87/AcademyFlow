@@ -2,13 +2,13 @@ import Modal from "../components/Modal";
 import CreateDepartments from "../components/CreateDepartments";
 import { useState, useEffect } from "react";
 import supabase from "../utils/supabase";
+import { useAuth } from "../contexts/AuthContext";
 
 export default function DepartmentsPage() {
+  const { userData } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
   const [departments, setDepartments] = useState([]);
   const [loading, setLoading] = useState(false);
-
-  const currentInstituteId = localStorage.getItem("institute_id");
 
   const fetchDepartments = async () => {
     setLoading(true);
@@ -16,7 +16,7 @@ export default function DepartmentsPage() {
     const { data, error } = await supabase
       .from("departments")
       .select("code, name")
-      .eq("institute_id", currentInstituteId)
+      .eq("institute_id", userData?.institute_id)
       .order("code");
 
     if (error) {

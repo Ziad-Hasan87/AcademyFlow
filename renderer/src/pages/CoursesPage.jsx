@@ -3,14 +3,16 @@ import CreateCourses from "../components/CreateCourses";
 import { useEffect, useState } from "react";
 import supabase from "../utils/supabase";
 import EditCourses from "../components/EditCourses";
+import { useAuth } from "../contexts/AuthContext";
 
 export default function CoursesPage() {
+  const { userData } = useAuth();
   const [isCreateOpen, setisCreateOpen] = useState(false);
   const [isEditOpen, setisEditOpen] = useState(false);
   const [courses, setCourses] = useState([]);
   const [loading, setLoading] = useState(false);
   const [selectedCourseId, setSelectedCourseId] = useState(null);
-
+  
   const fetchCourses = async () => {
     setLoading(true);
 
@@ -20,27 +22,22 @@ export default function CoursesPage() {
         id,
         name,
         created_at,
-        operation_id,
         operations (
           name,
-          program_id,
-          programs (
+          programs!inner (
             name,
             institution_id
           )
         )
       `)
+      .eq("operations.programs.institution_id", userData?.institute_id)
       .order("created_at", { ascending: false });
+
 
     if (error) {
       console.error("Error fetching courses:", error);
     } else {
-      const currentInstituteId = localStorage.getItem("institute_id");
-      // Filter by institute through operations -> programs
-      const filtered = data.filter(
-        (course) => course.operations?.programs?.institution_id === currentInstituteId
-      );
-      setCourses(filtered);
+      setCourses(data);
     }
 
     setLoading(false);

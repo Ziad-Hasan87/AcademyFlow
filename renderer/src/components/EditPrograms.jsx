@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
 import supabase from "../utils/supabase";
 import { showToast } from "../utils/toast";
+import { useAuth } from "../contexts/AuthContext";
 
 export default function EditPrograms({ programId, onCancel }) {
-  const currentInstituteId = localStorage.getItem("institute_id");
+  const { userData } = useAuth();
+  const currentInstituteId = userData?.institute_id;
   const [deptQuery, setDeptQuery] = useState("");
   const [deptResults, setDeptResults] = useState([]);
   const [loadingDepts, setLoadingDepts] = useState(false);
@@ -16,7 +18,6 @@ export default function EditPrograms({ programId, onCancel }) {
     department_id: "",
   });
 
-  // Fetch program by ID
   const fetchProgram = async () => {
     if (!programId) return;
 
@@ -49,7 +50,6 @@ export default function EditPrograms({ programId, onCancel }) {
     setDeptQuery(data.departments?.name || "");
   };
 
-  // Fetch departments for autocomplete
   useEffect(() => {
     if (deptQuery.trim() === "") {
       setDeptResults([]);
@@ -192,7 +192,7 @@ export default function EditPrograms({ programId, onCancel }) {
             fontStyle: "bold",
           }}
         >
-          {localStorage.getItem("institute_name") || form.institution_id}
+          {userData?.institute_name || form.institution_id}
         </div>
       </div>
 

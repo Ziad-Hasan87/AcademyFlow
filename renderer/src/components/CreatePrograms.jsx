@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
 import supabase from "../utils/supabase";
 import { showToast } from "../utils/toast";
+import { useAuth } from "../contexts/AuthContext";
 
 export default function CreatePrograms() {
-  const currentInstituteId = localStorage.getItem("institute_id");
+  const { userData } = useAuth();
+  const currentInstituteId = userData?.institute_id;
   const [form, setForm] = useState({
     name: "",
     institution_id: currentInstituteId ||  "",
@@ -123,7 +125,7 @@ export default function CreatePrograms() {
               fontStyle: "bold",
               }}
           >
-              {localStorage.getItem("institute_name") || form.institute_id}
+              {userData?.institute_name || form.institute_id}
           </div>
       </div>
 

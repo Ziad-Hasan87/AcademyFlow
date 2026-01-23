@@ -3,8 +3,10 @@ import CreateSubgroups from "../components/CreateSubgroups";
 import { useEffect, useState } from "react";
 import supabase from "../utils/supabase";
 import EditSubgroups from "../components/EditSubgroups";
+import { useAuth } from "../contexts/AuthContext";
 
 export default function SubgroupsPage() {
+  const { userData } = useAuth();
   const [isCreateOpen, setisCreateOpen] = useState(false);
   const [isEditOpen, setisEditOpen] = useState(false);
   const [subgroups, setSubgroups] = useState([]);
@@ -14,7 +16,7 @@ export default function SubgroupsPage() {
   const [selectedSubgroupId, setSelectedSubgroupId] = useState(null);
 
   const fetchGroups = async () => {
-    const currentInstituteId = localStorage.getItem("institute_id");
+    const currentInstituteId = userData?.institute_id;
     const { data, error } = await supabase
       .from("groups")
       .select("id, name, programs(name, institution_id)")
@@ -31,7 +33,7 @@ export default function SubgroupsPage() {
   const fetchSubgroups = async (groupId = "") => {
     setLoading(true);
 
-    const currentInstituteId = localStorage.getItem("institute_id");
+    const currentInstituteId = userData?.institute_id;
 
     let query = supabase
       .from("subgroups")

@@ -26,6 +26,7 @@ html, body, #root {
   padding: 20px;
 }
 
+
 .login-box {
   background: #ffffff;
   padding: 48px 40px;
@@ -150,7 +151,7 @@ html, body, #root {
 }
 
 .page-content {
-  padding: 20px;
+  padding: 20px 5px 5px 5px;
   color: #1a1a1a;
 }
 
@@ -587,6 +588,96 @@ html, body, #root {
   border-bottom: 1px solid #e0e0e0;
   margin-bottom: 15px;
 }
+/* ===========================
+   Lists (Departments, etc.)
+   =========================== */
+
+.lists-container {
+  display: flex;
+  flex-direction: column;
+  gap: 0px;
+  margin-top: 0px;
+}
+
+
+.list-item {
+  background: #EEF6EE;
+  border: 1px solid #e0e0e0;
+  border-radius: 0px;
+  padding: 14px 16px;
+  transition: background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+
+.list-item h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: #1a1a1a;
+}
+
+.list-item p {
+  margin: 4px 0 0 0;
+  font-size: 13px;
+  color: #666666;
+  line-height: 1.4;
+}
+
+
+/* Hover & focus feedback */
+.list-item:hover {
+  background: #DDFFDD;
+  border-color: #cfd8dc;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+}
+
+/* Optional: clickable rows */
+.list-item.clickable {
+  cursor: pointer;
+}
+.list-item.clickable:hover {
+  background: #DDFFDD;
+  border-color: #007acc;
+}
+.list-item-inactive {
+  background: #F6EEEE;
+  border: 1px solid #e0e0e0;
+  border-radius: 0px;
+  padding: 14px 16px;
+  transition: background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.list-item-inactive h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: #555555;
+}
+
+.list-item-inactive p {
+  margin: 4px 0 0 0;
+  font-size: 13px;
+  color: #999999;
+  line-height: 1.4;
+}
+.list-item-inactive:hover {
+  background: #F5DDE3;
+  border-color: #cfd8dc;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+}
+.list-item-inactive.clickable {
+  cursor: pointer;
+}
+.list-item-inactive.clickable:hover {
+  background: #eef5ff;
+  border-color: #007acc;
+}
+
+/* Optional: active/selected state */
+.list-item.active {
+  background: #e3f2fd;
+  border-color: #2196f3;
+}
+
 
 /* Optional extras */
 .logo {
@@ -681,6 +772,18 @@ html, body, #root {
   font-weight: 600;
   background: #007acc;
   color: #fff;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  width: 100%;
+}
+.form-cancel {
+  padding: 12px 24px;
+  font-size: 15px;
+  font-weight: 600;
+  background: #DDDDDD;
+  color: #555555;
   border: none;
   border-radius: 6px;
   cursor: pointer;
@@ -1058,6 +1161,447 @@ export default function BottomSidebar({ height }) {
 
 components\CreateCourses.jsx:
 ///
+import { useEffect, useState } from "react";
+import supabase from "../utils/supabase";
+import { showToast } from "../utils/toast";
+
+export default function CreateCourses() {
+  const currentInstituteId = localStorage.getItem("institute_id");
+  const [form, setForm] = useState({
+    name: "",
+    program_id: "",
+    operation_id: "",
+  });
+
+  const [programQuery, setProgramQuery] = useState("");
+  const [programResults, setProgramResults] = useState([]);
+  const [loadingPrograms, setLoadingPrograms] = useState(false);
+
+  const [operationQuery, setOperationQuery] = useState("");
+  const [operationResults, setOperationResults] = useState([]);
+  const [loadingOperations, setLoadingOperations] = useState(false);
+
+  // Fetch programs for autocomplete
+  useEffect(() => {
+    if (programQuery.trim() === "") {
+      setProgramResults([]);
+      return;
+    }
+
+    const fetchPrograms = async () => {
+      setLoadingPrograms(true);
+      const { data, error } = await supabase
+        .from("programs")
+        .select("id, name, departments(name)")
+        .eq("institution_id", currentInstituteId)
+        .eq("is_active", true)
+        .ilike("name", `%${programQuery}%`);
+
+      if (error) {
+        console.error("Error fetching programs:", error);
+      } else {
+        setProgramResults(data);
+      }
+      setLoadingPrograms(false);
+    };
+
+    fetchPrograms();
+  }, [programQuery, currentInstituteId]);
+
+  // Fetch operations for autocomplete based on selected program
+  useEffect(() => {
+    if (operationQuery.trim() === "" || !form.program_id) {
+      setOperationResults([]);
+      return;
+    }
+
+    const fetchOperations = async () => {
+      setLoadingOperations(true);
+      const { data, error } = await supabase
+        .from("operations")
+        .select("id, name, status")
+        .eq("program_id", form.program_id)
+        .eq("status", "active")
+        .ilike("name", `%${operationQuery}%`);
+
+      if (error) {
+        console.error("Error fetching operations:", error);
+      } else {
+        setOperationResults(data);
+      }
+      setLoadingOperations(false);
+    };
+
+    fetchOperations();
+  }, [operationQuery, form.program_id]);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+
+    const { error } = await supabase.from("courses").insert([
+      {
+        name: form.name,
+        operation_id: form.operation_id,
+      },
+    ]);
+
+    if (error) {
+      alert(`Failed to create course: ${error.message}`);
+      return;
+    }
+
+    showToast("Course created successfully");
+    setForm({ name: "", program_id: "", operation_id: "" });
+    setProgramQuery("");
+    setOperationQuery("");
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="form">
+      <h2 className="form-title">Create Course</h2>
+
+      <div className="form-field">
+        <label>Course Name</label>
+        <input
+          className="form-input"
+          value={form.name}
+          onChange={(e) => setForm({ ...form, name: e.target.value })}
+          placeholder="Enter course name..."
+          required
+        />
+      </div>
+
+      <div className="form-field autocomplete-container">
+        <label>Program</label>
+        <input
+          className="form-input"
+          value={programQuery}
+          onChange={(e) => {
+            setProgramQuery(e.target.value);
+            setForm({ ...form, program_id: "", operation_id: "" });
+            setOperationQuery("");
+          }}
+          placeholder="Type program name..."
+          required
+        />
+
+        {loadingPrograms && (
+          <div className="autocomplete-loading">Searching...</div>
+        )}
+
+        {programResults.length > 0 && (
+          <div className="autocomplete-list">
+            {programResults.map((prog) => (
+              <div
+                key={prog.id}
+                className="autocomplete-item"
+                onMouseDown={() => {
+                  setProgramQuery(prog.name);
+                  setForm({ ...form, program_id: prog.id, operation_id: "" });
+                  setProgramResults([]);
+                  setOperationQuery("");
+                }}
+              >
+                {prog.name}
+                {prog.departments?.name && (
+                  <span style={{ color: "#999", fontSize: "12px" }}>
+                    {" "}
+                    ({prog.departments.name})
+                  </span>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="form-field autocomplete-container">
+        <label>Operation</label>
+        <input
+          className="form-input"
+          value={operationQuery}
+          onChange={(e) => {
+            setOperationQuery(e.target.value);
+            setForm({ ...form, operation_id: "" });
+          }}
+          placeholder="Type operation name..."
+          disabled={!form.program_id}
+          required
+        />
+
+        {loadingOperations && (
+          <div className="autocomplete-loading">Searching...</div>
+        )}
+
+        {operationResults.length > 0 && (
+          <div className="autocomplete-list">
+            {operationResults.map((op) => (
+              <div
+                key={op.id}
+                className="autocomplete-item"
+                onMouseDown={() => {
+                  setOperationQuery(op.name);
+                  setForm({ ...form, operation_id: op.id });
+                  setOperationResults([]);
+                }}
+              >
+                {op.name}
+                {op.programs?.name && (
+                  <span style={{ color: "#999", fontSize: "12px" }}>
+                    {" "}
+                    ({op.programs.name})
+                  </span>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="form-field">
+        <label>Institute</label>
+        <div
+          style={{
+            padding: "8px",
+            backgroundColor: "#f0f0f0",
+            color: "#555",
+            borderRadius: "4px",
+            fontStyle: "bold",
+          }}
+        >
+          {localStorage.getItem("institute_name") || currentInstituteId}
+        </div>
+      </div>
+
+      <button type="submit" className="form-submit">
+        Create Course
+      </button>
+    </form>
+  );
+}
+
+///
+
+components\CreateDepartments.jsx:
+///
+import { useState, useEffect } from "react";
+import supabase from "../utils/supabase";
+import { ROLES } from "../utils/types";
+import { showToast } from "../utils/toast";
+
+export default function CreateDepartments() {
+    const currentInstituteId = localStorage.getItem("institute_id");
+
+    const [form, setForm] = useState({
+        code: "",
+        name: "",
+        institute_id: currentInstituteId || "",
+    });
+
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+
+        const { error } = await supabase.from("departments").insert([
+            {
+                code: form.code,
+                name: form.name,
+                institute_id: form.institute_id,
+            },
+        ]);
+            
+        if (error.code === "23505") {
+            alert("Department code already exists in this institute.");
+            return;
+        }
+        showToast("Department created successfully");
+    };
+    return (
+        <form onSubmit={handleSubmit} className="form">
+            <h2 className="form-title">Create Department</h2>
+            <div className="form-field">
+                <label>Department Code</label>
+                <input
+                    className="form-input"
+                    value={form.code}
+                    onChange={(e) => setForm({ ...form, code: e.target.value })}
+                    required
+                />
+            </div>
+
+            <div className="form-field">
+                <label>Department Name</label>
+                <input
+                    className="form-input"
+                    value={form.name}
+                    onChange={(e) => setForm({ ...form, name: e.target.value })}
+                    required
+                />
+            </div>
+            <div className="form-field">
+                <label>Institute</label>
+                <div
+                    style={{
+                    padding: "8px",
+                    backgroundColor: "#f0f0f0",
+                    color: "#555",
+                    borderRadius: "4px",
+                    fontStyle: "bold",
+                    }}
+                >
+                    {localStorage.getItem("institute_name") || form.institute_id}
+                </div>
+            </div>
+            <button type="submit" className="submit-button">
+                Create Department
+            </button>
+        </form>
+    );
+}
+    
+///
+
+components\CreateGroups.jsx:
+///
+import { useEffect, useState } from "react";
+import supabase from "../utils/supabase";
+import { showToast } from "../utils/toast";
+
+export default function CreateGroups() {
+  const currentInstituteId = localStorage.getItem("institute_id");
+  const [form, setForm] = useState({
+    name: "",
+    program_id: "",
+  });
+
+  const [programQuery, setProgramQuery] = useState("");
+  const [programResults, setProgramResults] = useState([]);
+  const [loadingPrograms, setLoadingPrograms] = useState(false);
+
+  // Fetch programs for autocomplete
+  useEffect(() => {
+    if (programQuery.trim() === "") {
+      setProgramResults([]);
+      return;
+    }
+
+    const fetchPrograms = async () => {
+      setLoadingPrograms(true);
+      const { data, error } = await supabase
+        .from("programs")
+        .select("id, name, departments(name)")
+        .eq("institution_id", currentInstituteId)
+        .eq("is_active", true)
+        .ilike("name", `%${programQuery}%`);
+
+      if (error) {
+        console.error("Error fetching programs:", error);
+      } else {
+        setProgramResults(data);
+      }
+      setLoadingPrograms(false);
+    };
+
+    fetchPrograms();
+  }, [programQuery, currentInstituteId]);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+
+    const { error } = await supabase.from("groups").insert([
+      {
+        name: form.name,
+        program_id: form.program_id,
+      },
+    ]);
+
+    if (error) {
+      alert(`Failed to create group: ${error.message}`);
+      return;
+    }
+
+    showToast("Group created successfully");
+    setForm({ name: "", program_id: "" });
+    setProgramQuery("");
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="form">
+      <h2 className="form-title">Create Group</h2>
+
+      <div className="form-field">
+        <label>Group Name</label>
+        <input
+          className="form-input"
+          value={form.name}
+          onChange={(e) => setForm({ ...form, name: e.target.value })}
+          placeholder="Enter group name..."
+          required
+        />
+      </div>
+
+      <div className="form-field autocomplete-container">
+        <label>Program</label>
+        <input
+          className="form-input"
+          value={programQuery}
+          onChange={(e) => {
+            setProgramQuery(e.target.value);
+            setForm({ ...form, program_id: "" });
+          }}
+          placeholder="Type program name..."
+          required
+        />
+
+        {loadingPrograms && (
+          <div className="autocomplete-loading">Searching...</div>
+        )}
+
+        {programResults.length > 0 && (
+          <div className="autocomplete-list">
+            {programResults.map((prog) => (
+              <div
+                key={prog.id}
+                className="autocomplete-item"
+                onMouseDown={() => {
+                  setProgramQuery(prog.name);
+                  setForm({ ...form, program_id: prog.id });
+                  setProgramResults([]);
+                }}
+              >
+                {prog.name}
+                {prog.departments?.name && (
+                  <span style={{ color: "#999", fontSize: "12px" }}>
+                    {" "}
+                    ({prog.departments.name})
+                  </span>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="form-field">
+        <label>Institute</label>
+        <div
+          style={{
+            padding: "8px",
+            backgroundColor: "#f0f0f0",
+            color: "#555",
+            borderRadius: "4px",
+            fontStyle: "bold",
+          }}
+        >
+          {localStorage.getItem("institute_name") || currentInstituteId}
+        </div>
+      </div>
+
+      <button type="submit" className="form-submit">
+        Create Group
+      </button>
+    </form>
+  );
+}
 
 ///
 
@@ -1065,6 +1609,7 @@ components\CreateOperations.jsx:
 ///
 import { useEffect, useState } from "react";
 import supabase from "../utils/supabase";
+import { showToast } from "../utils/toast";
 
 export default function CreateOperations() {
   const [form, setForm] = useState({
@@ -1081,7 +1626,7 @@ export default function CreateOperations() {
      Program search (autocomplete)
   ---------------------------------- */
   useEffect(() => {
-    if (programQuery.length < 2) {
+    if (programQuery.trim() === "") {
       setPrograms([]);
       return;
     }
@@ -1089,13 +1634,19 @@ export default function CreateOperations() {
     const fetchPrograms = async () => {
       setLoadingPrograms(true);
 
+      const currentInstituteId = localStorage.getItem("institute_id");
       const { data, error } = await supabase
         .from("programs")
-        .select("id, name")
-        .ilike("name", `%${programQuery}%`)
-        .limit(10);
+        .select("id, name, departments(name)")
+        .eq("institution_id", currentInstituteId)
+        .eq("is_active", true)
+        .ilike("name", `%${programQuery}%`);
 
-      if (!error) setPrograms(data || []);
+      if (error) {
+        console.error("Error fetching programs:", error);
+      } else {
+        setPrograms(data || []);
+      }
       setLoadingPrograms(false);
     };
 
@@ -1121,7 +1672,7 @@ export default function CreateOperations() {
       return;
     }
 
-    alert("Operation created successfully");
+    showToast("Operation created successfully");
     setForm({ name: "", program_id: "", status: "active" });
     setProgramQuery("");
     setPrograms([]);
@@ -1142,36 +1693,45 @@ export default function CreateOperations() {
         />
       </div>
 
-      <div className="form-field">
+      <div className="form-field autocomplete-container">
         <label>Program</label>
-
         <input
           className="form-input"
-          placeholder="Search program"
           value={programQuery}
-          onChange={(e) => setProgramQuery(e.target.value)}
+          onChange={(e) => {
+            setProgramQuery(e.target.value);
+            setForm({ ...form, program_id: "" });
+          }}
+          placeholder="Type program name..."
+          required
         />
 
+        {loadingPrograms && (
+          <div className="autocomplete-loading">Searching...</div>
+        )}
+
         {programs.length > 0 && (
-          <ul className="autocomplete-list">
+          <div className="autocomplete-list">
             {programs.map((prog) => (
-              <li
+              <div
                 key={prog.id}
                 className="autocomplete-item"
-                onClick={() => {
-                  setForm({ ...form, program_id: prog.id });
+                onMouseDown={() => {
                   setProgramQuery(prog.name);
+                  setForm({ ...form, program_id: prog.id });
                   setPrograms([]);
                 }}
               >
                 {prog.name}
-              </li>
+                {prog.departments?.name && (
+                  <span style={{ color: "#999", fontSize: "12px" }}>
+                    {" "}
+                    ({prog.departments.name})
+                  </span>
+                )}
+              </div>
             ))}
-          </ul>
-        )}
-
-        {loadingPrograms && (
-          <div className="autocomplete-loading">Searching…</div>
+          </div>
         )}
       </div>
 
@@ -1188,6 +1748,21 @@ export default function CreateOperations() {
         </select>
       </div>
 
+      <div className="form-field">
+        <label>Institute</label>
+        <div
+          style={{
+            padding: "8px",
+            backgroundColor: "#f0f0f0",
+            color: "#555",
+            borderRadius: "4px",
+            fontStyle: "bold",
+          }}
+        >
+          {localStorage.getItem("institute_name") || localStorage.getItem("institute_id")}
+        </div>
+      </div>
+
       <button type="submit" className="form-submit">
         Create Operation
       </button>
@@ -1201,46 +1776,45 @@ components\CreatePrograms.jsx:
 ///
 import { useEffect, useState } from "react";
 import supabase from "../utils/supabase";
+import { showToast } from "../utils/toast";
 
 export default function CreatePrograms() {
+  const currentInstituteId = localStorage.getItem("institute_id");
   const [form, setForm] = useState({
     name: "",
-    institution_id: "",
+    institution_id: currentInstituteId ||  "",
     is_active: true,
+    department_id: "",
   });
 
-  const [instituteQuery, setInstituteQuery] = useState("");
-  const [institutes, setInstitutes] = useState([]);
-  const [loadingInstitutes, setLoadingInstitutes] = useState(false);
+  const [deptQuery, setDeptQuery] = useState("");
+  const [deptResults, setDeptResults] = useState([]);
+  const [loadingDepts, setLoadingDepts] = useState(false);
 
-  /* ----------------------------------
-     Institution search (autocomplete)
-  ---------------------------------- */
   useEffect(() => {
-    if (instituteQuery.length < 2) {
-      setInstitutes([]);
+    if (deptQuery.trim() === "") {
+      setDeptResults([]);
       return;
     }
-
-    const fetchInstitutes = async () => {
-      setLoadingInstitutes(true);
-
+    const fetchDepartments = async () => {
+      setLoadingDepts(true);
       const { data, error } = await supabase
-        .from("institutes")
+        .from("departments")
         .select("id, name")
-        .ilike("name", `%${instituteQuery}%`)
-        .limit(10);
+        .eq("institute_id", currentInstituteId)
+        .ilike("name", `%${deptQuery}%`);
 
-      if (!error) setInstitutes(data || []);
-      setLoadingInstitutes(false);
+      if (error) {
+        console.error("Error fetching departments:", error);
+      } else {
+        setDeptResults(data);
+      }
+      setLoadingDepts(false);
     };
 
-    fetchInstitutes();
-  }, [instituteQuery]);
+    fetchDepartments();
+  }, [deptQuery, currentInstituteId]);
 
-  /* ----------------------------------
-     Submit handler
-  ---------------------------------- */
   const handleSubmit = async (e) => {
     e.preventDefault();
 
@@ -1249,6 +1823,7 @@ export default function CreatePrograms() {
         name: form.name,
         institution_id: form.institution_id,
         is_active: form.is_active,
+        department_id: form.department_id,
       },
     ]);
 
@@ -1257,15 +1832,13 @@ export default function CreatePrograms() {
       return;
     }
 
-    alert("Program created successfully");
+    showToast("Program created successfully");
     setForm({ name: "", institution_id: "", is_active: true });
-    setInstituteQuery("");
-    setInstitutes([]);
   };
 
   return (
     <form onSubmit={handleSubmit} className="form">
-      <h2 className="form-title">Create Program</h2>
+      <h2 className="form-title">Create Program</h2> 
 
       <div className="form-field">
         <label>Program Name</label>
@@ -1276,38 +1849,58 @@ export default function CreatePrograms() {
           required
         />
       </div>
-
-      <div className="form-field">
-        <label>Institution</label>
-
+      <div className="form-field autocomplete-container">
+        <label>Department</label>
         <input
           className="form-input"
-          placeholder="Search institution"
-          value={instituteQuery}
-          onChange={(e) => setInstituteQuery(e.target.value)}
+          value={deptQuery}
+          onChange={(e) => {
+            setDeptQuery(e.target.value);
+            setForm({ ...form, department_id: "" });
+          }}
+          placeholder="Type department name..."
+          required
         />
 
-        {institutes.length > 0 && (
-          <ul className="autocomplete-list">
-            {institutes.map((inst) => (
-              <li
-                key={inst.id}
-                className="autocomplete-item"
-                onClick={() => {
-                  setForm({ ...form, institution_id: inst.id });
-                  setInstituteQuery(inst.name);
-                  setInstitutes([]);
-                }}
-              >
-                {inst.name}
-              </li>
-            ))}
-          </ul>
+        {loadingDepts && (
+          <div className="autocomplete-loading">Searching...</div>
         )}
 
-        {loadingInstitutes && (
-          <div className="autocomplete-loading">Searching…</div>
+        {deptResults.length > 0 && (
+          <div className="autocomplete-list">
+            {deptResults.map((dept) => (
+              <div
+                key={dept.id}
+                className="autocomplete-item"
+                onMouseDown={() => {
+                  setDeptQuery(dept.name);
+                  setForm({ ...form, department_id: dept.id });
+                  setDeptResults([]);
+                }}
+              >
+                {dept.name}
+                <span style={{ color: "#999", fontSize: "12px" }}>
+                  {" "}
+                  ({dept.code})
+                </span>
+              </div>
+            ))}
+          </div>
         )}
+      </div>
+      <div className="form-field">
+          <label>Institute</label>
+          <div
+              style={{
+              padding: "8px",
+              backgroundColor: "#f0f0f0",
+              color: "#555",
+              borderRadius: "4px",
+              fontStyle: "bold",
+              }}
+          >
+              {localStorage.getItem("institute_name") || form.institute_id}
+          </div>
       </div>
 
       <button type="submit" className="form-submit">
@@ -1357,12 +1950,158 @@ export default function CreateRoutineModal({ onClose }) {
 
 ///
 
+components\CreateSubgroups.jsx:
+///
+import { useEffect, useState } from "react";
+import supabase from "../utils/supabase";
+import { showToast } from "../utils/toast";
+
+export default function CreateSubgroups() {
+  const currentInstituteId = localStorage.getItem("institute_id");
+  const [form, setForm] = useState({
+    name: "",
+    group_id: "",
+  });
+
+  const [groupQuery, setGroupQuery] = useState("");
+  const [groupResults, setGroupResults] = useState([]);
+  const [loadingGroups, setLoadingGroups] = useState(false);
+
+  // Fetch groups for autocomplete
+  useEffect(() => {
+    if (groupQuery.trim() === "") {
+      setGroupResults([]);
+      return;
+    }
+
+    const fetchGroups = async () => {
+      setLoadingGroups(true);
+      const { data, error } = await supabase
+        .from("groups")
+        .select("id, name, programs(name, institution_id)")
+        .eq("programs.institution_id", currentInstituteId)
+        .ilike("name", `%${groupQuery}%`);
+
+      if (error) {
+        console.error("Error fetching groups:", error);
+      } else {
+        setGroupResults(data);
+      }
+      setLoadingGroups(false);
+    };
+
+    fetchGroups();
+  }, [groupQuery, currentInstituteId]);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+
+    const { error } = await supabase.from("subgroups").insert([
+      {
+        name: form.name,
+        group_id: form.group_id,
+      },
+    ]);
+
+    if (error) {
+      alert(`Failed to create subgroup: ${error.message}`);
+      return;
+    }
+
+    showToast("Subgroup created successfully");
+    setForm({ name: "", group_id: "" });
+    setGroupQuery("");
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="form">
+      <h2 className="form-title">Create Subgroup</h2>
+
+      <div className="form-field">
+        <label>Subgroup Name</label>
+        <input
+          className="form-input"
+          value={form.name}
+          onChange={(e) => setForm({ ...form, name: e.target.value })}
+          placeholder="Enter subgroup name..."
+          required
+        />
+      </div>
+
+      <div className="form-field autocomplete-container">
+        <label>Group</label>
+        <input
+          className="form-input"
+          value={groupQuery}
+          onChange={(e) => {
+            setGroupQuery(e.target.value);
+            setForm({ ...form, group_id: "" });
+          }}
+          placeholder="Type group name..."
+          required
+        />
+
+        {loadingGroups && (
+          <div className="autocomplete-loading">Searching...</div>
+        )}
+
+        {groupResults.length > 0 && (
+          <div className="autocomplete-list">
+            {groupResults.map((grp) => (
+              <div
+                key={grp.id}
+                className="autocomplete-item"
+                onMouseDown={() => {
+                  setGroupQuery(grp.name);
+                  setForm({ ...form, group_id: grp.id });
+                  setGroupResults([]);
+                }}
+              >
+                {grp.name}
+                {grp.programs?.name && (
+                  <span style={{ color: "#999", fontSize: "12px" }}>
+                    {" "}
+                    ({grp.programs.name})
+                  </span>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="form-field">
+        <label>Institute</label>
+        <div
+          style={{
+            padding: "8px",
+            backgroundColor: "#f0f0f0",
+            color: "#555",
+            borderRadius: "4px",
+            fontStyle: "bold",
+          }}
+        >
+          {localStorage.getItem("institute_name") || currentInstituteId}
+        </div>
+      </div>
+
+      <button type="submit" className="form-submit">
+        Create Subgroup
+      </button>
+    </form>
+  );
+}
+
+///
+
 components\CreateUser.jsx:
 ///
 import { useState, useEffect } from "react";
 import { createUser } from "../utils/authentication";
 import { ROLES } from "../utils/types";
 import { MdOutlineEmail } from "react-icons/md";
+import supabase from "../utils/supabase";
+import { showToast } from "../utils/toast";
 
 export default function CreateUserForm() {
   // Get current user's institute from localStorage
@@ -1379,7 +2118,132 @@ export default function CreateUserForm() {
   const [studentInfo, setStudentInfo] = useState({
     program_id: "",
     is_representative: false,
+    operation_id: "",
+    roll_no: "",
+    group_id: "",
+    subgroup_id: "",
   });
+
+  // Autocomplete states
+  const [programQuery, setProgramQuery] = useState("");
+  const [programResults, setProgramResults] = useState([]);
+  const [loadingPrograms, setLoadingPrograms] = useState(false);
+
+  const [operationQuery, setOperationQuery] = useState("");
+  const [operationResults, setOperationResults] = useState([]);
+  const [loadingOperations, setLoadingOperations] = useState(false);
+
+  // Dropdown states
+  const [groups, setGroups] = useState([]);
+  const [subgroups, setSubgroups] = useState([]);
+  const [loadingGroups, setLoadingGroups] = useState(false);
+  const [loadingSubgroups, setLoadingSubgroups] = useState(false);
+
+  // Fetch programs for autocomplete
+  useEffect(() => {
+    if (programQuery.trim() === "") {
+      setProgramResults([]);
+      return;
+    }
+
+    const fetchPrograms = async () => {
+      setLoadingPrograms(true);
+      const { data, error } = await supabase
+        .from("programs")
+        .select("id, name, departments(name)")
+        .eq("institution_id", currentInstituteId)
+        .eq("is_active", true)
+        .ilike("name", `%${programQuery}%`);
+
+      if (error) {
+        console.error("Error fetching programs:", error);
+      } else {
+        setProgramResults(data);
+      }
+      setLoadingPrograms(false);
+    };
+
+    fetchPrograms();
+  }, [programQuery, currentInstituteId]);
+
+  // Fetch operations for autocomplete based on selected program
+  useEffect(() => {
+    if (operationQuery.trim() === "" || !studentInfo.program_id) {
+      setOperationResults([]);
+      return;
+    }
+
+    const fetchOperations = async () => {
+      setLoadingOperations(true);
+      const { data, error } = await supabase
+        .from("operations")
+        .select("id, name, status")
+        .eq("program_id", studentInfo.program_id)
+        .eq("status", "active")
+        .ilike("name", `%${operationQuery}%`);
+
+      if (error) {
+        console.error("Error fetching operations:", error);
+      } else {
+        setOperationResults(data);
+      }
+      setLoadingOperations(false);
+    };
+
+    fetchOperations();
+  }, [operationQuery, studentInfo.program_id]);
+
+  // Fetch groups when program is selected
+  useEffect(() => {
+    if (!studentInfo.program_id) {
+      setGroups([]);
+      return;
+    }
+
+    const fetchGroups = async () => {
+      setLoadingGroups(true);
+      const { data, error } = await supabase
+        .from("groups")
+        .select("id, name")
+        .eq("program_id", studentInfo.program_id)
+        .order("name");
+
+      if (error) {
+        console.error("Error fetching groups:", error);
+      } else {
+        setGroups(data || []);
+      }
+      setLoadingGroups(false);
+    };
+
+    fetchGroups();
+  }, [studentInfo.program_id]);
+
+  // Fetch subgroups when group is selected
+  useEffect(() => {
+    if (!studentInfo.group_id) {
+      setSubgroups([]);
+      return;
+    }
+
+    const fetchSubgroups = async () => {
+      setLoadingSubgroups(true);
+      const { data, error } = await supabase
+        .from("subgroups")
+        .select("id, name")
+        .eq("group_id", studentInfo.group_id)
+        .order("name");
+
+      if (error) {
+        console.error("Error fetching subgroups:", error);
+      } else {
+        setSubgroups(data || []);
+      }
+      setLoadingSubgroups(false);
+    };
+
+    fetchSubgroups();
+  }, [studentInfo.group_id]);
 
   /* ----------------------------------
      Submit handler
@@ -1395,7 +2259,7 @@ export default function CreateUserForm() {
     try {
       // Create user
       const user = await createUser({
-        email: form.email || `user-${Date.now()}@academy.local`,
+        email: form.email,
         password: form.password,
         role: form.role,
         institute_id: form.institute_id,
@@ -1404,12 +2268,16 @@ export default function CreateUserForm() {
       // If role is Student, insert into student table
       if (form.role === "Student") {
         const { error: studentError } = await supabase
-          .from("students") // corrected table name
+          .from("students")
           .insert([
             {
               id: user.id,
               program_id: studentInfo.program_id,
               is_representative: studentInfo.is_representative,
+              operation_id: studentInfo.operation_id,
+              roll_no: studentInfo.roll_no,
+              group_id: studentInfo.group_id || null,
+              subgroup_id: studentInfo.subgroup_id || null,
             },
           ]);
 
@@ -1420,11 +2288,20 @@ export default function CreateUserForm() {
         }
       }
 
-      alert("User created successfully");
+      showToast("User created successfully");
 
       // Reset form
       setForm({ role: "", institute_id: currentInstituteId, password: "", email: "" });
-      setStudentInfo({ program_id: "", is_representative: false });
+      setStudentInfo({
+        program_id: "",
+        is_representative: false,
+        operation_id: "",
+        roll_no: "",
+        group_id: "",
+        subgroup_id: "",
+      });
+      setProgramQuery("");
+      setOperationQuery("");
     } catch (error) {
       console.error(error);
       alert(`Failed to create user: ${error.message}`);
@@ -1505,40 +2382,1384 @@ export default function CreateUserForm() {
         <div className="form-group-box">
           <h3 className="form-section-title">Student Details</h3>
 
-          <div className="form-field">
-            <label htmlFor="program-id">Program ID (uuid)</label>
+          <div className="form-field autocomplete-container">
+            <label>Program</label>
             <input
-              id="program-id"
-              type="text"
               className="form-input"
-              placeholder="Enter program ID"
-              value={studentInfo.program_id}
+              value={programQuery}
+              onChange={(e) => {
+                setProgramQuery(e.target.value);
+                setStudentInfo({
+                  ...studentInfo,
+                  program_id: "",
+                  operation_id: "",
+                  group_id: "",
+                  subgroup_id: "",
+                });
+                setOperationQuery("");
+              }}
+              placeholder="Type program name..."
+              required
+            />
+
+            {loadingPrograms && (
+              <div className="autocomplete-loading">Searching...</div>
+            )}
+
+            {programResults.length > 0 && (
+              <div className="autocomplete-list">
+                {programResults.map((prog) => (
+                  <div
+                    key={prog.id}
+                    className="autocomplete-item"
+                    onMouseDown={() => {
+                      setProgramQuery(prog.name);
+                      setStudentInfo({
+                        ...studentInfo,
+                        program_id: prog.id,
+                        operation_id: "",
+                        group_id: "",
+                        subgroup_id: "",
+                      });
+                      setProgramResults([]);
+                      setOperationQuery("");
+                    }}
+                  >
+                    {prog.name}
+                    {prog.departments?.name && (
+                      <span style={{ color: "#999", fontSize: "12px" }}>
+                        {" "}
+                        ({prog.departments.name})
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="form-field autocomplete-container">
+            <label>Operation</label>
+            <input
+              className="form-input"
+              value={operationQuery}
+              onChange={(e) => {
+                setOperationQuery(e.target.value);
+                setStudentInfo({ ...studentInfo, operation_id: "" });
+              }}
+              placeholder="Type operation name..."
+              disabled={!studentInfo.program_id}
+              required
+            />
+
+            {loadingOperations && (
+              <div className="autocomplete-loading">Searching...</div>
+            )}
+
+            {operationResults.length > 0 && (
+              <div className="autocomplete-list">
+                {operationResults.map((op) => (
+                  <div
+                    key={op.id}
+                    className="autocomplete-item"
+                    onMouseDown={() => {
+                      setOperationQuery(op.name);
+                      setStudentInfo({ ...studentInfo, operation_id: op.id });
+                      setOperationResults([]);
+                    }}
+                  >
+                    {op.name}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="form-field">
+            <label>Roll Number</label>
+            <input
+              className="form-input"
+              value={studentInfo.roll_no}
               onChange={(e) =>
-                setStudentInfo({ ...studentInfo, program_id: e.target.value })
+                setStudentInfo({ ...studentInfo, roll_no: e.target.value })
               }
+              placeholder="Enter roll number..."
               required
             />
           </div>
 
-          <div className="form-checkbox">
-            <input
-              id="is-representative"
-              type="checkbox"
-              checked={studentInfo.is_representative}
+          <div className="form-field">
+            <label>Class Representative</label>
+            <select
+              className="form-select"
+              value={studentInfo.is_representative ? "yes" : "no"}
               onChange={(e) =>
                 setStudentInfo({
                   ...studentInfo,
-                  is_representative: e.target.checked,
+                  is_representative: e.target.value === "yes",
                 })
               }
-            />
-            <label htmlFor="is-representative">Is representative</label>
+              required
+            >
+              <option value="no">No</option>
+              <option value="yes">Yes</option>
+            </select>
+          </div>
+
+          <div className="form-field">
+            <label>Group (Optional)</label>
+            <select
+              className="form-select"
+              value={studentInfo.group_id}
+              onChange={(e) => {
+                setStudentInfo({
+                  ...studentInfo,
+                  group_id: e.target.value,
+                  subgroup_id: "",
+                });
+              }}
+              disabled={!studentInfo.program_id || loadingGroups}
+            >
+              <option value="">Select a group</option>
+              {groups.map((grp) => (
+                <option key={grp.id} value={grp.id}>
+                  {grp.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="form-field">
+            <label>Subgroup (Optional)</label>
+            <select
+              className="form-select"
+              value={studentInfo.subgroup_id}
+              onChange={(e) =>
+                setStudentInfo({ ...studentInfo, subgroup_id: e.target.value })
+              }
+              disabled={!studentInfo.group_id || loadingSubgroups}
+            >
+              <option value="">Select a subgroup</option>
+              {subgroups.map((sub) => (
+                <option key={sub.id} value={sub.id}>
+                  {sub.name}
+                </option>
+              ))}
+            </select>
           </div>
         </div>
       )}
 
       <button type="submit" className="form-submit">
         Create User
+      </button>
+    </form>
+  );
+}
+
+///
+
+components\EditCourses.jsx:
+///
+import { useEffect, useState } from "react";
+import supabase from "../utils/supabase";
+import { showToast } from "../utils/toast";
+
+export default function EditCourses({ courseId, onCancel }) {
+  const currentInstituteId = localStorage.getItem("institute_id");
+  const [operationQuery, setOperationQuery] = useState("");
+  const [operationResults, setOperationResults] = useState([]);
+  const [loadingOperations, setLoadingOperations] = useState(false);
+
+  const [form, setForm] = useState({
+    id: "",
+    name: "",
+    operation_id: "",
+    created_at: "",
+  });
+
+  // Fetch course by ID
+  const fetchCourse = async () => {
+    if (!courseId) return;
+
+    const { data, error } = await supabase
+      .from("courses")
+      .select(`
+        id,
+        name,
+        created_at,
+        operation_id,
+        operations ( name )
+      `)
+      .eq("id", courseId)
+      .single();
+
+    if (error) {
+      console.error("Error fetching course:", error);
+      return;
+    }
+
+    setForm({
+      id: data.id,
+      name: data.name,
+      operation_id: data.operation_id,
+      created_at: data.created_at,
+    });
+
+    setOperationQuery(data.operations?.name || "");
+  };
+
+  // Fetch operations for autocomplete
+  useEffect(() => {
+    if (operationQuery.trim() === "") {
+      setOperationResults([]);
+      return;
+    }
+
+    const fetchOperations = async () => {
+      setLoadingOperations(true);
+      const { data, error } = await supabase
+        .from("operations")
+        .select("id, name, status, programs(name, institution_id)")
+        .eq("programs.institution_id", currentInstituteId)
+        .eq("status", "active")
+        .ilike("name", `%${operationQuery}%`);
+
+      if (error) {
+        console.error("Error fetching operations:", error);
+      } else {
+        setOperationResults(data);
+      }
+      setLoadingOperations(false);
+    };
+
+    fetchOperations();
+  }, [operationQuery, currentInstituteId]);
+
+  // Submit update
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    const { error } = await supabase
+      .from("courses")
+      .update({
+        name: form.name,
+        operation_id: form.operation_id,
+      })
+      .eq("id", form.id);
+
+    if (error) {
+      alert("Failed to update course: " + error.message);
+    } else {
+      showToast("Course updated successfully!");
+    }
+  };
+
+  // Delete course
+  const handleDelete = async () => {
+    if (!confirm("Are you sure you want to delete this course?")) {
+      return;
+    }
+
+    const { error } = await supabase.from("courses").delete().eq("id", form.id);
+
+    if (error) {
+      alert("Failed to delete course: " + error.message);
+    } else {
+      showToast("Course deleted successfully!");
+      onCancel();
+    }
+  };
+
+  useEffect(() => {
+    fetchCourse();
+  }, [courseId]);
+
+  return (
+    <form onSubmit={handleSubmit} className="form">
+      <h2 className="form-title">Edit Course</h2>
+
+      <div className="form-field">
+        <label>Course ID</label>
+        <div
+          style={{
+            padding: "8px",
+            backgroundColor: "#f0f0f0",
+            color: "#555",
+            borderRadius: "4px",
+            fontStyle: "bold",
+            fontSize: "0.9em",
+          }}
+        >
+          {form.id}
+        </div>
+      </div>
+
+      <div className="form-field">
+        <label>Course Name</label>
+        <input
+          className="form-input"
+          value={form.name}
+          onChange={(e) => setForm({ ...form, name: e.target.value })}
+          placeholder="Enter course name..."
+          required
+        />
+      </div>
+
+      <div className="form-field autocomplete-container">
+        <label>Operation</label>
+        <input
+          className="form-input"
+          value={operationQuery}
+          onChange={(e) => {
+            setOperationQuery(e.target.value);
+            setForm({ ...form, operation_id: "" });
+          }}
+          placeholder="Type operation name..."
+          required
+        />
+
+        {loadingOperations && (
+          <div className="autocomplete-loading">Searching...</div>
+        )}
+
+        {operationResults.length > 0 && (
+          <div className="autocomplete-list">
+            {operationResults.map((op) => (
+              <div
+                key={op.id}
+                className="autocomplete-item"
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  setOperationQuery(op.name);
+                  setForm((prev) => ({
+                    ...prev,
+                    operation_id: op.id,
+                  }));
+                  setOperationResults([]);
+                }}
+              >
+                {op.name}
+                {op.programs?.name && (
+                  <span style={{ color: "#999", fontSize: "12px" }}>
+                    {" "}
+                    ({op.programs.name})
+                  </span>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="form-field">
+        <label>Institute</label>
+        <div
+          style={{
+            padding: "8px",
+            backgroundColor: "#f0f0f0",
+            color: "#555",
+            borderRadius: "4px",
+            fontStyle: "bold",
+          }}
+        >
+          {localStorage.getItem("institute_name") || currentInstituteId}
+        </div>
+      </div>
+
+      <div className="form-field">
+        <label>Created At</label>
+        <div
+          style={{
+            padding: "8px",
+            backgroundColor: "#f0f0f0",
+            color: "#555",
+            borderRadius: "4px",
+            fontSize: "0.9em",
+          }}
+        >
+          {form.created_at
+            ? new Date(form.created_at).toLocaleString()
+            : "N/A"}
+        </div>
+      </div>
+
+      <button type="submit" className="form-submit">
+        Save Course
+      </button>
+      <button type="button" className="form-cancel" onClick={onCancel}>
+        Cancel
+      </button>
+      <button
+        type="button"
+        className="form-submit"
+        style={{ backgroundColor: "#dc3545", marginTop: "10px" }}
+        onClick={handleDelete}
+      >
+        Delete Course
+      </button>
+    </form>
+  );
+}
+
+///
+
+components\EditGroups.jsx:
+///
+import { useEffect, useState } from "react";
+import supabase from "../utils/supabase";
+import { showToast } from "../utils/toast";
+
+export default function EditGroups({ groupId, onCancel }) {
+  const currentInstituteId = localStorage.getItem("institute_id");
+  const [programQuery, setProgramQuery] = useState("");
+  const [programResults, setProgramResults] = useState([]);
+  const [loadingPrograms, setLoadingPrograms] = useState(false);
+
+  const [form, setForm] = useState({
+    id: "",
+    name: "",
+    program_id: "",
+    created_at: "",
+  });
+
+  // Fetch group by ID
+  const fetchGroup = async () => {
+    if (!groupId) return;
+
+    const { data, error } = await supabase
+      .from("groups")
+      .select(`
+        id,
+        name,
+        program_id,
+        created_at,
+        programs ( name )
+      `)
+      .eq("id", groupId)
+      .single();
+
+    if (error) {
+      console.error("Error fetching group:", error);
+      return;
+    }
+
+    setForm({
+      id: data.id,
+      name: data.name,
+      program_id: data.program_id,
+      created_at: data.created_at,
+    });
+
+    setProgramQuery(data.programs?.name || "");
+  };
+
+  // Fetch programs for autocomplete
+  useEffect(() => {
+    if (programQuery.trim() === "") {
+      setProgramResults([]);
+      return;
+    }
+
+    const fetchPrograms = async () => {
+      setLoadingPrograms(true);
+      const { data, error } = await supabase
+        .from("programs")
+        .select("id, name, departments(name)")
+        .eq("institution_id", currentInstituteId)
+        .eq("is_active", true)
+        .ilike("name", `%${programQuery}%`);
+
+      if (error) {
+        console.error("Error fetching programs:", error);
+      } else {
+        setProgramResults(data);
+      }
+      setLoadingPrograms(false);
+    };
+
+    fetchPrograms();
+  }, [programQuery, currentInstituteId]);
+
+  // Submit update
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    const { error } = await supabase
+      .from("groups")
+      .update({
+        name: form.name,
+        program_id: form.program_id,
+      })
+      .eq("id", form.id);
+
+    if (error) {
+      alert("Failed to update group: " + error.message);
+    } else {
+      showToast("Group updated successfully!");
+    }
+  };
+
+  // Delete group
+  const handleDelete = async () => {
+    if (!confirm("Are you sure you want to delete this group? This may affect related subgroups and students.")) {
+      return;
+    }
+
+    const { error } = await supabase
+      .from("groups")
+      .delete()
+      .eq("id", form.id);
+
+    if (error) {
+      alert("Failed to delete group: " + error.message);
+    } else {
+      showToast("Group deleted successfully!");
+      onCancel();
+    }
+  };
+
+  useEffect(() => {
+    fetchGroup();
+  }, [groupId]);
+
+  return (
+    <form onSubmit={handleSubmit} className="form">
+      <h2 className="form-title">Edit Group</h2>
+
+      <div className="form-field">
+        <label>Group ID</label>
+        <div
+          style={{
+            padding: "8px",
+            backgroundColor: "#f0f0f0",
+            color: "#555",
+            borderRadius: "4px",
+            fontStyle: "bold",
+            fontSize: "0.9em",
+          }}
+        >
+          {form.id}
+        </div>
+      </div>
+
+      <div className="form-field">
+        <label>Group Name</label>
+        <input
+          className="form-input"
+          value={form.name}
+          onChange={(e) => setForm({ ...form, name: e.target.value })}
+          placeholder="Enter group name..."
+          required
+        />
+      </div>
+
+      <div className="form-field autocomplete-container">
+        <label>Program</label>
+        <input
+          className="form-input"
+          value={programQuery}
+          onChange={(e) => {
+            setProgramQuery(e.target.value);
+            setForm({ ...form, program_id: "" });
+          }}
+          placeholder="Type program name..."
+          required
+        />
+
+        {loadingPrograms && (
+          <div className="autocomplete-loading">Searching...</div>
+        )}
+
+        {programResults.length > 0 && (
+          <div className="autocomplete-list">
+            {programResults.map((prog) => (
+              <div
+                key={prog.id}
+                className="autocomplete-item"
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  setProgramQuery(prog.name);
+                  setForm((prev) => ({
+                    ...prev,
+                    program_id: prog.id,
+                  }));
+                  setProgramResults([]);
+                }}
+              >
+                {prog.name}{" "}
+                {prog.departments?.name && (
+                  <span style={{ color: "#999", fontSize: "12px" }}>
+                    ({prog.departments.name})
+                  </span>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="form-field">
+        <label>Institute</label>
+        <div
+          style={{
+            padding: "8px",
+            backgroundColor: "#f0f0f0",
+            color: "#555",
+            borderRadius: "4px",
+            fontStyle: "bold",
+          }}
+        >
+          {localStorage.getItem("institute_name") || currentInstituteId}
+        </div>
+      </div>
+
+      <div className="form-field">
+        <label>Created At</label>
+        <div
+          style={{
+            padding: "8px",
+            backgroundColor: "#f0f0f0",
+            color: "#555",
+            borderRadius: "4px",
+            fontSize: "0.9em",
+          }}
+        >
+          {form.created_at
+            ? new Date(form.created_at).toLocaleString()
+            : "N/A"}
+        </div>
+      </div>
+
+      <button type="submit" className="form-submit">
+        Save Group
+      </button>
+      <button type="button" className="form-cancel" onClick={onCancel}>
+        Cancel
+      </button>
+      <button
+        type="button"
+        className="form-submit"
+        style={{ backgroundColor: "#dc3545", marginTop: "10px" }}
+        onClick={handleDelete}
+      >
+        Delete Group
+      </button>
+    </form>
+  );
+}
+
+///
+
+components\EditOperations.jsx:
+///
+import { useEffect, useState } from "react";
+import supabase from "../utils/supabase";
+import { showToast } from "../utils/toast";
+
+export default function EditOperations({ operationId, onCancel }) {
+  const currentInstituteId = localStorage.getItem("institute_id");
+  const [programQuery, setProgramQuery] = useState("");
+  const [programResults, setProgramResults] = useState([]);
+  const [loadingPrograms, setLoadingPrograms] = useState(false);
+
+  const [form, setForm] = useState({
+    id: "",
+    name: "",
+    program_id: "",
+    status: "active",
+    created_at: "",
+  });
+
+  // Fetch operation by ID
+  const fetchOperation = async () => {
+    if (!operationId) return;
+
+    const { data, error } = await supabase
+      .from("operations")
+      .select(`
+        id,
+        name,
+        program_id,
+        status,
+        created_at,
+        programs ( name )
+      `)
+      .eq("id", operationId)
+      .single();
+
+    if (error) {
+      console.error("Error fetching operation:", error);
+      return;
+    }
+
+    setForm({
+      id: data.id,
+      name: data.name,
+      program_id: data.program_id,
+      status: data.status,
+      created_at: data.created_at,
+    });
+
+    setProgramQuery(data.programs?.name || "");
+  };
+
+  // Fetch programs for autocomplete
+  useEffect(() => {
+    if (programQuery.trim() === "") {
+      setProgramResults([]);
+      return;
+    }
+
+    const fetchPrograms = async () => {
+      setLoadingPrograms(true);
+      const { data, error } = await supabase
+        .from("programs")
+        .select("id, name, departments(name)")
+        .eq("institution_id", currentInstituteId)
+        .eq("is_active", true)
+        .ilike("name", `%${programQuery}%`);
+
+      if (error) {
+        console.error("Error fetching programs:", error);
+      } else {
+        setProgramResults(data);
+      }
+      setLoadingPrograms(false);
+    };
+
+    fetchPrograms();
+  }, [programQuery, currentInstituteId]);
+
+  // Submit update
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    const { error } = await supabase
+      .from("operations")
+      .update({
+        name: form.name,
+        program_id: form.program_id,
+        status: form.status,
+      })
+      .eq("id", form.id);
+
+    if (error) {
+      alert("Failed to update operation: " + error.message);
+    } else {
+      showToast("Operation updated successfully!");
+    }
+  };
+
+  // Delete operation
+  const handleDelete = async () => {
+    if (!confirm("Are you sure you want to delete this operation? This may affect related courses and other data.")) {
+      return;
+    }
+
+    const { error } = await supabase
+      .from("operations")
+      .delete()
+      .eq("id", form.id);
+
+    if (error) {
+      alert("Failed to delete operation: " + error.message);
+    } else {
+      showToast("Operation deleted successfully!");
+      onCancel();
+    }
+  };
+
+  useEffect(() => {
+    fetchOperation();
+  }, [operationId]);
+
+  return (
+    <form onSubmit={handleSubmit} className="form">
+      <h2 className="form-title">Edit Operation</h2>
+
+      <div className="form-field">
+        <label>Operation ID</label>
+        <div
+          style={{
+            padding: "8px",
+            backgroundColor: "#f0f0f0",
+            color: "#555",
+            borderRadius: "4px",
+            fontStyle: "bold",
+            fontSize: "0.9em",
+          }}
+        >
+          {form.id}
+        </div>
+      </div>
+
+      <div className="form-field">
+        <label>Operation Name</label>
+        <input
+          className="form-input"
+          value={form.name}
+          onChange={(e) => setForm({ ...form, name: e.target.value })}
+          placeholder="Fall 2025"
+          required
+        />
+      </div>
+
+      <div className="form-field autocomplete-container">
+        <label>Program</label>
+        <input
+          className="form-input"
+          value={programQuery}
+          onChange={(e) => {
+            setProgramQuery(e.target.value);
+            setForm({ ...form, program_id: "" });
+          }}
+          placeholder="Type program name..."
+          required
+        />
+
+        {loadingPrograms && (
+          <div className="autocomplete-loading">Searching...</div>
+        )}
+
+        {programResults.length > 0 && (
+          <div className="autocomplete-list">
+            {programResults.map((prog) => (
+              <div
+                key={prog.id}
+                className="autocomplete-item"
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  setProgramQuery(prog.name);
+                  setForm((prev) => ({
+                    ...prev,
+                    program_id: prog.id,
+                  }));
+                  setProgramResults([]);
+                }}
+              >
+                {prog.name}{" "}
+                {prog.departments?.name && (
+                  <span style={{ color: "#999", fontSize: "12px" }}>
+                    ({prog.departments.name})
+                  </span>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="form-field">
+        <label>Status</label>
+        <select
+          className="form-select"
+          value={form.status}
+          onChange={(e) => setForm({ ...form, status: e.target.value })}
+        >
+          <option value="planned">Planned</option>
+          <option value="active">Active</option>
+          <option value="completed">Completed</option>
+        </select>
+      </div>
+
+      <div className="form-field">
+        <label>Institute</label>
+        <div
+          style={{
+            padding: "8px",
+            backgroundColor: "#f0f0f0",
+            color: "#555",
+            borderRadius: "4px",
+            fontStyle: "bold",
+          }}
+        >
+          {localStorage.getItem("institute_name") || currentInstituteId}
+        </div>
+      </div>
+
+      <div className="form-field">
+        <label>Created At</label>
+        <div
+          style={{
+            padding: "8px",
+            backgroundColor: "#f0f0f0",
+            color: "#555",
+            borderRadius: "4px",
+            fontSize: "0.9em",
+          }}
+        >
+          {form.created_at
+            ? new Date(form.created_at).toLocaleString()
+            : "N/A"}
+        </div>
+      </div>
+
+      <button type="submit" className="form-submit">
+        Save Operation
+      </button>
+      <button type="button" className="form-cancel" onClick={onCancel}>
+        Cancel
+      </button>
+      <button
+        type="button"
+        className="form-submit"
+        style={{ backgroundColor: "#dc3545", marginTop: "10px" }}
+        onClick={handleDelete}
+      >
+        Delete Operation
+      </button>
+    </form>
+  );
+}
+
+///
+
+components\EditPrograms.jsx:
+///
+import { useEffect, useState } from "react";
+import supabase from "../utils/supabase";
+import { showToast } from "../utils/toast";
+
+export default function EditPrograms({ programId, onCancel }) {
+  const currentInstituteId = localStorage.getItem("institute_id");
+  const [deptQuery, setDeptQuery] = useState("");
+  const [deptResults, setDeptResults] = useState([]);
+  const [loadingDepts, setLoadingDepts] = useState(false);
+  const [form, setForm] = useState({
+    id: "",
+    name: "",
+    institution_id: currentInstituteId || "",
+    is_active: true,
+    department_name: "",
+    department_id: "",
+  });
+
+  const fetchProgram = async () => {
+    if (!programId) return;
+
+    const { data, error } = await supabase
+      .from("programs")
+      .select(`
+        id,
+        name,
+        institution_id,
+        is_active,
+        department_id,
+        departments ( name )
+      `)
+      .eq("id", programId)
+      .single();
+
+    if (error) {
+      console.error("Error fetching program:", error);
+      return;
+    }
+
+    setForm({
+      id: data.id,
+      name: data.name,
+      institution_id: data.institution_id,
+      is_active: data.is_active,
+      department_id: data.department_id,
+    });
+
+    setDeptQuery(data.departments?.name || "");
+  };
+
+  useEffect(() => {
+    if (deptQuery.trim() === "") {
+      setDeptResults([]);
+      return;
+    }
+
+    const fetchDepartments = async () => {
+      setLoadingDepts(true);
+      const { data, error } = await supabase
+        .from("departments")
+        .select("id, name, code")
+        .eq("institute_id", currentInstituteId)
+        .ilike("name", `%${deptQuery}%`);
+
+      if (error) {
+        console.error("Error fetching departments:", error);
+      } else {
+        setDeptResults(data);
+      }
+      setLoadingDepts(false);
+    };
+
+    fetchDepartments();
+  }, [deptQuery, currentInstituteId]);
+
+  // Submit update
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    const { error } = await supabase
+      .from("programs")
+      .update({
+        name: form.name,
+        institution_id: form.institution_id,
+        is_active: form.is_active,
+        department_id: form.department_id,
+      })
+      .eq("id", form.id);
+
+    if (error) {
+      alert("Failed to update program: " + error.message);
+    } else {
+      showToast("Program updated successfully!");
+    }
+  };
+
+  useEffect(() => {
+    fetchProgram();
+  }, [programId]);
+
+  return (
+    <form onSubmit={handleSubmit} className="form">
+      <h2 className="form-title">Edit Program</h2>
+
+      <div className="form-field">
+        <label>Program ID</label>
+        <div
+          style={{
+            padding: "8px",
+            backgroundColor: "#f0f0f0",
+            color: "#555",
+            borderRadius: "4px",
+            fontStyle: "bold",
+          }}
+        >
+          {form.id}
+        </div>
+
+        <label>Program Name</label>
+        <input
+          className="form-input"
+          value={form.name}
+          onChange={(e) => setForm({ ...form, name: e.target.value })}
+          required
+        />
+      </div>
+
+      <div className="form-field autocomplete-container">
+        <label>Department</label>
+        <input
+          className="form-input"
+          value={deptQuery}
+          onChange={(e) => {
+            setDeptQuery(e.target.value);
+            setForm({ ...form, department_id: "" });
+          }}
+          placeholder="Type department name..."
+          required
+        />
+
+        {loadingDepts && <div className="autocomplete-loading">Searching...</div>}
+
+        {deptResults.length > 0 && (
+          <div className="autocomplete-list">
+            {deptResults.map((dept) => (
+              <div
+                key={dept.id}
+                className="autocomplete-item"
+                onMouseDown={(e) => {
+                  e.preventDefault(); // Prevent blur
+                  setDeptQuery(dept.name);
+                  setForm((prev) => ({
+                    ...prev,
+                    department_id: dept.id,
+                  }));
+                  setDeptResults([]);
+                }}
+              >
+                {dept.name}{" "}
+                <span style={{ color: "#999", fontSize: "12px" }}>
+                  ({dept.code})
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="form-field">
+        <label>Program Status</label>
+        <select
+          className="form-select"
+          value={form.is_active ? "active" : "inactive"}
+          onChange={(e) =>
+            setForm({ ...form, is_active: e.target.value === "active" })
+          }
+        >
+          <option value="active">Active</option>
+          <option value="inactive">Inactive</option>
+        </select>
+      </div>
+
+      <div className="form-field">
+        <label>Institute</label>
+        <div
+          style={{
+            padding: "8px",
+            backgroundColor: "#f0f0f0",
+            color: "#555",
+            borderRadius: "4px",
+            fontStyle: "bold",
+          }}
+        >
+          {localStorage.getItem("institute_name") || form.institution_id}
+        </div>
+      </div>
+
+      <button type="submit" className="form-submit">
+        Save Program
+      </button>
+      <button type="button" className="form-cancel" onClick={onCancel}>
+          Cancel
+      </button>
+    </form>
+  );
+}
+
+///
+
+components\EditSubgroups.jsx:
+///
+import { useEffect, useState } from "react";
+import supabase from "../utils/supabase";
+import { showToast } from "../utils/toast";
+
+export default function EditSubgroups({ subgroupId, onCancel }) {
+  const currentInstituteId = localStorage.getItem("institute_id");
+  const [groupQuery, setGroupQuery] = useState("");
+  const [groupResults, setGroupResults] = useState([]);
+  const [loadingGroups, setLoadingGroups] = useState(false);
+
+  const [form, setForm] = useState({
+    id: "",
+    name: "",
+    group_id: "",
+    created_at: "",
+  });
+
+  // Fetch subgroup by ID
+  const fetchSubgroup = async () => {
+    if (!subgroupId) return;
+
+    const { data, error } = await supabase
+      .from("subgroups")
+      .select(`
+        id,
+        name,
+        group_id,
+        created_at,
+        groups ( name )
+      `)
+      .eq("id", subgroupId)
+      .single();
+
+    if (error) {
+      console.error("Error fetching subgroup:", error);
+      return;
+    }
+
+    setForm({
+      id: data.id,
+      name: data.name,
+      group_id: data.group_id,
+      created_at: data.created_at,
+    });
+
+    setGroupQuery(data.groups?.name || "");
+  };
+
+  // Fetch groups for autocomplete
+  useEffect(() => {
+    if (groupQuery.trim() === "") {
+      setGroupResults([]);
+      return;
+    }
+
+    const fetchGroups = async () => {
+      setLoadingGroups(true);
+      const { data, error } = await supabase
+        .from("groups")
+        .select("id, name, programs(name, institution_id)")
+        .eq("programs.institution_id", currentInstituteId)
+        .ilike("name", `%${groupQuery}%`);
+
+      if (error) {
+        console.error("Error fetching groups:", error);
+      } else {
+        setGroupResults(data);
+      }
+      setLoadingGroups(false);
+    };
+
+    fetchGroups();
+  }, [groupQuery, currentInstituteId]);
+
+  // Submit update
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    const { error } = await supabase
+      .from("subgroups")
+      .update({
+        name: form.name,
+        group_id: form.group_id,
+      })
+      .eq("id", form.id);
+
+    if (error) {
+      alert("Failed to update subgroup: " + error.message);
+    } else {
+      showToast("Subgroup updated successfully!");
+    }
+  };
+
+  // Delete subgroup
+  const handleDelete = async () => {
+    if (!confirm("Are you sure you want to delete this subgroup? This may affect related students.")) {
+      return;
+    }
+
+    const { error } = await supabase
+      .from("subgroups")
+      .delete()
+      .eq("id", form.id);
+
+    if (error) {
+      alert("Failed to delete subgroup: " + error.message);
+    } else {
+      showToast("Subgroup deleted successfully!");
+      onCancel();
+    }
+  };
+
+  useEffect(() => {
+    fetchSubgroup();
+  }, [subgroupId]);
+
+  return (
+    <form onSubmit={handleSubmit} className="form">
+      <h2 className="form-title">Edit Subgroup</h2>
+
+      <div className="form-field">
+        <label>Subgroup ID</label>
+        <div
+          style={{
+            padding: "8px",
+            backgroundColor: "#f0f0f0",
+            color: "#555",
+            borderRadius: "4px",
+            fontStyle: "bold",
+            fontSize: "0.9em",
+          }}
+        >
+          {form.id}
+        </div>
+      </div>
+
+      <div className="form-field">
+        <label>Subgroup Name</label>
+        <input
+          className="form-input"
+          value={form.name}
+          onChange={(e) => setForm({ ...form, name: e.target.value })}
+          placeholder="Enter subgroup name..."
+          required
+        />
+      </div>
+
+      <div className="form-field autocomplete-container">
+        <label>Group</label>
+        <input
+          className="form-input"
+          value={groupQuery}
+          onChange={(e) => {
+            setGroupQuery(e.target.value);
+            setForm({ ...form, group_id: "" });
+          }}
+          placeholder="Type group name..."
+          required
+        />
+
+        {loadingGroups && (
+          <div className="autocomplete-loading">Searching...</div>
+        )}
+
+        {groupResults.length > 0 && (
+          <div className="autocomplete-list">
+            {groupResults.map((grp) => (
+              <div
+                key={grp.id}
+                className="autocomplete-item"
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  setGroupQuery(grp.name);
+                  setForm((prev) => ({
+                    ...prev,
+                    group_id: grp.id,
+                  }));
+                  setGroupResults([]);
+                }}
+              >
+                {grp.name}{" "}
+                {grp.programs?.name && (
+                  <span style={{ color: "#999", fontSize: "12px" }}>
+                    ({grp.programs.name})
+                  </span>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="form-field">
+        <label>Institute</label>
+        <div
+          style={{
+            padding: "8px",
+            backgroundColor: "#f0f0f0",
+            color: "#555",
+            borderRadius: "4px",
+            fontStyle: "bold",
+          }}
+        >
+          {localStorage.getItem("institute_name") || currentInstituteId}
+        </div>
+      </div>
+
+      <div className="form-field">
+        <label>Created At</label>
+        <div
+          style={{
+            padding: "8px",
+            backgroundColor: "#f0f0f0",
+            color: "#555",
+            borderRadius: "4px",
+            fontSize: "0.9em",
+          }}
+        >
+          {form.created_at
+            ? new Date(form.created_at).toLocaleString()
+            : "N/A"}
+        </div>
+      </div>
+
+      <button type="submit" className="form-submit">
+        Save Subgroup
+      </button>
+      <button type="button" className="form-cancel" onClick={onCancel}>
+        Cancel
+      </button>
+      <button
+        type="button"
+        className="form-submit"
+        style={{ backgroundColor: "#dc3545", marginTop: "10px" }}
+        onClick={handleDelete}
+      >
+        Delete Subgroup
       </button>
     </form>
   );
@@ -1578,7 +3799,12 @@ export default function HorizontalResizer({ onDrag }) {
 components\IconSidebar.jsx:
 ///
 import React from "react";
-import { FiUsers, FiShield, FiActivity, FiBook, FiBookOpen, FiSun, FiLogOut } from "react-icons/fi";
+import { FiUsers, FiShield, FiActivity, FiBook, FiBookOpen, FiSun, FiLogOut  } from "react-icons/fi";
+import { GoOrganization } from "react-icons/go";
+import { FaRegCalendarTimes, FaCog, FaLayerGroup,FaRegUser   } from "react-icons/fa";
+import { FaPeopleRoof } from "react-icons/fa6";
+import { MdOutlineGroupWork } from "react-icons/md";
+import { GrGroup } from "react-icons/gr";
 import { useNavigate } from "react-router-dom";
 import supabase from "../utils/supabase"; // for auth logout
 
@@ -1586,12 +3812,15 @@ export default function IconSidebar({ onIconClick, activePage }) {
   const navigate = useNavigate();
 
   const topIcons = [
-    { id: "users", icon: FiUsers, name: "Users" },
+    { id: "users", icon: FaRegUser, name: "Users" },
     { id: "moderators", icon: FiShield, name: "Moderators" },
-    { id: "operations", icon: FiActivity, name: "Operations" },
+    { id: "operations", icon: FaCog, name: "Operations" },
     { id: "programs", icon: FiBook, name: "Programs" },
     { id: "courses", icon: FiBookOpen, name: "Courses" },
-    { id: "vacations", icon: FiSun, name: "Vacations" },
+    { id: "groups", icon: GrGroup, name: "Groups" },
+    { id: "subgroups", icon: FaPeopleRoof , name: "Subgroups" },
+    { id: "vacations", icon: FaRegCalendarTimes, name: "Vacations" },
+    { id: "departments", icon: GoOrganization, name: "Departments" },
   ];
 
   // Logout function
@@ -1656,7 +3885,10 @@ import ModeratorsPage from "../pages/ModeratorsPage";
 import OperationsPage from "../pages/OperationsPage";
 import ProgramsPage from "../pages/ProgramsPage";
 import CoursesPage from "../pages/CoursesPage";
+import GroupsPage from "../pages/GroupsPage";
+import SubgroupsPage from "../pages/SubgroupsPage";
 import VacationsPage from "../pages/VacationsPage";
+import DepartmentsPage from "../pages/DepartmentsPage";
 
 export default function LeftSidebar({ width, onCreateClick, activePage }) {
   const renderPage = () => {
@@ -1671,8 +3903,14 @@ export default function LeftSidebar({ width, onCreateClick, activePage }) {
         return <ProgramsPage />;
       case "courses":
         return <CoursesPage />;
+      case "groups":
+        return <GroupsPage />;
+      case "subgroups":
+        return <SubgroupsPage />;
       case "vacations":
         return <VacationsPage />;
+      case "departments":
+        return <DepartmentsPage />;
       default:
         return null;
     }
@@ -1971,6 +4209,77 @@ export default function RightSidebar({ width }) {
             </div>
         </div>
     );
+}
+
+///
+
+components\Toast.jsx:
+///
+import { useState, useEffect } from 'react';
+import { setToastCallback } from '../utils/toast';
+
+export default function Toast() {
+  const [toasts, setToasts] = useState([]);
+  const [nextId, setNextId] = useState(0);
+
+  useEffect(() => {
+    setToastCallback((message, type) => {
+      const id = nextId;
+      setNextId(prev => prev + 1);
+      
+      setToasts(prev => [...prev, { id, message, type }]);
+      
+      setTimeout(() => {
+        setToasts(prev => prev.filter(toast => toast.id !== id));
+      }, 3000);
+    });
+  }, [nextId]);
+
+  if (toasts.length === 0) return null;
+
+  return (
+    <div style={{
+      position: 'fixed',
+      top: '20px',
+      right: '20px',
+      zIndex: 10000,
+      display: 'flex',
+      flexDirection: 'column',
+      gap: '10px',
+    }}>
+      {toasts.map(toast => (
+        <div
+          key={toast.id}
+          style={{
+            padding: '12px 20px',
+            borderRadius: '8px',
+            backgroundColor: toast.type === 'success' ? '#4caf50' : '#2196f3',
+            color: 'white',
+            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+            minWidth: '250px',
+            maxWidth: '400px',
+            animation: 'slideIn 0.3s ease-out',
+            fontSize: '14px',
+            fontWeight: '500',
+          }}
+        >
+          {toast.message}
+        </div>
+      ))}
+      <style>{`
+        @keyframes slideIn {
+          from {
+            transform: translateX(400px);
+            opacity: 0;
+          }
+          to {
+            transform: translateX(0);
+            opacity: 1;
+          }
+        }
+      `}</style>
+    </div>
+  );
 }
 
 ///

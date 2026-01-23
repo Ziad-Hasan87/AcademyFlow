@@ -4,10 +4,12 @@ import { ROLES } from "../utils/types";
 import { MdOutlineEmail } from "react-icons/md";
 import supabase from "../utils/supabase";
 import { showToast } from "../utils/toast";
+import { useAuth } from "../contexts/AuthContext";
 
 export default function CreateUserForm() {
-  // Get current user's institute from localStorage
-  const currentInstituteId = localStorage.getItem("institute_id");
+  const { userData } = useAuth();
+  // Get current user's institute from context
+  const currentInstituteId = userData?.institute_id;
 
   const [form, setForm] = useState({
     role: "",
@@ -261,7 +263,7 @@ export default function CreateUserForm() {
             fontStyle: "bold",
             }}
         >
-            {localStorage.getItem("institute_name") || form.institute_id}
+            {userData?.institute_name || form.institute_id}
         </div>
     </div>
 

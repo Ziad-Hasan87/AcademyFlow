@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
 import supabase from "../utils/supabase";
 import { showToast } from "../utils/toast";
+import { useAuth } from "../contexts/AuthContext";
 
 export default function CreateOperations() {
+  const { userData } = useAuth();
   const [form, setForm] = useState({
     name: "",
     program_id: "",
@@ -25,7 +27,7 @@ export default function CreateOperations() {
     const fetchPrograms = async () => {
       setLoadingPrograms(true);
 
-      const currentInstituteId = localStorage.getItem("institute_id");
+      const currentInstituteId = userData?.institute_id;
       const { data, error } = await supabase
         .from("programs")
         .select("id, name, departments(name)")
@@ -150,7 +152,7 @@ export default function CreateOperations() {
             fontStyle: "bold",
           }}
         >
-          {localStorage.getItem("institute_name") || localStorage.getItem("institute_id")}
+          {userData?.institute_name || userData?.institute_id}
         </div>
       </div>
 

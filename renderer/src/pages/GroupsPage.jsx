@@ -3,8 +3,10 @@ import CreateGroups from "../components/CreateGroups";
 import { useEffect, useState } from "react";
 import supabase from "../utils/supabase";
 import EditGroups from "../components/EditGroups";
+import { useAuth } from "../contexts/AuthContext";
 
 export default function GroupsPage() {
+  const { userData } = useAuth();
   const [isCreateOpen, setisCreateOpen] = useState(false);
   const [isEditOpen, setisEditOpen] = useState(false);
   const [groups, setGroups] = useState([]);
@@ -14,7 +16,7 @@ export default function GroupsPage() {
   const [selectedGroupId, setSelectedGroupId] = useState(null);
 
   const fetchPrograms = async () => {
-    const currentInstituteId = localStorage.getItem("institute_id");
+    const currentInstituteId = userData?.institute_id;
     const { data, error } = await supabase
       .from("programs")
       .select("id, name")
@@ -32,22 +34,23 @@ export default function GroupsPage() {
   const fetchGroups = async (programId = "") => {
     setLoading(true);
 
-    const currentInstituteId = localStorage.getItem("institute_id");
+    const currentInstituteId = userData?.institute_id;
 
     let query = supabase
-      .from("groups")
-      .select(`
-        id,
+    .from("groups")
+    .select(`
+      id,
+      name,
+      created_at,
+      program_id,
+      programs!inner (
         name,
-        created_at,
-        program_id,
-        programs (
-          name,
-          institution_id
-        )
-      `)
-      .eq("programs.institution_id", currentInstituteId)
-      .order("name", { ascending: true });
+        institution_id
+      )
+    `)
+    .eq("programs.institution_id", currentInstituteId)
+    .order("name", { ascending: true });
+
 
     if (programId) {
       query = query.eq("program_id", programId);

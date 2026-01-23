@@ -3,8 +3,10 @@ import CreatePrograms from "../components/CreatePrograms";
 import { useEffect, useState } from "react";
 import supabase from "../utils/supabase";
 import EditPrograms from "../components/EditPrograms";
+import { useAuth } from "../contexts/AuthContext";
 
 export default function ProgramsPage() {
+  const { userData } = useAuth();
 
   const [isCreateOpen, setisCreateOpen] = useState(false);
   const [isEditOpen, setisEditOpen] = useState(false);
@@ -14,6 +16,7 @@ export default function ProgramsPage() {
   const [selectedDept, setSelectedDept] = useState("");
   const [selectedProgramId, setSelectedProgramId] = useState(null);
 
+  const currentInstituteId = userData?.institute_id;
 
   const fetchDepartments = async () => {
     const { data, error } = await supabase
@@ -29,8 +32,6 @@ export default function ProgramsPage() {
     }
   };
 
-
-  const currentInstituteId = localStorage.getItem("institute_id");
 
   const fetchPrograms = async (departmentId = "") => {
     setLoading(true);
