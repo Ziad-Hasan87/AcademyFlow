@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import supabase from "../utils/supabase";
 import EditPrograms from "../components/EditPrograms";
 import { useAuth } from "../contexts/AuthContext";
+import AddButton from "../components/AddButton";
 
 export default function ProgramsPage() {
   const { userData } = useAuth();
@@ -74,39 +75,38 @@ export default function ProgramsPage() {
 
   return (
     <div className="page-content">
-      <button
-        className="create-button"
-        onClick={() => setisCreateOpen(true)}
-        aria-label="Create Program"
-      >
-        + Add
-      </button>
-      <Modal isOpen={isCreateOpen} title="Create Program" onClose={()=> {setisCreateOpen(false); fetchPrograms();}}>
+      <Modal isOpen={isCreateOpen} title="Create Program" onClose={() => { setisCreateOpen(false); fetchPrograms(); }}>
         <CreatePrograms />
       </Modal>
-      <Modal isOpen={isEditOpen} title="Edit Program" onClose={()=> {setisEditOpen(false); fetchPrograms();}}>
-        <EditPrograms programId={selectedProgramId} onCancel={()=>setisEditOpen(false)} />
+      <Modal isOpen={isEditOpen} title="Edit Program" onClose={() => { setisEditOpen(false); fetchPrograms(); }}>
+        <EditPrograms programId={selectedProgramId} onCancel={() => setisEditOpen(false)} />
       </Modal>
       <div>
-      <h2>Programs</h2>
-      <div className="form-field" style={{ maxWidth: "300px", marginBottom: "16px" }}>
-        <select
-          className="form-select"
-          value={selectedDept}
-          onChange={(e) => {
-            const deptId = e.target.value;
-            setSelectedDept(deptId);
-            fetchPrograms(deptId);
-          }}
-        >
-          <option value="">All Departments</option>
-          {departments.map((dept) => (
-            <option key={dept.id} value={dept.id}>
-              {dept.name}
-            </option>
-          ))}
-        </select>
-      </div>
+        <div className="page-sidebar-title">
+          <h2>Programs</h2>
+          <AddButton
+            onClick={() => setisCreateOpen(true)}
+            ariaLabel="Create Program"
+          />
+        </div>
+        <div className="form-field" style={{ maxWidth: "300px", marginBottom: "16px" }}>
+          <select
+            className="form-select"
+            value={selectedDept}
+            onChange={(e) => {
+              const deptId = e.target.value;
+              setSelectedDept(deptId);
+              fetchPrograms(deptId);
+            }}
+          >
+            <option value="">All Departments</option>
+            {departments.map((dept) => (
+              <option key={dept.id} value={dept.id}>
+                {dept.name}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
       {loading && <p>Loading…</p>}
 

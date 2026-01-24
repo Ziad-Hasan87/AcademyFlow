@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import supabase from "../utils/supabase";
 import EditGroups from "../components/EditGroups";
 import { useAuth } from "../contexts/AuthContext";
+import AddButton from "../components/AddButton";
 
 export default function GroupsPage() {
   const { userData } = useAuth();
@@ -37,8 +38,8 @@ export default function GroupsPage() {
     const currentInstituteId = userData?.institute_id;
 
     let query = supabase
-    .from("groups")
-    .select(`
+      .from("groups")
+      .select(`
       id,
       name,
       created_at,
@@ -48,8 +49,8 @@ export default function GroupsPage() {
         institution_id
       )
     `)
-    .eq("programs.institution_id", currentInstituteId)
-    .order("name", { ascending: true });
+      .eq("programs.institution_id", currentInstituteId)
+      .order("name", { ascending: true });
 
 
     if (programId) {
@@ -74,13 +75,6 @@ export default function GroupsPage() {
 
   return (
     <div className="page-content">
-      <button
-        className="create-button"
-        onClick={() => setisCreateOpen(true)}
-        aria-label="Create Group"
-      >
-        + Add
-      </button>
       <Modal
         isOpen={isCreateOpen}
         title="Create Group"
@@ -105,7 +99,13 @@ export default function GroupsPage() {
         />
       </Modal>
       <div>
-        <h2>Groups</h2>
+        <div className="page-sidebar-title">
+          <h2>Groups</h2>
+          <AddButton
+            onClick={() => setisCreateOpen(true)}
+            ariaLabel="Create Group"
+          />
+        </div>
         <div
           className="form-field"
           style={{ maxWidth: "300px", marginBottom: "16px" }}

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import supabase from "../utils/supabase";
 import EditCourses from "../components/EditCourses";
 import { useAuth } from "../contexts/AuthContext";
+import AddButton from "../components/AddButton";
 
 export default function CoursesPage() {
   const { userData } = useAuth();
@@ -12,7 +13,7 @@ export default function CoursesPage() {
   const [courses, setCourses] = useState([]);
   const [loading, setLoading] = useState(false);
   const [selectedCourseId, setSelectedCourseId] = useState(null);
-  
+
   const fetchCourses = async () => {
     setLoading(true);
 
@@ -49,13 +50,6 @@ export default function CoursesPage() {
 
   return (
     <div className="page-content">
-      <button
-        className="create-button"
-        onClick={() => setisCreateOpen(true)}
-        aria-label="Create Course"
-      >
-        + Add
-      </button>
       <Modal
         isOpen={isCreateOpen}
         title="Create Course"
@@ -79,8 +73,12 @@ export default function CoursesPage() {
           onCancel={() => setisEditOpen(false)}
         />
       </Modal>
-      <div>
+      <div className="page-sidebar-title">
         <h2>Courses</h2>
+        <AddButton
+          onClick={() => setisCreateOpen(true)}
+          ariaLabel="Create Course"
+        />
       </div>
       {loading && <p>Loading…</p>}
 

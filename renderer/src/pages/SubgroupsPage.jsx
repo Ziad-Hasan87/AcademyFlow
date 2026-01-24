@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import supabase from "../utils/supabase";
 import EditSubgroups from "../components/EditSubgroups";
 import { useAuth } from "../contexts/AuthContext";
+import AddButton from "../components/AddButton";
 
 export default function SubgroupsPage() {
   const { userData } = useAuth();
@@ -38,20 +39,20 @@ export default function SubgroupsPage() {
     let query = supabase
       .from("subgroups")
       .select(`
-        id,
-        name,
-        created_at,
-        group_id,
-        groups (
+          id,
           name,
-          programs (
+          created_at,
+          group_id,
+          groups!inner (
             name,
-            institution_id
+            programs!inner (
+              name,
+              institution_id
+            )
           )
-        )
-      `)
+        `)
       .eq("groups.programs.institution_id", currentInstituteId)
-      .order("name", { ascending: true });
+
 
     if (groupId) {
       query = query.eq("group_id", groupId);
@@ -75,13 +76,6 @@ export default function SubgroupsPage() {
 
   return (
     <div className="page-content">
-      <button
-        className="create-button"
-        onClick={() => setisCreateOpen(true)}
-        aria-label="Create Subgroup"
-      >
-        + Add
-      </button>
       <Modal
         isOpen={isCreateOpen}
         title="Create Subgroup"
@@ -106,7 +100,13 @@ export default function SubgroupsPage() {
         />
       </Modal>
       <div>
-        <h2>Subgroups</h2>
+        <div className="page-sidebar-title">
+          <h2>Subgroups</h2>
+          <AddButton
+            onClick={() => setisCreateOpen(true)}
+            ariaLabel="Create Subgroup"
+          />
+        </div>
         <div
           className="form-field"
           style={{ maxWidth: "300px", marginBottom: "16px" }}

@@ -3,6 +3,7 @@ import CreateDepartments from "../components/CreateDepartments";
 import { useState, useEffect } from "react";
 import supabase from "../utils/supabase";
 import { useAuth } from "../contexts/AuthContext";
+import AddButton from "../components/AddButton";
 
 export default function DepartmentsPage() {
   const { userData } = useAuth();
@@ -34,13 +35,13 @@ export default function DepartmentsPage() {
 
   return (
     <div className="page-content">
-      <button
-        className="create-button"
-        onClick={() => setIsOpen(true)}
-        aria-label="Create Department"
-      >
-        + Add
-      </button>
+      <div className="page-sidebar-title">
+        <h2>Departments</h2>
+        <AddButton
+          onClick={() => setIsOpen(true)}
+          ariaLabel="Create Department"
+        />
+      </div>
 
       <Modal
         isOpen={isOpen}
@@ -54,8 +55,6 @@ export default function DepartmentsPage() {
           }}
         />
       </Modal>
-
-      <h2>Departments</h2>
 
       {loading && <p>Loading…</p>}
 

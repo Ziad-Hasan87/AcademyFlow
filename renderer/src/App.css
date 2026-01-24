@@ -508,15 +508,24 @@ html, body, #root {
   font-size: 9px;
   color: #666666;
 }
+
+.page-sidebar-title {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+}
+
 .create-button {
   transition: all 0.3s;
   width: 100%;
-  font-size: 64px;
-  font-weight: 300;
-  background: none;
-  border: 5px solid #d0d0d0;
+  font-size: 25px;
+  border: 2px dashed #d0d0d0;
   cursor: pointer;
-  color: #999999;
+  width: fit-content;
+  height: fit-content;
+  aspect-ratio: 1 / 1;
+  color: #666666;
   display: flex;
   align-items: center;
   justify-content: center;

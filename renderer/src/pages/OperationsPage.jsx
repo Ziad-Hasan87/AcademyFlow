@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import supabase from "../utils/supabase";
 import EditOperations from "../components/EditOperations";
 import { useAuth } from "../contexts/AuthContext";
+import AddButton from "../components/AddButton";
 
 export default function OperationsPage() {
   const { userData } = useAuth();
@@ -44,7 +45,7 @@ export default function OperationsPage() {
         status,
         created_at,
         program_id,
-        programs (
+        programs!inner (
           name,
           institution_id
         )
@@ -52,6 +53,7 @@ export default function OperationsPage() {
       .eq("programs.institution_id", currentInstituteId)
       .order("status", { ascending: true })
       .order("created_at", { ascending: false });
+
 
     if (programId) {
       query = query.eq("program_id", programId);
@@ -72,21 +74,14 @@ export default function OperationsPage() {
     fetchOperations();
     fetchPrograms();
   }, [isEditOpen, isCreateOpen]);
-  
-   useEffect(() => {
+
+  useEffect(() => {
     fetchOperations();
     fetchPrograms();
   }, []);
 
   return (
     <div className="page-content">
-      <button
-        className="create-button"
-        onClick={() => setisCreateOpen(true)}
-        aria-label="Create Operation"
-      >
-        + Add
-      </button>
       <Modal
         isOpen={isCreateOpen}
         title="Create Operation"
@@ -111,7 +106,13 @@ export default function OperationsPage() {
         />
       </Modal>
       <div>
-        <h2>Operations</h2>
+        <div className="page-sidebar-title">
+          <h2>Operations</h2>
+          <AddButton
+            onClick={() => setisCreateOpen(true)}
+            ariaLabel="Create Operation"
+          />
+        </div>
         <div
           className="form-field"
           style={{ maxWidth: "300px", marginBottom: "16px" }}
