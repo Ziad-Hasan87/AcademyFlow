@@ -120,6 +120,9 @@ export default function CreateCourses() {
             setForm({ ...form, program_id: "", operation_id: "" });
             setOperationQuery("");
           }}
+          onBlur={() => {
+            setTimeout(() => setProgramResults([]), 200);
+          }}
           placeholder="Type program name..."
           required
         />
@@ -162,6 +165,9 @@ export default function CreateCourses() {
           onChange={(e) => {
             setOperationQuery(e.target.value);
             setForm({ ...form, operation_id: "" });
+          }}
+          onBlur={() => {
+            setTimeout(() => setOperationResults([]), 200);
           }}
           placeholder="Type operation name..."
           disabled={!form.program_id}

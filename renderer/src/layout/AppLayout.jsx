@@ -23,24 +23,23 @@ export default function AppLayout() {
   return (
     <>
       {/* MAIN APP */}
-      <div className={`app ${showCreateRoutine ? "blurred" : ""}`}>
+      <div className="main-app">
         <IconSidebar onIconClick={setActivePage} activePage={activePage} />
-        <div className="left-group">
-          <div className="top">
-            <LeftSidebar
-              width={leftWidth}
-              onCreateClick={() => setShowCreateRoutine(true)} // ✅ PASS IT
-              activePage={activePage}
-            />
+        
+        <LeftSidebar
+          width={leftWidth}
+          onCreateClick={() => setShowCreateRoutine(true)}
+          activePage={activePage}
+        />
 
-            <VerticalResizer
-              onDrag={(dx) =>
-                setLeftWidth((w) => Math.min(550, Math.max(240, w + dx)))
-              }
-            />
+        <VerticalResizer
+          onDrag={(dx) =>
+            setLeftWidth((w) => Math.min(550, Math.max(240, w + dx)))
+          }
+        />
 
-            <MainContent />
-          </div>
+        <div className="middle-group">
+          <MainContent />
 
           <HorizontalResizer
             onDrag={(dy) =>
@@ -53,17 +52,15 @@ export default function AppLayout() {
           <BottomSidebar height={bottomHeight} />
         </div>
 
-        <div className="right-wrapper">
-          <VerticalResizer
-            onDrag={(dx) =>
-              setRightWidth((w) =>
-                Math.min(550, Math.max(240, w - dx))
-              )
-            }
-          />
+        <VerticalResizer
+          onDrag={(dx) =>
+            setRightWidth((w) =>
+              Math.min(550, Math.max(240, w - dx))
+            )
+          }
+        />
 
-          <RightSidebar width={rightWidth} />
-        </div>
+        <RightSidebar width={rightWidth} />
       </div>
 
       {/* MODAL OVERLAY */}

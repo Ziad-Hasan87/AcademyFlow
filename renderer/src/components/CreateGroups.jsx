@@ -86,6 +86,9 @@ export default function CreateGroups() {
             setProgramQuery(e.target.value);
             setForm({ ...form, program_id: "" });
           }}
+          onBlur={() => {
+            setTimeout(() => setProgramResults([]), 200);
+          }}
           placeholder="Type program name..."
           required
         />

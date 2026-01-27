@@ -1,5 +1,6 @@
 import Modal from "../components/Modal";
 import CreateUser from "../components/CreateUser";
+import AddButton from "../components/AddButton";
 import { useState } from "react";
 export default function UsersPage() {
   const [isOpen, setIsOpen] = useState(false);
@@ -11,17 +12,16 @@ export default function UsersPage() {
 
   return (
     <div className="page-content">
-      <button
-        className="create-button"
-        onClick={() => setIsOpen(true)}
-        aria-label="Create User"
-      >
-        +
-      </button>
       <Modal isOpen={isOpen} title="Create User" onClose={()=> setIsOpen(false)}>
         <CreateUser />
       </Modal>
-      <h2>Users Management</h2>
+      <div className="page-sidebar-title">
+        <h2>Users Management</h2>
+        <AddButton
+          onClick={() => setIsOpen(true)}
+          ariaLabel="Create User"
+        />
+      </div>
       <p>This is Users page</p>
       <div className="users-list">
         

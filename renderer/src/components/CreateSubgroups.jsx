@@ -85,6 +85,9 @@ export default function CreateSubgroups() {
             setGroupQuery(e.target.value);
             setForm({ ...form, group_id: "" });
           }}
+          onBlur={() => {
+            setTimeout(() => setGroupResults([]), 200);
+          }}
           placeholder="Type group name..."
           required
         />

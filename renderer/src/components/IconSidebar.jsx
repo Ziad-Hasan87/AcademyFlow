@@ -1,13 +1,13 @@
 import React from "react";
-import { FiUsers, FiShield, FiActivity, FiBook, FiBookOpen, FiSun, FiLogOut  } from "react-icons/fi";
+import { FiUsers, FiShield, FiActivity, FiBook, FiBookOpen, FiSun, FiUser } from "react-icons/fi";
 import { GoOrganization } from "react-icons/go";
-import { FaRegCalendarTimes, FaCog, FaLayerGroup,FaRegUser   } from "react-icons/fa";
+import { FaRegCalendarTimes, FaCog, FaLayerGroup,FaRegUser,FaRegIdCard   } from "react-icons/fa";
 import { FaPeopleRoof } from "react-icons/fa6";
+import { BsPersonCircle } from "react-icons/bs";
 import { MdOutlineGroupWork } from "react-icons/md";
 import { GrGroup } from "react-icons/gr";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
-import supabase from "../utils/supabase";
 import { hasPermission } from "../utils/types";
 
 export default function IconSidebar({ onIconClick, activePage }) {
@@ -15,7 +15,7 @@ export default function IconSidebar({ onIconClick, activePage }) {
   const { userData, logout } = useAuth();
 
   const topIcons = [
-    { id: "users", icon: FaRegUser, name: "Users", minRole: "Admin" },
+    { id: "users", icon: FaRegIdCard, name: "Users", minRole: "Admin" },
     { id: "moderators", icon: FiShield, name: "Moderators", minRole: "Moderator" },
     { id: "operations", icon: FaCog, name: "Operations" , minRole: "Moderator" },
     { id: "programs", icon: FiBook, name: "Programs", minRole: "Admin" },
@@ -34,15 +34,6 @@ export default function IconSidebar({ onIconClick, activePage }) {
   }
     
   );
-  const handleLogout = async () => {
-    try {
-      await logout();
-      navigate("/login");
-    } catch (error) {
-      console.error("Logout failed:", error);
-      alert("Failed to logout. Please try again.");
-    }
-  };
 
   return (
     <div
@@ -72,14 +63,14 @@ export default function IconSidebar({ onIconClick, activePage }) {
         })}
       </div>
 
-      {/* Logout button at bottom */}
+      {/* Profile button at bottom */}
       <div
         className="icon-sidebar-bottom"
         style={{ padding: "10px", cursor: "pointer" }}
-        onClick={handleLogout}
-        title="Logout"
+        onClick={() => onIconClick("profile")}
+        title="Profile"
       >
-        <FiLogOut color="white" size={20} />
+        <BsPersonCircle color={activePage === "profile" ? "blue" : "white"} size={20} />
       </div>
     </div>
   );

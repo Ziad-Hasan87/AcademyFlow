@@ -12,6 +12,7 @@ export default function CreateUserForm() {
   const currentInstituteId = userData?.institute_id;
 
   const [form, setForm] = useState({
+    name: "",
     role: "",
     institute_id: currentInstituteId || "",
     password: "",
@@ -167,6 +168,7 @@ export default function CreateUserForm() {
         password: form.password,
         role: form.role,
         institute_id: form.institute_id,
+        name: form.name,
       });
 
       // If role is Student, insert into student table
@@ -195,7 +197,7 @@ export default function CreateUserForm() {
       showToast("User created successfully");
 
       // Reset form
-      setForm({ role: "", institute_id: currentInstituteId, password: "", email: "" });
+      setForm({ name: "", role: "", institute_id: currentInstituteId, password: "", email: "" });
       setStudentInfo({
         program_id: "",
         is_representative: false,
@@ -217,6 +219,19 @@ export default function CreateUserForm() {
       <h2 className="form-title">Create User</h2>
 
       {/* Email */}
+      <div className="form-field">
+        <label htmlFor="name">Name</label>
+        <input
+          id="name"
+          type="text"
+          className="form-input"
+          placeholder="Enter full name"
+          value={form.name}
+          onChange={(e) => setForm({ ...form, name: e.target.value })}
+          required
+        />
+      </div>
+
       <div className="form-field">
         <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap:5}}>
           <MdOutlineEmail />
@@ -302,6 +317,9 @@ export default function CreateUserForm() {
                 });
                 setOperationQuery("");
               }}
+              onBlur={() => {
+                setTimeout(() => setProgramResults([]), 200);
+              }}
               placeholder="Type program name..."
               required
             />
@@ -350,6 +368,9 @@ export default function CreateUserForm() {
               onChange={(e) => {
                 setOperationQuery(e.target.value);
                 setStudentInfo({ ...studentInfo, operation_id: "" });
+              }}
+              onBlur={() => {
+                setTimeout(() => setOperationResults([]), 200);
               }}
               placeholder="Type operation name..."
               disabled={!studentInfo.program_id}

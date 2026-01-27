@@ -135,6 +135,9 @@ export default function EditPrograms({ programId, onCancel }) {
             setDeptQuery(e.target.value);
             setForm({ ...form, department_id: "" });
           }}
+          onBlur={() => {
+            setTimeout(() => setDeptResults([]), 200);
+          }}
           placeholder="Type department name..."
           required
         />

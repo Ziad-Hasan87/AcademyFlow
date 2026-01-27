@@ -153,6 +153,9 @@ export default function EditCourses({ courseId, onCancel }) {
             setOperationQuery(e.target.value);
             setForm({ ...form, operation_id: "" });
           }}
+          onBlur={() => {
+            setTimeout(() => setOperationResults([]), 200);
+          }}
           placeholder="Type operation name..."
           required
         />

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+
 import supabase from "../utils/supabase";
 import { showToast } from "../utils/toast";
 import { useAuth } from "../contexts/AuthContext";
@@ -159,6 +160,9 @@ export default function EditOperations({ operationId, onCancel }) {
           onChange={(e) => {
             setProgramQuery(e.target.value);
             setForm({ ...form, program_id: "" });
+          }}
+          onBlur={() => {
+            setTimeout(() => setProgramResults([]), 200);
           }}
           placeholder="Type program name..."
           required

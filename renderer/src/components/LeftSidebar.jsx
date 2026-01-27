@@ -7,6 +7,7 @@ import GroupsPage from "../pages/GroupsPage";
 import SubgroupsPage from "../pages/SubgroupsPage";
 import VacationsPage from "../pages/VacationsPage";
 import DepartmentsPage from "../pages/DepartmentsPage";
+import ProfilePage from "../pages/ProfilePage";
 
 export default function LeftSidebar({ width, onCreateClick, activePage }) {
   const renderPage = () => {
@@ -29,6 +30,8 @@ export default function LeftSidebar({ width, onCreateClick, activePage }) {
         return <VacationsPage />;
       case "departments":
         return <DepartmentsPage />;
+      case "profile":
+        return <ProfilePage />;
       default:
         return null;
     }

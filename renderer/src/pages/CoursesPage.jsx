@@ -13,11 +13,27 @@ export default function CoursesPage() {
   const [courses, setCourses] = useState([]);
   const [loading, setLoading] = useState(false);
   const [selectedCourseId, setSelectedCourseId] = useState(null);
+  const [departments, setDepartments] = useState([]);
+  const [selectedDepartmentId, setSelectedDepartmentId] = useState("");
+
+  const fetchDepartments = async () => {
+    const { data, error } = await supabase
+      .from("departments")
+      .select("id, name, code")
+      .eq("institute_id", userData?.institute_id)
+      .order("name");
+
+    if (error) {
+      console.error("Error fetching departments:", error);
+    } else {
+      setDepartments(data || []);
+    }
+  };
 
   const fetchCourses = async () => {
     setLoading(true);
 
-    const { data, error } = await supabase
+    let query = supabase
       .from("courses")
       .select(`
         id,
@@ -27,12 +43,18 @@ export default function CoursesPage() {
           name,
           programs!inner (
             name,
-            institution_id
+            institution_id,
+            department_id
           )
         )
       `)
-      .eq("operations.programs.institution_id", userData?.institute_id)
-      .order("created_at", { ascending: false });
+      .eq("operations.programs.institution_id", userData?.institute_id);
+
+    if (selectedDepartmentId) {
+      query = query.eq("operations.programs.department_id", selectedDepartmentId);
+    }
+
+    const { data, error } = await query.order("created_at", { ascending: false });
 
 
     if (error) {
@@ -45,8 +67,12 @@ export default function CoursesPage() {
   };
 
   useEffect(() => {
-    fetchCourses();
+    fetchDepartments();
   }, []);
+
+  useEffect(() => {
+    fetchCourses();
+  }, [selectedDepartmentId]);
 
   return (
     <div className="page-content">
@@ -80,6 +106,22 @@ export default function CoursesPage() {
           ariaLabel="Create Course"
         />
       </div>
+
+      <div className="form-field" style={{ maxWidth: "300px", marginBottom: "16px" }}>
+        <select
+          className="form-select"
+          value={selectedDepartmentId}
+          onChange={(e) => setSelectedDepartmentId(e.target.value)}
+        >
+          <option value="">All Departments</option>
+          {departments.map((dept) => (
+            <option key={dept.id} value={dept.id}>
+              {dept.name}
+            </option>
+          ))}
+        </select>
+      </div>
+
       {loading && <p>Loading…</p>}
 
       <div className="lists-container">
