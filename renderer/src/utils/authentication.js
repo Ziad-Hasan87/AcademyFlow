@@ -54,6 +54,29 @@ export async function logOut() {
   if (error) throw error;
 }
 
+export async function getUserProfile() {
+  const { data: { user }, error } = await supabase.auth.getUser();
+  const { data: profile, error: profileError } = await supabase
+    .from("users")
+    .select(`
+      role,
+      institute_id,
+      institutes!inner(name)
+    `)
+    .eq("id", user.id)
+    .single();
+  
+  if (profileError) throw profileError;
+  
+  const userData = {
+    id: user.id,
+    email: user.email,
+    role: profile.role,
+    institute_id: profile.institute_id,
+    institute_name: profile.institutes?.name || "Unknown Institute"
+  };
+  return userData;
+}
 /* ----------------------------------
    Get Current User (Auth + Profile)
 ---------------------------------- */

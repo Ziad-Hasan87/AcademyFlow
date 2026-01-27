@@ -3,31 +3,27 @@ import supabase from "../utils/supabase";
 import { showToast } from "../utils/toast";
 import { useAuth } from "../contexts/AuthContext";
 
-export default function CreateOperations() {
+export default function CreateGroups() {
   const { userData } = useAuth();
+  const currentInstituteId = userData?.institute_id;
   const [form, setForm] = useState({
     name: "",
     program_id: "",
-    status: "active",
   });
 
   const [programQuery, setProgramQuery] = useState("");
-  const [programs, setPrograms] = useState([]);
+  const [programResults, setProgramResults] = useState([]);
   const [loadingPrograms, setLoadingPrograms] = useState(false);
 
-  /* ----------------------------------
-     Program search (autocomplete)
-  ---------------------------------- */
+  // Fetch programs for autocomplete
   useEffect(() => {
     if (programQuery.trim() === "") {
-      setPrograms([]);
+      setProgramResults([]);
       return;
     }
 
     const fetchPrograms = async () => {
       setLoadingPrograms(true);
-
-      const currentInstituteId = userData?.institute_id;
       const { data, error } = await supabase
         .from("programs")
         .select("id, name, departments(name)")
@@ -38,50 +34,45 @@ export default function CreateOperations() {
       if (error) {
         console.error("Error fetching programs:", error);
       } else {
-        setPrograms(data || []);
+        setProgramResults(data);
       }
       setLoadingPrograms(false);
     };
 
     fetchPrograms();
-  }, [programQuery]);
+  }, [programQuery, currentInstituteId]);
 
-  /* ----------------------------------
-     Submit handler
-  ---------------------------------- */
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    const { error } = await supabase.from("operations").insert([
+    const { error } = await supabase.from("groups").insert([
       {
         name: form.name,
         program_id: form.program_id,
-        status: form.status,
       },
     ]);
 
     if (error) {
-      alert(`Failed to create operation: ${error.message}`);
+      alert(`Failed to create group: ${error.message}`);
       return;
     }
 
-    showToast("Operation created successfully");
-    setForm({ name: "", program_id: "", status: "active" });
+    showToast("Group created successfully");
+    setForm({ name: "", program_id: "" });
     setProgramQuery("");
-    setPrograms([]);
   };
 
   return (
     <form onSubmit={handleSubmit} className="form">
-      <h2 className="form-title">Create Operation (Semester)</h2>
+      <h2 className="form-title">Create Group</h2>
 
       <div className="form-field">
-        <label>Operation Name</label>
+        <label>Group Name</label>
         <input
           className="form-input"
-          placeholder="Fall 2025"
           value={form.name}
           onChange={(e) => setForm({ ...form, name: e.target.value })}
+          placeholder="Enter group name..."
           required
         />
       </div>
@@ -106,16 +97,16 @@ export default function CreateOperations() {
           <div className="autocomplete-loading">Searching...</div>
         )}
 
-        {programs.length > 0 && (
+        {programResults.length > 0 && (
           <div className="autocomplete-list">
-            {programs.map((prog) => (
+            {programResults.map((prog) => (
               <div
                 key={prog.id}
                 className="autocomplete-item"
                 onMouseDown={() => {
                   setProgramQuery(prog.name);
                   setForm({ ...form, program_id: prog.id });
-                  setPrograms([]);
+                  setProgramResults([]);
                 }}
               >
                 {prog.name}
@@ -132,19 +123,6 @@ export default function CreateOperations() {
       </div>
 
       <div className="form-field">
-        <label>Status</label>
-        <select
-          className="form-select"
-          value={form.status}
-          onChange={(e) => setForm({ ...form, status: e.target.value })}
-        >
-          <option value="planned">Planned</option>
-          <option value="active">Active</option>
-          <option value="completed">Completed</option>
-        </select>
-      </div>
-
-      <div className="form-field">
         <label>Institute</label>
         <div
           style={{
@@ -155,12 +133,12 @@ export default function CreateOperations() {
             fontStyle: "bold",
           }}
         >
-          {userData?.institute_name || userData?.institute_id}
+          {userData?.institute_name || currentInstituteId}
         </div>
       </div>
 
       <button type="submit" className="form-submit">
-        Create Operation
+        Create Group
       </button>
     </form>
   );

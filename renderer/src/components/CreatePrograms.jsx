@@ -1,45 +1,46 @@
 import { useEffect, useState } from "react";
 import supabase from "../utils/supabase";
+import { showToast } from "../utils/toast";
+import { useAuth } from "../contexts/AuthContext";
 
 export default function CreatePrograms() {
+  const { userData } = useAuth();
+  const currentInstituteId = userData?.institute_id;
   const [form, setForm] = useState({
     name: "",
-    institution_id: "",
+    institution_id: currentInstituteId ||  "",
     is_active: true,
+    department_id: "",
   });
 
-  const [instituteQuery, setInstituteQuery] = useState("");
-  const [institutes, setInstitutes] = useState([]);
-  const [loadingInstitutes, setLoadingInstitutes] = useState(false);
+  const [deptQuery, setDeptQuery] = useState("");
+  const [deptResults, setDeptResults] = useState([]);
+  const [loadingDepts, setLoadingDepts] = useState(false);
 
-  /* ----------------------------------
-     Institution search (autocomplete)
-  ---------------------------------- */
   useEffect(() => {
-    if (instituteQuery.length < 2) {
-      setInstitutes([]);
+    if (deptQuery.trim() === "") {
+      setDeptResults([]);
       return;
     }
-
-    const fetchInstitutes = async () => {
-      setLoadingInstitutes(true);
-
+    const fetchDepartments = async () => {
+      setLoadingDepts(true);
       const { data, error } = await supabase
-        .from("institutes")
+        .from("departments")
         .select("id, name")
-        .ilike("name", `%${instituteQuery}%`)
-        .limit(10);
+        .eq("institute_id", currentInstituteId)
+        .ilike("name", `%${deptQuery}%`);
 
-      if (!error) setInstitutes(data || []);
-      setLoadingInstitutes(false);
+      if (error) {
+        console.error("Error fetching departments:", error);
+      } else {
+        setDeptResults(data);
+      }
+      setLoadingDepts(false);
     };
 
-    fetchInstitutes();
-  }, [instituteQuery]);
+    fetchDepartments();
+  }, [deptQuery, currentInstituteId]);
 
-  /* ----------------------------------
-     Submit handler
-  ---------------------------------- */
   const handleSubmit = async (e) => {
     e.preventDefault();
 
@@ -48,6 +49,7 @@ export default function CreatePrograms() {
         name: form.name,
         institution_id: form.institution_id,
         is_active: form.is_active,
+        department_id: form.department_id,
       },
     ]);
 
@@ -56,15 +58,13 @@ export default function CreatePrograms() {
       return;
     }
 
-    alert("Program created successfully");
+    showToast("Program created successfully");
     setForm({ name: "", institution_id: "", is_active: true });
-    setInstituteQuery("");
-    setInstitutes([]);
   };
 
   return (
     <form onSubmit={handleSubmit} className="form">
-      <h2 className="form-title">Create Program</h2>
+      <h2 className="form-title">Create Program</h2> 
 
       <div className="form-field">
         <label>Program Name</label>
@@ -75,38 +75,61 @@ export default function CreatePrograms() {
           required
         />
       </div>
-
-      <div className="form-field">
-        <label>Institution</label>
-
+      <div className="form-field autocomplete-container">
+        <label>Department</label>
         <input
           className="form-input"
-          placeholder="Search institution"
-          value={instituteQuery}
-          onChange={(e) => setInstituteQuery(e.target.value)}
+          value={deptQuery}
+          onChange={(e) => {
+            setDeptQuery(e.target.value);
+            setForm({ ...form, department_id: "" });
+          }}
+          onBlur={() => {
+            setTimeout(() => setDeptResults([]), 200);
+          }}
+          placeholder="Type department name..."
+          required
         />
 
-        {institutes.length > 0 && (
-          <ul className="autocomplete-list">
-            {institutes.map((inst) => (
-              <li
-                key={inst.id}
-                className="autocomplete-item"
-                onClick={() => {
-                  setForm({ ...form, institution_id: inst.id });
-                  setInstituteQuery(inst.name);
-                  setInstitutes([]);
-                }}
-              >
-                {inst.name}
-              </li>
-            ))}
-          </ul>
+        {loadingDepts && (
+          <div className="autocomplete-loading">Searching...</div>
         )}
 
-        {loadingInstitutes && (
-          <div className="autocomplete-loading">Searching…</div>
+        {deptResults.length > 0 && (
+          <div className="autocomplete-list">
+            {deptResults.map((dept) => (
+              <div
+                key={dept.id}
+                className="autocomplete-item"
+                onMouseDown={() => {
+                  setDeptQuery(dept.name);
+                  setForm({ ...form, department_id: dept.id });
+                  setDeptResults([]);
+                }}
+              >
+                {dept.name}
+                <span style={{ color: "#999", fontSize: "12px" }}>
+                  {" "}
+                  ({dept.code})
+                </span>
+              </div>
+            ))}
+          </div>
         )}
+      </div>
+      <div className="form-field">
+          <label>Institute</label>
+          <div
+              style={{
+              padding: "8px",
+              backgroundColor: "#f0f0f0",
+              color: "#555",
+              borderRadius: "4px",
+              fontStyle: "bold",
+              }}
+          >
+              {userData?.institute_name || form.institute_id}
+          </div>
       </div>
 
       <button type="submit" className="form-submit">

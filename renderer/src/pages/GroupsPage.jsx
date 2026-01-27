@@ -1,20 +1,20 @@
 import Modal from "../components/Modal";
-import CreateOperations from "../components/CreateOperations";
+import CreateGroups from "../components/CreateGroups";
 import { useEffect, useState } from "react";
 import supabase from "../utils/supabase";
-import EditOperations from "../components/EditOperations";
+import EditGroups from "../components/EditGroups";
 import { useAuth } from "../contexts/AuthContext";
 import AddButton from "../components/AddButton";
 
-export default function OperationsPage() {
+export default function GroupsPage() {
   const { userData } = useAuth();
   const [isCreateOpen, setisCreateOpen] = useState(false);
   const [isEditOpen, setisEditOpen] = useState(false);
-  const [operations, setOperations] = useState([]);
+  const [groups, setGroups] = useState([]);
   const [loading, setLoading] = useState(false);
   const [programs, setPrograms] = useState([]);
   const [selectedProgram, setSelectedProgram] = useState("");
-  const [selectedOperationId, setSelectedOperationId] = useState(null);
+  const [selectedGroupId, setSelectedGroupId] = useState(null);
 
   const fetchPrograms = async () => {
     const currentInstituteId = userData?.institute_id;
@@ -32,27 +32,25 @@ export default function OperationsPage() {
     }
   };
 
-  const fetchOperations = async (programId = "") => {
+  const fetchGroups = async (programId = "") => {
     setLoading(true);
 
     const currentInstituteId = userData?.institute_id;
 
     let query = supabase
-      .from("operations")
+      .from("groups")
       .select(`
-        id,
+      id,
+      name,
+      created_at,
+      program_id,
+      programs!inner (
         name,
-        status,
-        created_at,
-        program_id,
-        programs!inner (
-          name,
-          institution_id
-        )
-      `)
+        institution_id
+      )
+    `)
       .eq("programs.institution_id", currentInstituteId)
-      .order("status", { ascending: true })
-      .order("created_at", { ascending: false });
+      .order("name", { ascending: true });
 
 
     if (programId) {
@@ -62,21 +60,16 @@ export default function OperationsPage() {
     const { data, error } = await query;
 
     if (error) {
-      console.error("Error fetching operations:", error);
+      console.error("Error fetching groups:", error);
     } else {
-      setOperations(data);
+      setGroups(data);
     }
 
     setLoading(false);
   };
 
   useEffect(() => {
-    fetchOperations();
-    fetchPrograms();
-  }, [isEditOpen, isCreateOpen]);
-
-  useEffect(() => {
-    fetchOperations();
+    fetchGroups();
     fetchPrograms();
   }, []);
 
@@ -84,33 +77,33 @@ export default function OperationsPage() {
     <div className="page-content">
       <Modal
         isOpen={isCreateOpen}
-        title="Create Operation"
+        title="Create Group"
         onClose={() => {
           setisCreateOpen(false);
-          fetchOperations();
+          fetchGroups();
         }}
       >
-        <CreateOperations />
+        <CreateGroups />
       </Modal>
       <Modal
         isOpen={isEditOpen}
-        title="Edit Operation"
+        title="Edit Group"
         onClose={() => {
           setisEditOpen(false);
-          fetchOperations();
+          fetchGroups();
         }}
       >
-        <EditOperations
-          operationId={selectedOperationId}
+        <EditGroups
+          groupId={selectedGroupId}
           onCancel={() => setisEditOpen(false)}
         />
       </Modal>
       <div>
         <div className="page-sidebar-title">
-          <h2>Operations</h2>
+          <h2>Groups</h2>
           <AddButton
             onClick={() => setisCreateOpen(true)}
-            ariaLabel="Create Operation"
+            ariaLabel="Create Group"
           />
         </div>
         <div
@@ -123,7 +116,7 @@ export default function OperationsPage() {
             onChange={(e) => {
               const progId = e.target.value;
               setSelectedProgram(progId);
-              fetchOperations(progId);
+              fetchGroups(progId);
             }}
           >
             <option value="">All Programs</option>
@@ -138,24 +131,17 @@ export default function OperationsPage() {
       {loading && <p>Loading…</p>}
 
       <div className="lists-container">
-        {operations.map((operation) => (
+        {groups.map((group) => (
           <div
-            key={operation.id}
-            className={
-              operation.status === "active"
-                ? "list-item"
-                : "list-item-inactive"
-            }
+            key={group.id}
+            className="list-item"
             onClick={() => {
-              setSelectedOperationId(operation.id);
+              setSelectedGroupId(group.id);
               setisEditOpen(true);
             }}
           >
-            <h3>{operation.name}</h3>
-            <p>{operation.programs?.name}</p>
-            <p style={{ fontSize: "0.85em", color: "#666", textTransform: "capitalize" }}>
-              Status: {operation.status}
-            </p>
+            <h3>{group.name}</h3>
+            <p>{group.programs?.name}</p>
           </div>
         ))}
       </div>
