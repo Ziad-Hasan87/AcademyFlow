@@ -178,6 +178,34 @@ html, body, #root {
   line-height: 1.5;
 }
 
+.routine-page {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  overflow: auto;         /* scroll if needed */
+}
+
+.routine-table {
+  width: 100%;
+  min-width: 600px;       /* table min width so it doesn’t compress too much */
+  border-collapse: collapse;
+}
+
+.routine-table th,
+.routine-table td {
+  padding: 8px;
+  border: 1px solid #ccc;
+  text-align: center;
+}
+
+.routine-add-btn {
+  padding: 4px 8px;
+  font-size: 0.85em;
+  cursor: pointer;
+}
+
+
 .right-wrapper {
   display: flex;
   height: 100%;
@@ -571,10 +599,23 @@ html, body, #root {
   background: white;
   border-radius: 8px;
   padding: 24px;
-  min-width: 400px;
+  width: auto;            /* fit content width */
+  max-width: 95vw;        /* never exceed viewport width */
+  max-height: 90vh;       /* max height for viewport */
+  overflow-y: auto;       /* scroll vertically if content is tall */
+  overflow-x: auto;       /* scroll horizontally if table is wide */
+}
+.routine-modal-content {
+  background: white;
+  border-radius: 8px;
+  padding: 24px;
+  width: 80vw;
+  height: 90vh;
   max-width: 80vw;
-  max-height: 80vh;
+  max-height: 90vh;
   overflow-y: auto;
+  display: flex;
+  flex-direction: column;
 }
 .modal-overlay {
   position: fixed;
@@ -868,18 +909,17 @@ html, body, #root {
 
 .autocomplete-list {
   position: absolute;
-  z-index: 10000;
   top: 100%;
   left: 0;
-  width: 100%;
-  background: #ffffff;
-  border: 1px solid #e0e0e0;
-  border-radius: 6px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-  margin-top: 4px;
-  max-height: 240px;
-  overflow-y: auto;
+  right: 0;
+  background: white;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  z-index: 999;
+  max-height: 300px; /* for example */
+  overflow-y: auto; /* scroll if too many items */
 }
+
 
 .autocomplete-item {
   padding: 12px 16px;
