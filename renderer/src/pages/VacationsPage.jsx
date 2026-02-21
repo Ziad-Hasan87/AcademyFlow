@@ -345,17 +345,7 @@ export default function VacationsPage() {
                 setIsEditOpen(true);
               }}
             >
-              <h3>
-                {vac.from_table === "all"
-                  ? "All"
-                  : vac.from_table === "departments"
-                    ? vac.department_name
-                    : vac.from_table === "programs"
-                      ? vac.program_name
-                      : vac.from_table === "operations"
-                        ? `${vac.program_name} - ${vac.operation_name}`
-                        : ""}
-              </h3>
+              <h3>{vac.displayFor}</h3>
               <p>
                 {new Date(vac.start_day).toLocaleDateString("en-GB")} –{" "}
                 {new Date(vac.end_day).toLocaleDateString("en-GB")}
