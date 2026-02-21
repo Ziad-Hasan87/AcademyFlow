@@ -2,47 +2,66 @@ import { useEffect, useState } from "react";
 import supabase from "../utils/supabase";
 import { showToast } from "../utils/toast";
 import { useAuth } from "../contexts/AuthContext";
+import { fetchPrograms, fetchGroups } from "../utils/fetch";
 
 export default function CreateSubgroups() {
   const { userData } = useAuth();
   const currentInstituteId = userData?.institute_id;
+
   const [form, setForm] = useState({
     name: "",
     group_id: "",
   });
 
-  const [groupQuery, setGroupQuery] = useState("");
-  const [groupResults, setGroupResults] = useState([]);
+  /* ================= PROGRAM SEARCH ================= */
+  const [programQuery, setProgramQuery] = useState("");
+  const [programResults, setProgramResults] = useState([]);
+  const [selectedProgram, setSelectedProgram] = useState(null);
+  const [loadingPrograms, setLoadingPrograms] = useState(false);
+
+  /* ================= GROUP DROPDOWN ================= */
+  const [groups, setGroups] = useState([]);
   const [loadingGroups, setLoadingGroups] = useState(false);
 
-  // Fetch groups for autocomplete
+  /* ===== Fetch programs when searching ===== */
   useEffect(() => {
-    if (groupQuery.trim() === "") {
-      setGroupResults([]);
+    if (!programQuery.trim()) {
+      setProgramResults([]);
       return;
     }
 
-    const fetchGroups = async () => {
-      setLoadingGroups(true);
-      const { data, error } = await supabase
-        .from("groups")
-        .select("id, name, programs(name, institution_id)")
-        .eq("programs.institution_id", currentInstituteId)
-        .ilike("name", `%${groupQuery}%`);
+    fetchPrograms(
+      currentInstituteId,
+      programQuery,
+      setProgramResults,
+      setLoadingPrograms
+    );
+  }, [programQuery, currentInstituteId]);
 
-      if (error) {
-        console.error("Error fetching groups:", error);
-      } else {
-        setGroupResults(data);
-      }
-      setLoadingGroups(false);
-    };
+  /* ===== Fetch groups when program selected ===== */
+  useEffect(() => {
+    if (!selectedProgram) {
+      setGroups([]);
+      setForm({ ...form, group_id: "" });
+      return;
+    }
 
-    fetchGroups();
-  }, [groupQuery, currentInstituteId]);
+    fetchGroups(
+      selectedProgram.id,
+      "",
+      setGroups,
+      setLoadingGroups
+    );
+  }, [selectedProgram]);
 
+  /* ================= SUBMIT ================= */
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    if (!form.group_id) {
+      showToast("Please select a group", "error");
+      return;
+    }
 
     const { error } = await supabase.from("subgroups").insert([
       {
@@ -52,75 +71,99 @@ export default function CreateSubgroups() {
     ]);
 
     if (error) {
-      alert(`Failed to create subgroup: ${error.message}`);
+      showToast(`Failed to create subgroup: ${error.message}`, "error");
       return;
     }
 
     showToast("Subgroup created successfully");
+
     setForm({ name: "", group_id: "" });
-    setGroupQuery("");
+    setProgramQuery("");
+    setSelectedProgram(null);
+    setGroups([]);
   };
 
   return (
     <form onSubmit={handleSubmit} className="form">
       <h2 className="form-title">Create Subgroup</h2>
 
-      <div className="form-field">
-        <label>Subgroup Name</label>
-        <input
-          className="form-input"
-          value={form.name}
-          onChange={(e) => setForm({ ...form, name: e.target.value })}
-          placeholder="Enter subgroup name..."
-          required
-        />
-      </div>
-
+      {/* ================= PROGRAM ================= */}
       <div className="form-field autocomplete-container">
-        <label>Group</label>
+        <label>Program</label>
         <input
           className="form-input"
-          value={groupQuery}
+          placeholder="Search program..."
+          value={programQuery}
           onChange={(e) => {
-            setGroupQuery(e.target.value);
+            setProgramQuery(e.target.value);
+            setSelectedProgram(null);
+            setGroups([]);
             setForm({ ...form, group_id: "" });
           }}
-          onBlur={() => {
-            setTimeout(() => setGroupResults([]), 200);
-          }}
-          placeholder="Type group name..."
+          onBlur={() => setTimeout(() => setProgramResults([]), 200)}
           required
         />
 
-        {loadingGroups && (
+        {loadingPrograms && (
           <div className="autocomplete-loading">Searching...</div>
         )}
 
-        {groupResults.length > 0 && (
+        {programResults.length > 0 && (
           <div className="autocomplete-list">
-            {groupResults.map((grp) => (
+            {programResults.map((prog) => (
               <div
-                key={grp.id}
+                key={prog.id}
                 className="autocomplete-item"
                 onMouseDown={() => {
-                  setGroupQuery(grp.name);
-                  setForm({ ...form, group_id: grp.id });
-                  setGroupResults([]);
+                  setSelectedProgram(prog);
+                  setProgramQuery(prog.name);
+                  setProgramResults([]);
                 }}
               >
-                {grp.name}
-                {grp.programs?.name && (
-                  <span style={{ color: "#999", fontSize: "12px" }}>
-                    {" "}
-                    ({grp.programs.name})
-                  </span>
-                )}
+                {prog.name}
               </div>
             ))}
           </div>
         )}
       </div>
 
+      {/* ================= GROUP ================= */}
+      {selectedProgram && (
+        <div className="form-field">
+          <label>Group</label>
+          <select
+            className="form-select"
+            value={form.group_id}
+            onChange={(e) =>
+              setForm({ ...form, group_id: e.target.value })
+            }
+            required
+          >
+            <option value="">Select group</option>
+            {groups.map((grp) => (
+              <option key={grp.id} value={grp.id}>
+                {grp.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+
+      {/* ================= SUBGROUP NAME ================= */}
+      <div className="form-field">
+        <label>Subgroup Name</label>
+        <input
+          className="form-input"
+          value={form.name}
+          onChange={(e) =>
+            setForm({ ...form, name: e.target.value })
+          }
+          placeholder="Enter subgroup name..."
+          required
+        />
+      </div>
+
+      {/* ================= INSTITUTE ================= */}
       <div className="form-field">
         <label>Institute</label>
         <div
@@ -129,7 +172,7 @@ export default function CreateSubgroups() {
             backgroundColor: "#f0f0f0",
             color: "#555",
             borderRadius: "4px",
-            fontStyle: "bold",
+            fontWeight: "bold",
           }}
         >
           {userData?.institute_name || currentInstituteId}

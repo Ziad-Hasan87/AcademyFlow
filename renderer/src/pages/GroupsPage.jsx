@@ -1,77 +1,49 @@
 import Modal from "../components/Modal";
 import CreateGroups from "../components/CreateGroups";
-import { useEffect, useState } from "react";
-import supabase from "../utils/supabase";
 import EditGroups from "../components/EditGroups";
+import { useEffect, useState } from "react";
 import { useAuth } from "../contexts/AuthContext";
 import AddButton from "../components/AddButton";
+import { fetchPrograms, fetchGroups } from "../utils/fetch";
 
 export default function GroupsPage() {
   const { userData } = useAuth();
-  const [isCreateOpen, setisCreateOpen] = useState(false);
-  const [isEditOpen, setisEditOpen] = useState(false);
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [isEditOpen, setIsEditOpen] = useState(false);
   const [groups, setGroups] = useState([]);
   const [loading, setLoading] = useState(false);
+
   const [programs, setPrograms] = useState([]);
   const [selectedProgram, setSelectedProgram] = useState("");
   const [selectedGroupId, setSelectedGroupId] = useState(null);
 
-  const fetchPrograms = async () => {
-    const currentInstituteId = userData?.institute_id;
-    const { data, error } = await supabase
-      .from("programs")
-      .select("id, name")
-      .eq("institution_id", currentInstituteId)
-      .eq("is_active", true)
-      .order("name");
-
-    if (error) {
-      console.error("Error fetching programs:", error);
-    } else {
-      setPrograms(data);
-    }
+  /** Load programs using the new fetchPrograms utility */
+  const loadPrograms = async () => {
+    if (!userData?.institute_id) return;
+    await fetchPrograms(
+      userData.institute_id,
+      "",          // programQuery empty initially
+      setPrograms, // callback to set programs
+      () => {}     // no loading state needed here
+    );
   };
 
-  const fetchGroups = async (programId = "") => {
+  /** Load groups using the new fetchGroups utility */
+  const loadGroups = async (programId = "") => {
     setLoading(true);
-
-    const currentInstituteId = userData?.institute_id;
-
-    let query = supabase
-      .from("groups")
-      .select(`
-      id,
-      name,
-      created_at,
-      program_id,
-      programs!inner (
-        name,
-        institution_id
-      )
-    `)
-      .eq("programs.institution_id", currentInstituteId)
-      .order("name", { ascending: true });
-
-
-    if (programId) {
-      query = query.eq("program_id", programId);
-    }
-
-    const { data, error } = await query;
-
-    if (error) {
-      console.error("Error fetching groups:", error);
-    } else {
-      setGroups(data);
-    }
-
+    await fetchGroups(
+      programId,
+      "",         // groupQuery empty initially
+      setGroups,  // callback to set groups
+      setLoading  // loading state
+    );
     setLoading(false);
   };
 
   useEffect(() => {
-    fetchGroups();
-    fetchPrograms();
-  }, []);
+    loadPrograms();
+    loadGroups();
+  }, [userData?.institute_id]);
 
   return (
     <div className="page-content">
@@ -79,55 +51,54 @@ export default function GroupsPage() {
         isOpen={isCreateOpen}
         title="Create Group"
         onClose={() => {
-          setisCreateOpen(false);
-          fetchGroups();
+          setIsCreateOpen(false);
+          loadGroups(selectedProgram);
         }}
       >
         <CreateGroups />
       </Modal>
+
       <Modal
         isOpen={isEditOpen}
         title="Edit Group"
         onClose={() => {
-          setisEditOpen(false);
-          fetchGroups();
+          setIsEditOpen(false);
+          loadGroups(selectedProgram);
         }}
       >
         <EditGroups
           groupId={selectedGroupId}
-          onCancel={() => setisEditOpen(false)}
+          onCancel={() => setIsEditOpen(false)}
         />
       </Modal>
-      <div>
-        <div className="page-sidebar-title">
-          <h2>Groups</h2>
-          <AddButton
-            onClick={() => setisCreateOpen(true)}
-            ariaLabel="Create Group"
-          />
-        </div>
-        <div
-          className="form-field"
-          style={{ maxWidth: "300px", marginBottom: "16px" }}
-        >
-          <select
-            className="form-select"
-            value={selectedProgram}
-            onChange={(e) => {
-              const progId = e.target.value;
-              setSelectedProgram(progId);
-              fetchGroups(progId);
-            }}
-          >
-            <option value="">All Programs</option>
-            {programs.map((prog) => (
-              <option key={prog.id} value={prog.id}>
-                {prog.name}
-              </option>
-            ))}
-          </select>
-        </div>
+
+      <div className="page-sidebar-title">
+        <h2>Groups</h2>
+        <AddButton
+          onClick={() => setIsCreateOpen(true)}
+          ariaLabel="Create Group"
+        />
       </div>
+
+      <div className="form-field" style={{ maxWidth: "300px", marginBottom: "16px" }}>
+        <select
+          className="form-select"
+          value={selectedProgram}
+          onChange={(e) => {
+            const progId = e.target.value;
+            setSelectedProgram(progId);
+            loadGroups(progId);
+          }}
+        >
+          <option value="">All Programs</option>
+          {programs.map((prog) => (
+            <option key={prog.id} value={prog.id}>
+              {prog.name}
+            </option>
+          ))}
+        </select>
+      </div>
+
       {loading && <p>Loading…</p>}
 
       <div className="lists-container">
@@ -137,11 +108,11 @@ export default function GroupsPage() {
             className="list-item"
             onClick={() => {
               setSelectedGroupId(group.id);
-              setisEditOpen(true);
+              setIsEditOpen(true);
             }}
           >
             <h3>{group.name}</h3>
-            <p>{group.programs?.name}</p>
+            <p>{group.programs?.name || ""}</p>
           </div>
         ))}
       </div>

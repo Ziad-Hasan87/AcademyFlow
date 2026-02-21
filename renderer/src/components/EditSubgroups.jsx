@@ -2,22 +2,29 @@ import { useEffect, useState } from "react";
 import supabase from "../utils/supabase";
 import { showToast } from "../utils/toast";
 import { useAuth } from "../contexts/AuthContext";
+import { fetchPrograms, fetchGroups } from "../utils/fetch";
 
 export default function EditSubgroups({ subgroupId, onCancel }) {
   const { userData } = useAuth();
   const currentInstituteId = userData?.institute_id;
-  const [groupQuery, setGroupQuery] = useState("");
-  const [groupResults, setGroupResults] = useState([]);
-  const [loadingGroups, setLoadingGroups] = useState(false);
 
   const [form, setForm] = useState({
     id: "",
     name: "",
+    program_id: "",
     group_id: "",
     created_at: "",
   });
 
-  // Fetch subgroup by ID
+  const [programQuery, setProgramQuery] = useState("");
+  const [programResults, setProgramResults] = useState([]);
+  const [loadingPrograms, setLoadingPrograms] = useState(false);
+
+  const [groupQuery, setGroupQuery] = useState("");
+  const [groupResults, setGroupResults] = useState([]);
+  const [loadingGroups, setLoadingGroups] = useState(false);
+
+  // Fetch existing subgroup
   const fetchSubgroup = async () => {
     if (!subgroupId) return;
 
@@ -26,9 +33,17 @@ export default function EditSubgroups({ subgroupId, onCancel }) {
       .select(`
         id,
         name,
-        group_id,
         created_at,
-        groups ( name )
+        group_id,
+        groups (
+          id,
+          name,
+          program_id,
+          programs (
+            id,
+            name
+          )
+        )
       `)
       .eq("id", subgroupId)
       .single();
@@ -38,45 +53,56 @@ export default function EditSubgroups({ subgroupId, onCancel }) {
       return;
     }
 
+    const group = data.groups;
+    const program = data.groups?.programs;
+
     setForm({
       id: data.id,
       name: data.name,
-      group_id: data.group_id,
+      program_id: program?.id || "",
+      group_id: group?.id || "",
       created_at: data.created_at,
     });
 
-    setGroupQuery(data.groups?.name || "");
+    setProgramQuery(program?.name || "");
+    setGroupQuery(group?.name || "");
   };
 
-  // Fetch groups for autocomplete
+  // Fetch programs
   useEffect(() => {
-    if (groupQuery.trim() === "") {
+    if (!currentInstituteId) return;
+
+    if (programQuery.trim() === "") {
+      setProgramResults([]);
+      return;
+    }
+
+    fetchPrograms(
+      currentInstituteId,
+      programQuery,
+      setProgramResults,
+      setLoadingPrograms
+    );
+  }, [programQuery, currentInstituteId]);
+
+  // Fetch groups
+  useEffect(() => {
+    if (groupQuery.trim() === "" || !form.program_id) {
       setGroupResults([]);
       return;
     }
 
-    const fetchGroups = async () => {
-      setLoadingGroups(true);
-      const { data, error } = await supabase
-        .from("groups")
-        .select("id, name, programs(name, institution_id)")
-        .eq("programs.institution_id", currentInstituteId)
-        .ilike("name", `%${groupQuery}%`);
+    fetchGroups(
+      form.program_id,
+      groupQuery,
+      setGroupResults,
+      setLoadingGroups
+    );
+  }, [groupQuery, form.program_id]);
 
-      if (error) {
-        console.error("Error fetching groups:", error);
-      } else {
-        setGroupResults(data);
-      }
-      setLoadingGroups(false);
-    };
-
-    fetchGroups();
-  }, [groupQuery, currentInstituteId]);
-
-  // Submit update
   const handleSubmit = async (e) => {
     e.preventDefault();
+
     const { error } = await supabase
       .from("subgroups")
       .update({
@@ -92,11 +118,13 @@ export default function EditSubgroups({ subgroupId, onCancel }) {
     }
   };
 
-  // Delete subgroup
   const handleDelete = async () => {
-    if (!confirm("Are you sure you want to delete this subgroup? This may affect related students.")) {
+    if (
+      !confirm(
+        "Are you sure you want to delete this subgroup? This may affect related students."
+      )
+    )
       return;
-    }
 
     const { error } = await supabase
       .from("subgroups")
@@ -127,7 +155,7 @@ export default function EditSubgroups({ subgroupId, onCancel }) {
             backgroundColor: "#f0f0f0",
             color: "#555",
             borderRadius: "4px",
-            fontStyle: "bold",
+            fontWeight: "bold",
             fontSize: "0.9em",
           }}
         >
@@ -140,12 +168,57 @@ export default function EditSubgroups({ subgroupId, onCancel }) {
         <input
           className="form-input"
           value={form.name}
-          onChange={(e) => setForm({ ...form, name: e.target.value })}
-          placeholder="Enter subgroup name..."
+          onChange={(e) =>
+            setForm({ ...form, name: e.target.value })
+          }
           required
         />
       </div>
 
+      {/* Program */}
+      <div className="form-field autocomplete-container">
+        <label>Program</label>
+        <input
+          className="form-input"
+          value={programQuery}
+          onChange={(e) => {
+            setProgramQuery(e.target.value);
+            setForm({ ...form, program_id: "", group_id: "" });
+            setGroupQuery("");
+          }}
+          onBlur={() => setTimeout(() => setProgramResults([]), 200)}
+          required
+        />
+
+        {loadingPrograms && (
+          <div className="autocomplete-loading">Searching...</div>
+        )}
+
+        {programResults.length > 0 && (
+          <div className="autocomplete-list">
+            {programResults.map((prog) => (
+              <div
+                key={prog.id}
+                className="autocomplete-item"
+                onMouseDown={() => {
+                  setProgramQuery(prog.name);
+                  setForm({
+                    ...form,
+                    program_id: prog.id,
+                    group_id: "",
+                  });
+                  setProgramResults([]);
+                  setGroupQuery("");
+                }}
+              >
+                {prog.name}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Group */}
       <div className="form-field autocomplete-container">
         <label>Group</label>
         <input
@@ -155,10 +228,8 @@ export default function EditSubgroups({ subgroupId, onCancel }) {
             setGroupQuery(e.target.value);
             setForm({ ...form, group_id: "" });
           }}
-          onBlur={() => {
-            setTimeout(() => setGroupResults([]), 200);
-          }}
-          placeholder="Type group name..."
+          onBlur={() => setTimeout(() => setGroupResults([]), 200)}
+          disabled={!form.program_id}
           required
         />
 
@@ -172,22 +243,13 @@ export default function EditSubgroups({ subgroupId, onCancel }) {
               <div
                 key={grp.id}
                 className="autocomplete-item"
-                onMouseDown={(e) => {
-                  e.preventDefault();
+                onMouseDown={() => {
                   setGroupQuery(grp.name);
-                  setForm((prev) => ({
-                    ...prev,
-                    group_id: grp.id,
-                  }));
+                  setForm({ ...form, group_id: grp.id });
                   setGroupResults([]);
                 }}
               >
-                {grp.name}{" "}
-                {grp.programs?.name && (
-                  <span style={{ color: "#999", fontSize: "12px" }}>
-                    ({grp.programs.name})
-                  </span>
-                )}
+                {grp.name}
               </div>
             ))}
           </div>
@@ -202,7 +264,7 @@ export default function EditSubgroups({ subgroupId, onCancel }) {
             backgroundColor: "#f0f0f0",
             color: "#555",
             borderRadius: "4px",
-            fontStyle: "bold",
+            fontWeight: "bold",
           }}
         >
           {userData?.institute_name || currentInstituteId}
@@ -229,9 +291,15 @@ export default function EditSubgroups({ subgroupId, onCancel }) {
       <button type="submit" className="form-submit">
         Save Subgroup
       </button>
-      <button type="button" className="form-cancel" onClick={onCancel}>
+
+      <button
+        type="button"
+        className="form-cancel"
+        onClick={onCancel}
+      >
         Cancel
       </button>
+
       <button
         type="button"
         className="form-submit"

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import supabase from "../utils/supabase";
 import { showToast } from "../utils/toast";
 import { useAuth } from "../contexts/AuthContext";
+import { fetchOperations, fetchPrograms } from "../utils/fetch";
 
 export default function CreateCourses() {
   const { userData } = useAuth();
@@ -26,25 +27,7 @@ export default function CreateCourses() {
       setProgramResults([]);
       return;
     }
-
-    const fetchPrograms = async () => {
-      setLoadingPrograms(true);
-      const { data, error } = await supabase
-        .from("programs")
-        .select("id, name, departments(name)")
-        .eq("institution_id", currentInstituteId)
-        .eq("is_active", true)
-        .ilike("name", `%${programQuery}%`);
-
-      if (error) {
-        console.error("Error fetching programs:", error);
-      } else {
-        setProgramResults(data);
-      }
-      setLoadingPrograms(false);
-    };
-
-    fetchPrograms();
+    fetchPrograms(currentInstituteId, programQuery, setProgramResults, setLoadingPrograms);
   }, [programQuery, currentInstituteId]);
 
   // Fetch operations for autocomplete based on selected program
@@ -54,24 +37,7 @@ export default function CreateCourses() {
       return;
     }
 
-    const fetchOperations = async () => {
-      setLoadingOperations(true);
-      const { data, error } = await supabase
-        .from("operations")
-        .select("id, name, status")
-        .eq("program_id", form.program_id)
-        .eq("status", "active")
-        .ilike("name", `%${operationQuery}%`);
-
-      if (error) {
-        console.error("Error fetching operations:", error);
-      } else {
-        setOperationResults(data);
-      }
-      setLoadingOperations(false);
-    };
-
-    fetchOperations();
+    fetchOperations(form.program_id, operationQuery, setOperationResults, setLoadingOperations);
   }, [operationQuery, form.program_id]);
 
   const handleSubmit = async (e) => {

@@ -5,29 +5,22 @@ import supabase from "../utils/supabase";
 import EditCourses from "../components/EditCourses";
 import { useAuth } from "../contexts/AuthContext";
 import AddButton from "../components/AddButton";
+import { fetchDepartments } from "../utils/fetch";
 
 export default function CoursesPage() {
   const { userData } = useAuth();
-  const [isCreateOpen, setisCreateOpen] = useState(false);
-  const [isEditOpen, setisEditOpen] = useState(false);
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [isEditOpen, setIsEditOpen] = useState(false);
   const [courses, setCourses] = useState([]);
   const [loading, setLoading] = useState(false);
   const [selectedCourseId, setSelectedCourseId] = useState(null);
+
   const [departments, setDepartments] = useState([]);
   const [selectedDepartmentId, setSelectedDepartmentId] = useState("");
 
-  const fetchDepartments = async () => {
-    const { data, error } = await supabase
-      .from("departments")
-      .select("id, name, code")
-      .eq("institute_id", userData?.institute_id)
-      .order("name");
-
-    if (error) {
-      console.error("Error fetching departments:", error);
-    } else {
-      setDepartments(data || []);
-    }
+  const loadDepartments = () => {
+    if (!userData?.institute_id) return;
+    fetchDepartments(userData.institute_id, "", setDepartments, () => {});
   };
 
   const fetchCourses = async () => {
@@ -56,23 +49,22 @@ export default function CoursesPage() {
 
     const { data, error } = await query.order("created_at", { ascending: false });
 
-
     if (error) {
       console.error("Error fetching courses:", error);
     } else {
-      setCourses(data);
+      setCourses(data || []);
     }
 
     setLoading(false);
   };
 
   useEffect(() => {
-    fetchDepartments();
-  }, []);
+    loadDepartments();
+  }, [userData?.institute_id]);
 
   useEffect(() => {
     fetchCourses();
-  }, [selectedDepartmentId]);
+  }, [selectedDepartmentId, userData?.institute_id]);
 
   return (
     <div className="page-content">
@@ -80,34 +72,39 @@ export default function CoursesPage() {
         isOpen={isCreateOpen}
         title="Create Course"
         onClose={() => {
-          setisCreateOpen(false);
+          setIsCreateOpen(false);
           fetchCourses();
         }}
       >
         <CreateCourses />
       </Modal>
+
       <Modal
         isOpen={isEditOpen}
         title="Edit Course"
         onClose={() => {
-          setisEditOpen(false);
+          setIsEditOpen(false);
           fetchCourses();
         }}
       >
         <EditCourses
           courseId={selectedCourseId}
-          onCancel={() => setisEditOpen(false)}
+          onCancel={() => setIsEditOpen(false)}
         />
       </Modal>
+
       <div className="page-sidebar-title">
         <h2>Courses</h2>
         <AddButton
-          onClick={() => setisCreateOpen(true)}
+          onClick={() => setIsCreateOpen(true)}
           ariaLabel="Create Course"
         />
       </div>
 
-      <div className="form-field" style={{ maxWidth: "300px", marginBottom: "16px" }}>
+      <div
+        className="form-field"
+        style={{ maxWidth: "300px", marginBottom: "16px" }}
+      >
         <select
           className="form-select"
           value={selectedDepartmentId}
@@ -131,7 +128,7 @@ export default function CoursesPage() {
             className="list-item"
             onClick={() => {
               setSelectedCourseId(course.id);
-              setisEditOpen(true);
+              setIsEditOpen(true);
             }}
           >
             <h3>{course.name || "Unnamed Course"}</h3>

@@ -1,9 +1,9 @@
 import Modal from "../components/Modal";
 import CreateDepartments from "../components/CreateDepartments";
 import { useState, useEffect } from "react";
-import supabase from "../utils/supabase";
 import { useAuth } from "../contexts/AuthContext";
 import AddButton from "../components/AddButton";
+import { fetchDepartments } from "../utils/fetch";
 
 export default function DepartmentsPage() {
   const { userData } = useAuth();
@@ -11,27 +11,24 @@ export default function DepartmentsPage() {
   const [departments, setDepartments] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  const fetchDepartments = async () => {
+  // Use the new fetchDepartments util
+  const loadDepartments = async () => {
+    if (!userData?.institute_id) return;
     setLoading(true);
 
-    const { data, error } = await supabase
-      .from("departments")
-      .select("code, name")
-      .eq("institute_id", userData?.institute_id)
-      .order("code");
-
-    if (error) {
-      console.error("Error fetching departments:", error);
-    } else {
-      setDepartments(data);
-    }
+    await fetchDepartments(
+      userData.institute_id, // currentInstituteId
+      "",                    // initial query
+      setDepartments,        // setDeptResults
+      setLoading             // setLoadingDepts
+    );
 
     setLoading(false);
   };
 
   useEffect(() => {
-    fetchDepartments();
-  }, []);
+    loadDepartments();
+  }, [userData?.institute_id]);
 
   return (
     <div className="page-content">
@@ -51,7 +48,7 @@ export default function DepartmentsPage() {
         <CreateDepartments
           onCreated={() => {
             setIsOpen(false);
-            fetchDepartments();
+            loadDepartments();
           }}
         />
       </Modal>
@@ -60,7 +57,7 @@ export default function DepartmentsPage() {
 
       <div className="lists-container">
         {departments.map((dept) => (
-          <div key={dept.code} className="list-item">
+          <div key={dept.id || dept.code} className="list-item">
             <h3>{dept.code}</h3>
             <p>{dept.name}</p>
           </div>

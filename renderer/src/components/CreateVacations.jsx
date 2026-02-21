@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import supabase from "../utils/supabase";
 import { useAuth } from "../contexts/AuthContext";
 import { showToast } from "../utils/toast";
+import { fetchPrograms, fetchOperations, fetchDepartments } from "../utils/fetch";
 
 export default function CreateVacations({ onSuccess }) {
     const { userData } = useAuth();
@@ -26,45 +27,25 @@ export default function CreateVacations({ onSuccess }) {
 
     /** SEARCH PROGRAMS **/
     useEffect(() => {
-        if (forType === "operations" && programQuery.trim() !== "") {
-            supabase
-                .from("programs")
-                .select("id, name")
-                .eq("institution_id", currentInstituteId)
-                .ilike("name", `%${programQuery}%`)
-                .then(({ data }) => setProgramResults(data || []));
-        } else setProgramResults([]);
+        if (forType === "programs" && idQuery.trim() !== "") {
+            fetchPrograms(currentInstituteId, idQuery, setIdResults, () => {});
+        }
     }, [programQuery, forType, currentInstituteId]);
 
     /** SEARCH OPERATIONS **/
     useEffect(() => {
         if (forType === "operations" && selectedProgram && operationQuery.trim() !== "") {
-            supabase
-                .from("operations")
-                .select("id, name")
-                .eq("program_id", selectedProgram.id)
-                .ilike("name", `%${operationQuery}%`)
-                .then(({ data }) => setOperationResults(data || []));
+            fetchOperations(selectedProgram.id, operationQuery, setOperationResults, () => {});
         } else setOperationResults([]);
     }, [operationQuery, selectedProgram, forType]);
 
     // SEARCH DEPARTMENTS / PROGRAMS FOR ID FIELD
     useEffect(() => {
         if (forType === "programs" && idQuery.trim() !== "") {
-            supabase
-                .from("programs")
-                .select("id, name")
-                .eq("institution_id", currentInstituteId)
-                .ilike("name", `%${idQuery}%`)
-                .then(({ data }) => setIdResults(data || []));
+            fetchPrograms(currentInstituteId, idQuery, setIdResults, () => {});
         }
         else if (forType === "departments" && idQuery.trim() !== "") {
-            supabase
-                .from("departments")
-                .select("id, name")
-                .eq("institute_id", currentInstituteId)  // Corrected: use institute_id
-                .ilike("name", `%${idQuery}%`)
-                .then(({ data }) => setIdResults(data || []));
+            fetchDepartments(currentInstituteId, idQuery, setIdResults, () => {});
         }
         else {
             setIdResults([]);

@@ -1,124 +1,148 @@
-import Modal from "../components/Modal";
-import CreateSubgroups from "../components/CreateSubgroups";
 import { useEffect, useState } from "react";
-import supabase from "../utils/supabase";
+import Modal from "../components/Modal";
+import AddButton from "../components/AddButton";
+import CreateSubgroups from "../components/CreateSubgroups";
 import EditSubgroups from "../components/EditSubgroups";
 import { useAuth } from "../contexts/AuthContext";
-import AddButton from "../components/AddButton";
+import { fetchPrograms, fetchGroups, fetchSubgroups } from "../utils/fetch";
 
 export default function SubgroupsPage() {
   const { userData } = useAuth();
-  const [isCreateOpen, setisCreateOpen] = useState(false);
-  const [isEditOpen, setisEditOpen] = useState(false);
-  const [subgroups, setSubgroups] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [groups, setGroups] = useState([]);
-  const [selectedGroup, setSelectedGroup] = useState("");
+  const currentInstituteId = userData?.institute_id;
+
+  // Modal state
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [isEditOpen, setIsEditOpen] = useState(false);
   const [selectedSubgroupId, setSelectedSubgroupId] = useState(null);
 
-  const fetchGroups = async () => {
-    const currentInstituteId = userData?.institute_id;
-    const { data, error } = await supabase
-      .from("groups")
-      .select("id, name, programs(name, institution_id)")
-      .eq("programs.institution_id", currentInstituteId)
-      .order("name");
+  // Programs
+  const [programQuery, setProgramQuery] = useState("");
+  const [programResults, setProgramResults] = useState([]);
+  const [selectedProgram, setSelectedProgram] = useState(null);
+  const [loadingPrograms, setLoadingPrograms] = useState(false);
 
-    if (error) {
-      console.error("Error fetching groups:", error);
-    } else {
-      setGroups(data);
-    }
-  };
+  // Groups
+  const [groups, setGroups] = useState([]);
+  const [selectedGroup, setSelectedGroup] = useState("");
+  const [loadingGroups, setLoadingGroups] = useState(false);
 
-  const fetchSubgroups = async (groupId = "") => {
-    setLoading(true);
+  // Subgroups
+  const [subgroups, setSubgroups] = useState([]);
+  const [loadingSubgroups, setLoadingSubgroups] = useState(false);
 
-    const currentInstituteId = userData?.institute_id;
-
-    let query = supabase
-      .from("subgroups")
-      .select(`
-          id,
-          name,
-          created_at,
-          group_id,
-          groups!inner (
-            name,
-            programs!inner (
-              name,
-              institution_id
-            )
-          )
-        `)
-      .eq("groups.programs.institution_id", currentInstituteId)
-
-
-    if (groupId) {
-      query = query.eq("group_id", groupId);
-    }
-
-    const { data, error } = await query;
-
-    if (error) {
-      console.error("Error fetching subgroups:", error);
-    } else {
-      setSubgroups(data);
-    }
-
-    setLoading(false);
-  };
-
+  /* ====================== Fetch Programs ====================== */
   useEffect(() => {
-    fetchSubgroups();
-    fetchGroups();
-  }, []);
+    if (!programQuery.trim()) {
+      setProgramResults([]);
+      return;
+    }
+
+    fetchPrograms(currentInstituteId, programQuery, setProgramResults, setLoadingPrograms);
+  }, [programQuery, currentInstituteId]);
+
+  /* ====================== Fetch Groups ====================== */
+  useEffect(() => {
+    if (!selectedProgram) {
+      setGroups([]);
+      setSelectedGroup("");
+      return;
+    }
+
+    fetchGroups(selectedProgram.id, "", setGroups, setLoadingGroups);
+  }, [selectedProgram]);
+
+  /* ====================== Fetch Subgroups ====================== */
+  useEffect(() => {
+    // Show all subgroups from all groups under the institution if no group is selected
+    if (!selectedGroup) {
+      fetchSubgroups(null, "", setSubgroups, setLoadingSubgroups);
+      return;
+    }
+
+    fetchSubgroups(selectedGroup, "", setSubgroups, setLoadingSubgroups);
+  }, [selectedGroup]);
 
   return (
     <div className="page-content">
+      {/* ================= MODALS ================= */}
       <Modal
         isOpen={isCreateOpen}
         title="Create Subgroup"
         onClose={() => {
-          setisCreateOpen(false);
-          fetchSubgroups();
+          setIsCreateOpen(false);
+          fetchSubgroups(selectedGroup || null, "", setSubgroups, setLoadingSubgroups);
         }}
       >
         <CreateSubgroups />
       </Modal>
+
       <Modal
         isOpen={isEditOpen}
         title="Edit Subgroup"
         onClose={() => {
-          setisEditOpen(false);
-          fetchSubgroups();
+          setIsEditOpen(false);
+          fetchSubgroups(selectedGroup || null, "", setSubgroups, setLoadingSubgroups);
         }}
       >
         <EditSubgroups
           subgroupId={selectedSubgroupId}
-          onCancel={() => setisEditOpen(false)}
+          onCancel={() => setIsEditOpen(false)}
         />
       </Modal>
-      <div>
-        <div className="page-sidebar-title">
-          <h2>Subgroups</h2>
+
+      {/* ================= HEADER ================= */}
+      <div className="page-sidebar-title">
+        <h2>Subgroups</h2>
           <AddButton
-            onClick={() => setisCreateOpen(true)}
+            onClick={() => setIsCreateOpen(true)}
             ariaLabel="Create Subgroup"
           />
-        </div>
-        <div
-          className="form-field"
-          style={{ maxWidth: "300px", marginBottom: "16px" }}
-        >
+        
+      </div>
+
+      {/* ================= PROGRAM SEARCH ================= */}
+      <div className="form-field autocomplete-container">
+        <label>Program</label>
+        <input
+          className="form-input"
+          placeholder="Search program..."
+          value={programQuery}
+          onChange={(e) => {
+            setProgramQuery(e.target.value);
+            setSelectedProgram(null);
+            setSelectedGroup("");
+            setGroups([]);
+            setSubgroups([]);
+          }}
+          onBlur={() => setTimeout(() => setProgramResults([]), 200)}
+        />
+        {programResults.length > 0 && (
+          <div className="autocomplete-list">
+            {programResults.map((prog) => (
+              <div
+                key={prog.id}
+                className="autocomplete-item"
+                onMouseDown={() => {
+                  setSelectedProgram(prog);
+                  setProgramQuery(prog.name);
+                  setProgramResults([]);
+                }}
+              >
+                {prog.name}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* ================= GROUP SELECT ================= */}
+      {selectedProgram && (
+        <div className="form-field" style={{ maxWidth: "300px", marginBottom: "16px" }}>
+          <label>Group</label>
           <select
             className="form-select"
             value={selectedGroup}
-            onChange={(e) => {
-              const grpId = e.target.value;
-              setSelectedGroup(grpId);
-              fetchSubgroups(grpId);
-            }}
+            onChange={(e) => setSelectedGroup(e.target.value)}
           >
             <option value="">All Groups</option>
             {groups.map((grp) => (
@@ -128,9 +152,10 @@ export default function SubgroupsPage() {
             ))}
           </select>
         </div>
-      </div>
-      {loading && <p>Loading…</p>}
+      )}
 
+      {/* ================= SUBGROUP LIST ================= */}
+      {loadingSubgroups && <p>Loading…</p>}
       <div className="lists-container">
         {subgroups.map((subgroup) => (
           <div
@@ -138,7 +163,7 @@ export default function SubgroupsPage() {
             className="list-item"
             onClick={() => {
               setSelectedSubgroupId(subgroup.id);
-              setisEditOpen(true);
+              setIsEditOpen(true);
             }}
           >
             <h3>{subgroup.name}</h3>
@@ -149,6 +174,10 @@ export default function SubgroupsPage() {
             )}
           </div>
         ))}
+
+        {!loadingSubgroups && subgroups.length === 0 && (
+          <p style={{ color: "#777" }}>No subgroups found.</p>
+        )}
       </div>
     </div>
   );

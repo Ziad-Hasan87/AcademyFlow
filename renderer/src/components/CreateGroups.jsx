@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import supabase from "../utils/supabase";
 import { showToast } from "../utils/toast";
 import { useAuth } from "../contexts/AuthContext";
+import { fetchPrograms } from "../utils/fetch";
 
 export default function CreateGroups() {
   const { userData } = useAuth();
@@ -22,24 +23,7 @@ export default function CreateGroups() {
       return;
     }
 
-    const fetchPrograms = async () => {
-      setLoadingPrograms(true);
-      const { data, error } = await supabase
-        .from("programs")
-        .select("id, name, departments(name)")
-        .eq("institution_id", currentInstituteId)
-        .eq("is_active", true)
-        .ilike("name", `%${programQuery}%`);
-
-      if (error) {
-        console.error("Error fetching programs:", error);
-      } else {
-        setProgramResults(data);
-      }
-      setLoadingPrograms(false);
-    };
-
-    fetchPrograms();
+    fetchPrograms(currentInstituteId, programQuery, setProgramResults, setLoadingPrograms);
   }, [programQuery, currentInstituteId]);
 
   const handleSubmit = async (e) => {

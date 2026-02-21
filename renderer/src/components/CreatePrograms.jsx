@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import supabase from "../utils/supabase";
 import { showToast } from "../utils/toast";
 import { useAuth } from "../contexts/AuthContext";
+import { fetchDepartments } from "../utils/fetch";
 
 export default function CreatePrograms() {
   const { userData } = useAuth();
@@ -22,23 +23,8 @@ export default function CreatePrograms() {
       setDeptResults([]);
       return;
     }
-    const fetchDepartments = async () => {
-      setLoadingDepts(true);
-      const { data, error } = await supabase
-        .from("departments")
-        .select("id, name")
-        .eq("institute_id", currentInstituteId)
-        .ilike("name", `%${deptQuery}%`);
+    fetchDepartments(currentInstituteId, deptQuery, setDeptResults, setLoadingDepts);
 
-      if (error) {
-        console.error("Error fetching departments:", error);
-      } else {
-        setDeptResults(data);
-      }
-      setLoadingDepts(false);
-    };
-
-    fetchDepartments();
   }, [deptQuery, currentInstituteId]);
 
   const handleSubmit = async (e) => {

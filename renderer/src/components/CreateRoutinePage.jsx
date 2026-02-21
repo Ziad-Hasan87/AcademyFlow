@@ -3,6 +3,7 @@ import supabase from "../utils/supabase";
 import { useAuth } from "../contexts/AuthContext";
 import Modal from "./Modal"; // normal modal
 import CreateRoutineEvent from "./CreateRoutineEvent";
+import { fetchPrograms, fetchOperations, fetchSlots } from "../utils/fetch";
 
 export default function CreateRoutinePage() {
   const { userData } = useAuth();
@@ -28,39 +29,27 @@ export default function CreateRoutinePage() {
 
   /** Fetch Programs **/
   useEffect(() => {
-    if (programQuery.trim() === "") return setProgramResults([]);
-    supabase
-      .from("programs")
-      .select("id, name")
-      .eq("institution_id", currentInstituteId)
-      .ilike("name", `%${programQuery}%`)
-      .then(({ data }) => setProgramResults(data || []));
+    if (programQuery.trim() === "") {
+      setProgramResults([]);
+      return;
+    }
+    fetchPrograms(currentInstituteId, programQuery, setProgramResults, () => {});
   }, [programQuery, currentInstituteId]);
 
   /** Fetch Operations for Selected Program **/
   useEffect(() => {
-    if (!selectedProgram || operationQuery.trim() === "") return setOperationResults([]);
-    supabase
-      .from("operations")
-      .select("id, name")
-      .eq("program_id", selectedProgram.id)
-      .ilike("name", `%${operationQuery}%`)
-      .then(({ data }) => setOperationResults(data || []));
+    if (!selectedProgram) return setOperationResults([]);
+    if (operationQuery.trim() === "") {
+      setOperationResults([]);
+      return;
+    }
+    fetchOperations(selectedProgram.id, operationQuery, setOperationResults, () => {});
   }, [operationQuery, selectedProgram]);
 
   /** Fetch Slots for Selected Operation **/
   useEffect(() => {
     if (!selectedOperation) return setSlots([]);
-    const fetchSlots = async () => {
-      const { data, error } = await supabase
-        .from("slotinfo")
-        .select("*")
-        .eq("operation_id", selectedOperation.id)
-        .order("serial_no");
-      if (error) console.error("Error fetching slots:", error);
-      else setSlots(data || []);
-    };
-    fetchSlots();
+    fetchSlots(selectedOperation.id, setSlots);
   }, [selectedOperation]);
 
   return (

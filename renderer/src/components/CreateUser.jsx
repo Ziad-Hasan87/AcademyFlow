@@ -5,6 +5,7 @@ import { MdOutlineEmail } from "react-icons/md";
 import supabase from "../utils/supabase";
 import { showToast } from "../utils/toast";
 import { useAuth } from "../contexts/AuthContext";
+import { fetchPrograms, fetchOperations, fetchGroups, fetchSubgroups} from "../utils/fetch";
 
 export default function CreateUserForm() {
   const { userData } = useAuth();
@@ -51,24 +52,7 @@ export default function CreateUserForm() {
       return;
     }
 
-    const fetchPrograms = async () => {
-      setLoadingPrograms(true);
-      const { data, error } = await supabase
-        .from("programs")
-        .select("id, name, departments(name)")
-        .eq("institution_id", currentInstituteId)
-        .eq("is_active", true)
-        .ilike("name", `%${programQuery}%`);
-
-      if (error) {
-        console.error("Error fetching programs:", error);
-      } else {
-        setProgramResults(data);
-      }
-      setLoadingPrograms(false);
-    };
-
-    fetchPrograms();
+    fetchPrograms(currentInstituteId, programQuery, setProgramResults, setLoadingPrograms);
   }, [programQuery, currentInstituteId]);
 
   // Fetch operations for autocomplete based on selected program
@@ -78,24 +62,7 @@ export default function CreateUserForm() {
       return;
     }
 
-    const fetchOperations = async () => {
-      setLoadingOperations(true);
-      const { data, error } = await supabase
-        .from("operations")
-        .select("id, name, status")
-        .eq("program_id", studentInfo.program_id)
-        .eq("status", "active")
-        .ilike("name", `%${operationQuery}%`);
-
-      if (error) {
-        console.error("Error fetching operations:", error);
-      } else {
-        setOperationResults(data);
-      }
-      setLoadingOperations(false);
-    };
-
-    fetchOperations();
+    fetchOperations(studentInfo.program_id, operationQuery, setOperationResults, setLoadingOperations);
   }, [operationQuery, studentInfo.program_id]);
 
   // Fetch groups when program is selected
@@ -104,24 +71,7 @@ export default function CreateUserForm() {
       setGroups([]);
       return;
     }
-
-    const fetchGroups = async () => {
-      setLoadingGroups(true);
-      const { data, error } = await supabase
-        .from("groups")
-        .select("id, name")
-        .eq("program_id", studentInfo.program_id)
-        .order("name");
-
-      if (error) {
-        console.error("Error fetching groups:", error);
-      } else {
-        setGroups(data || []);
-      }
-      setLoadingGroups(false);
-    };
-
-    fetchGroups();
+    fetchGroups(currentInstituteId, studentInfo.program_id, setGroups, setLoadingGroups);
   }, [studentInfo.program_id]);
 
   // Fetch subgroups when group is selected
@@ -131,23 +81,7 @@ export default function CreateUserForm() {
       return;
     }
 
-    const fetchSubgroups = async () => {
-      setLoadingSubgroups(true);
-      const { data, error } = await supabase
-        .from("subgroups")
-        .select("id, name")
-        .eq("group_id", studentInfo.group_id)
-        .order("name");
-
-      if (error) {
-        console.error("Error fetching subgroups:", error);
-      } else {
-        setSubgroups(data || []);
-      }
-      setLoadingSubgroups(false);
-    };
-
-    fetchSubgroups();
+    fetchSubgroups(studentInfo.group_id, setSubgroups, setLoadingSubgroups);
   }, [studentInfo.group_id]);
 
   /* ----------------------------------

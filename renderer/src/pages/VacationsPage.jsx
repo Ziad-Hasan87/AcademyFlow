@@ -5,6 +5,7 @@ import AddButton from "../components/AddButton";
 import CreateVacations from "../components/CreateVacations";
 import EditVacations from "../components/EditVacations";
 import { useAuth } from "../contexts/AuthContext";
+import { fetchOperations, fetchPrograms, fetchDepartments } from "../utils/fetch";
 
 export default function VacationsPage() {
   const { userData } = useAuth();
@@ -51,22 +52,61 @@ export default function VacationsPage() {
     // Map UUIDs to human-readable names
     const mapped = await Promise.all(
       (data || []).map(async (vac) => {
-        if (vac.from_table === "all") return { ...vac, displayFor: "All" };
-        else if (vac.from_table === "programs") {
-          const { data: prog } = await supabase.from("programs").select("name").eq("id", vac.for_users).single();
-          return { ...vac, displayFor: prog?.name || vac.for_users };
-        } else if (vac.from_table === "departments") {
-          const { data: dept } = await supabase.from("departments").select("name").eq("id", vac.for_users).single();
-          return { ...vac, displayFor: dept?.name || vac.for_users };
-        } else if (vac.from_table === "operations") {
-          const { data: op } = await supabase.from("operations").select("name, program_id").eq("id", vac.for_users).single();
-          let programName = "";
-          if (op?.program_id) {
-            const { data: prog } = await supabase.from("programs").select("name").eq("id", op.program_id).single();
-            programName = prog?.name;
-          }
-          return { ...vac, displayFor: `${programName || ""} → ${op?.name || ""}` };
+        if (vac.from_table === "all") {
+          return { ...vac, displayFor: "ALL" };
         }
+
+        if (vac.from_table === "programs") {
+          const { data: prog } = await supabase
+            .from("programs")
+            .select("name")
+            .eq("id", vac.for_users)
+            .single();
+
+          return {
+            ...vac,
+            displayFor: prog?.name || "Program",
+          };
+        }
+
+        if (vac.from_table === "departments") {
+          const { data: dept } = await supabase
+            .from("departments")
+            .select("name")
+            .eq("id", vac.for_users)
+            .single();
+
+          return {
+            ...vac,
+            displayFor: dept?.name || "Department",
+          };
+        }
+
+        if (vac.from_table === "operations") {
+          const { data: op } = await supabase
+            .from("operations")
+            .select("name, program_id")
+            .eq("id", vac.for_users)
+            .single();
+
+          let programName = "";
+
+          if (op?.program_id) {
+            const { data: prog } = await supabase
+              .from("programs")
+              .select("name")
+              .eq("id", op.program_id)
+              .single();
+
+            programName = prog?.name || "";
+          }
+
+          return {
+            ...vac,
+            displayFor: `${programName} ${op?.name || ""}`,
+          };
+        }
+
         return vac;
       })
     );
@@ -78,44 +118,44 @@ export default function VacationsPage() {
   /** SEARCH PROGRAMS **/
   useEffect(() => {
     if (forFilter === "operations" && programQuery.trim() !== "") {
-      supabase
-        .from("programs")
-        .select("id, name")
-        .eq("institution_id", currentInstituteId)
-        .ilike("name", `%${programQuery}%`)
-        .then(({ data }) => setProgramResults(data || []));
+      fetchPrograms(
+        currentInstituteId,
+        programQuery,
+        setProgramResults,
+        () => {}
+      );
     } else setProgramResults([]);
   }, [programQuery, forFilter, currentInstituteId]);
 
   /** SEARCH OPERATIONS FOR SELECTED PROGRAM **/
   useEffect(() => {
     if (selectedProgram && operationQuery.trim() !== "" && forFilter === "operations") {
-      supabase
-        .from("operations")
-        .select("id, name")
-        .eq("program_id", selectedProgram.id)
-        .ilike("name", `%${operationQuery}%`)
-        .then(({ data }) => setOperationResults(data || []));
+      fetchOperations(
+        selectedProgram.id,
+        operationQuery,
+        setOperationResults,
+        () => {}
+      );
     } else setOperationResults([]);
   }, [operationQuery, selectedProgram, forFilter]);
 
   // SEARCH DEPARTMENTS / PROGRAMS FOR ID FIELD
   useEffect(() => {
     if (forFilter === "programs" && idQuery.trim() !== "") {
-      supabase
-        .from("programs")
-        .select("id, name")
-        .eq("institution_id", currentInstituteId)
-        .ilike("name", `%${idQuery}%`)
-        .then(({ data }) => setIdResults(data || []));
+      fetchPrograms(
+        currentInstituteId,
+        idQuery,
+        setIdResults,
+        () => {}
+      );
     }
     else if (forFilter === "departments" && idQuery.trim() !== "") {
-      supabase
-        .from("departments")
-        .select("id, name")
-        .eq("institute_id", currentInstituteId)  // Corrected: use institute_id
-        .ilike("name", `%${idQuery}%`)
-        .then(({ data }) => setIdResults(data || []));
+      fetchDepartments(
+        currentInstituteId,
+        idQuery,
+        setIdResults,
+        () => {}
+      );
     }
     else {
       setIdResults([]);

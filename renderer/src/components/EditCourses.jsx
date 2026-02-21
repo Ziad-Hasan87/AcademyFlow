@@ -2,22 +2,28 @@ import { useEffect, useState } from "react";
 import supabase from "../utils/supabase";
 import { showToast } from "../utils/toast";
 import { useAuth } from "../contexts/AuthContext";
+import { fetchOperations, fetchPrograms } from "../utils/fetch";
 
 export default function EditCourses({ courseId, onCancel }) {
   const { userData } = useAuth();
   const currentInstituteId = userData?.institute_id;
-  const [operationQuery, setOperationQuery] = useState("");
-  const [operationResults, setOperationResults] = useState([]);
-  const [loadingOperations, setLoadingOperations] = useState(false);
 
   const [form, setForm] = useState({
     id: "",
     name: "",
+    program_id: "",
     operation_id: "",
     created_at: "",
   });
 
-  // Fetch course by ID
+  const [programQuery, setProgramQuery] = useState("");
+  const [programResults, setProgramResults] = useState([]);
+  const [loadingPrograms, setLoadingPrograms] = useState(false);
+
+  const [operationQuery, setOperationQuery] = useState("");
+  const [operationResults, setOperationResults] = useState([]);
+  const [loadingOperations, setLoadingOperations] = useState(false);
+
   const fetchCourse = async () => {
     if (!courseId) return;
 
@@ -28,7 +34,12 @@ export default function EditCourses({ courseId, onCancel }) {
         name,
         created_at,
         operation_id,
-        operations ( name )
+        operations (
+          id,
+          name,
+          program_id,
+          programs ( id, name )
+        )
       `)
       .eq("id", courseId)
       .single();
@@ -41,43 +52,47 @@ export default function EditCourses({ courseId, onCancel }) {
     setForm({
       id: data.id,
       name: data.name,
+      program_id: data.operations?.program_id || "",
       operation_id: data.operation_id,
       created_at: data.created_at,
     });
 
+    setProgramQuery(data.operations?.programs?.name || "");
     setOperationQuery(data.operations?.name || "");
   };
 
-  // Fetch operations for autocomplete
   useEffect(() => {
-    if (operationQuery.trim() === "") {
+    if (!currentInstituteId) return;
+    if (programQuery.trim() === "") {
+      setProgramResults([]);
+      return;
+    }
+
+    fetchPrograms(
+      currentInstituteId,
+      programQuery,
+      setProgramResults,
+      setLoadingPrograms
+    );
+  }, [programQuery, currentInstituteId]);
+
+  useEffect(() => {
+    if (operationQuery.trim() === "" || !form.program_id) {
       setOperationResults([]);
       return;
     }
 
-    const fetchOperations = async () => {
-      setLoadingOperations(true);
-      const { data, error } = await supabase
-        .from("operations")
-        .select("id, name, status, programs(name, institution_id)")
-        .eq("programs.institution_id", currentInstituteId)
-        .eq("status", "active")
-        .ilike("name", `%${operationQuery}%`);
+    fetchOperations(
+      form.program_id,
+      operationQuery,
+      setOperationResults,
+      setLoadingOperations
+    );
+  }, [operationQuery, form.program_id]);
 
-      if (error) {
-        console.error("Error fetching operations:", error);
-      } else {
-        setOperationResults(data);
-      }
-      setLoadingOperations(false);
-    };
-
-    fetchOperations();
-  }, [operationQuery, currentInstituteId]);
-
-  // Submit update
   const handleSubmit = async (e) => {
     e.preventDefault();
+
     const { error } = await supabase
       .from("courses")
       .update({
@@ -93,13 +108,13 @@ export default function EditCourses({ courseId, onCancel }) {
     }
   };
 
-  // Delete course
   const handleDelete = async () => {
-    if (!confirm("Are you sure you want to delete this course?")) {
-      return;
-    }
+    if (!confirm("Are you sure you want to delete this course?")) return;
 
-    const { error } = await supabase.from("courses").delete().eq("id", form.id);
+    const { error } = await supabase
+      .from("courses")
+      .delete()
+      .eq("id", form.id);
 
     if (error) {
       alert("Failed to delete course: " + error.message);
@@ -125,7 +140,7 @@ export default function EditCourses({ courseId, onCancel }) {
             backgroundColor: "#f0f0f0",
             color: "#555",
             borderRadius: "4px",
-            fontStyle: "bold",
+            fontWeight: "bold",
             fontSize: "0.9em",
           }}
         >
@@ -139,9 +154,58 @@ export default function EditCourses({ courseId, onCancel }) {
           className="form-input"
           value={form.name}
           onChange={(e) => setForm({ ...form, name: e.target.value })}
-          placeholder="Enter course name..."
           required
         />
+      </div>
+
+      <div className="form-field autocomplete-container">
+        <label>Program</label>
+        <input
+          className="form-input"
+          value={programQuery}
+          onChange={(e) => {
+            setProgramQuery(e.target.value);
+            setForm({ ...form, program_id: "", operation_id: "" });
+            setOperationQuery("");
+          }}
+          onBlur={() => {
+            setTimeout(() => setProgramResults([]), 200);
+          }}
+          required
+        />
+
+        {loadingPrograms && (
+          <div className="autocomplete-loading">Searching...</div>
+        )}
+
+        {programResults.length > 0 && (
+          <div className="autocomplete-list">
+            {programResults.map((prog) => (
+              <div
+                key={prog.id}
+                className="autocomplete-item"
+                onMouseDown={() => {
+                  setProgramQuery(prog.name);
+                  setForm({
+                    ...form,
+                    program_id: prog.id,
+                    operation_id: "",
+                  });
+                  setProgramResults([]);
+                  setOperationQuery("");
+                }}
+              >
+                {prog.name}
+                {prog.departments?.name && (
+                  <span style={{ color: "#999", fontSize: "12px" }}>
+                    {" "}
+                    ({prog.departments.name})
+                  </span>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="form-field autocomplete-container">
@@ -156,7 +220,7 @@ export default function EditCourses({ courseId, onCancel }) {
           onBlur={() => {
             setTimeout(() => setOperationResults([]), 200);
           }}
-          placeholder="Type operation name..."
+          disabled={!form.program_id}
           required
         />
 
@@ -173,10 +237,7 @@ export default function EditCourses({ courseId, onCancel }) {
                 onMouseDown={(e) => {
                   e.preventDefault();
                   setOperationQuery(op.name);
-                  setForm((prev) => ({
-                    ...prev,
-                    operation_id: op.id,
-                  }));
+                  setForm({ ...form, operation_id: op.id });
                   setOperationResults([]);
                 }}
               >
@@ -201,7 +262,7 @@ export default function EditCourses({ courseId, onCancel }) {
             backgroundColor: "#f0f0f0",
             color: "#555",
             borderRadius: "4px",
-            fontStyle: "bold",
+            fontWeight: "bold",
           }}
         >
           {userData?.institute_name || currentInstituteId}
@@ -228,9 +289,11 @@ export default function EditCourses({ courseId, onCancel }) {
       <button type="submit" className="form-submit">
         Save Course
       </button>
+
       <button type="button" className="form-cancel" onClick={onCancel}>
         Cancel
       </button>
+
       <button
         type="button"
         className="form-submit"

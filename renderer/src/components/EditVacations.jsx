@@ -2,12 +2,14 @@ import { useState, useEffect } from "react";
 import supabase from "../utils/supabase";
 import { useAuth } from "../contexts/AuthContext";
 import { showToast } from "../utils/toast";
+import { fetchPrograms, fetchOperations, fetchDepartments } from "../utils/fetch";
 
 export default function EditVacations({ vacationId, onCancel, onSuccess }) {
   const { userData } = useAuth();
   const currentInstituteId = userData?.institute_id;
 
   const [forType, setForType] = useState("all");
+
   const [idQuery, setIdQuery] = useState("");
   const [idResults, setIdResults] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
@@ -15,16 +17,18 @@ export default function EditVacations({ vacationId, onCancel, onSuccess }) {
   const [programQuery, setProgramQuery] = useState("");
   const [programResults, setProgramResults] = useState([]);
   const [selectedProgram, setSelectedProgram] = useState(null);
+  const [loadingPrograms, setLoadingPrograms] = useState(false);
 
   const [operationQuery, setOperationQuery] = useState("");
   const [operationResults, setOperationResults] = useState([]);
   const [selectedOperation, setSelectedOperation] = useState(null);
+  const [loadingOperations, setLoadingOperations] = useState(false);
 
   const [startDay, setStartDay] = useState("");
   const [endDay, setEndDay] = useState("");
   const [description, setDescription] = useState("");
 
-  /** Fetch vacation by ID **/
+  // Fetch vacation by ID
   useEffect(() => {
     if (!vacationId) return;
 
@@ -42,16 +46,15 @@ export default function EditVacations({ vacationId, onCancel, onSuccess }) {
       setEndDay(data.end_day || "");
       setDescription(data.description || "");
 
-      // populate selectedId / program / operation
       if (data.from_table === "programs" || data.from_table === "departments") {
         setSelectedId(data.for_users);
         const table = data.from_table === "programs" ? "programs" : "departments";
-        const { data: results } = await supabase
+        const { data: result } = await supabase
           .from(table)
           .select("id, name")
           .eq("id", data.for_users)
           .single();
-        setIdQuery(results?.name || "");
+        setIdQuery(result?.name || "");
       } else if (data.from_table === "operations") {
         const { data: op } = await supabase
           .from("operations")
@@ -76,59 +79,36 @@ export default function EditVacations({ vacationId, onCancel, onSuccess }) {
     fetchVacation();
   }, [vacationId]);
 
-  /** SEARCH PROGRAMS **/
+  // Search programs
   useEffect(() => {
-    if (forType === "operations" && programQuery.trim() !== "") {
-      supabase
-        .from("programs")
-        .select("id, name")
-        .eq("institution_id", currentInstituteId)
-        .ilike("name", `%${programQuery}%`)
-        .then(({ data }) => setProgramResults(data || []));
+    if (forType === "operations" && programQuery.trim() !== "" && currentInstituteId) {
+      fetchPrograms(currentInstituteId, programQuery, setProgramResults, setLoadingPrograms);
     } else setProgramResults([]);
   }, [programQuery, forType, currentInstituteId]);
 
-  /** SEARCH OPERATIONS **/
+  // Search operations
   useEffect(() => {
     if (forType === "operations" && selectedProgram && operationQuery.trim() !== "") {
-      supabase
-        .from("operations")
-        .select("id, name")
-        .eq("program_id", selectedProgram.id)
-        .ilike("name", `%${operationQuery}%`)
-        .then(({ data }) => setOperationResults(data || []));
+      fetchOperations(selectedProgram.id, operationQuery, setOperationResults, setLoadingOperations);
     } else setOperationResults([]);
   }, [operationQuery, selectedProgram, forType]);
-  // SEARCH DEPARTMENTS / PROGRAMS FOR ID FIELD
-useEffect(() => {
-  if (forType === "programs" && idQuery.trim() !== "") {
-    supabase
-      .from("programs")
-      .select("id, name")
-      .eq("institution_id", currentInstituteId)
-      .ilike("name", `%${idQuery}%`)
-      .then(({ data }) => setIdResults(data || []));
-  } 
-  else if (forType === "departments" && idQuery.trim() !== "") {
-    supabase
-      .from("departments")
-      .select("id, name")
-      .eq("institute_id", currentInstituteId)  // Corrected: use institute_id
-      .ilike("name", `%${idQuery}%`)
-      .then(({ data }) => setIdResults(data || []));
-  } 
-  else {
-    setIdResults([]);
-  }
-}, [idQuery, forType, currentInstituteId]);
 
+  // Search programs or departments for ID field
+  useEffect(() => {
+    if (forType === "programs" && idQuery.trim() !== "" && currentInstituteId) {
+      fetchPrograms(currentInstituteId, idQuery, setIdResults, () => {});
+    } else if (forType === "departments" && idQuery.trim() !== "" && currentInstituteId) {
+      fetchDepartments(currentInstituteId, idQuery, setIdResults, () => {});
+    } else {
+      setIdResults([]);
+    }
+  }, [idQuery, forType, currentInstituteId]);
 
-  /** Submit update **/
   const handleSubmit = async (e) => {
     e.preventDefault();
 
     let forUsers = null;
-    let fromTable = forType;
+    const fromTable = forType;
 
     if (forType === "all") forUsers = currentInstituteId;
     else if (forType === "programs" || forType === "departments") forUsers = selectedId;
@@ -147,9 +127,8 @@ useEffect(() => {
       })
       .eq("id", vacationId);
 
-    if (error) {
-      alert("Failed to update vacation: " + error.message);
-    } else {
+    if (error) alert("Failed to update vacation: " + error.message);
+    else {
       showToast("Vacation updated successfully!");
       onSuccess();
     }
@@ -181,7 +160,6 @@ useEffect(() => {
         </select>
       </div>
 
-      {/* Program/Department search */}
       {(forType === "programs" || forType === "departments") && (
         <div className="form-field autocomplete-container">
           <label>Name:</label>
@@ -215,7 +193,6 @@ useEffect(() => {
         </div>
       )}
 
-      {/* Operations: program → operation selection */}
       {forType === "operations" && (
         <>
           <div className="form-field autocomplete-container">

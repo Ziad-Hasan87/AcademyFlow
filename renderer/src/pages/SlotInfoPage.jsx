@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
-import supabase from "../utils/supabase";
 import Modal from "../components/Modal";
 import AddButton from "../components/AddButton";
 import CreateSlots from "../components/CreateSlots";
 import EditSlots from "../components/EditSlots";
 import { useAuth } from "../contexts/AuthContext";
+import { fetchPrograms, fetchOperations, fetchSlots } from "../utils/fetch";
 
 export default function SlotInfoPage() {
   const { userData } = useAuth();
@@ -14,11 +14,13 @@ export default function SlotInfoPage() {
   const [programQuery, setProgramQuery] = useState("");
   const [programResults, setProgramResults] = useState([]);
   const [selectedProgram, setSelectedProgram] = useState(null);
+  const [loadingPrograms, setLoadingPrograms] = useState(false);
 
   // Operation state
   const [operationQuery, setOperationQuery] = useState("");
   const [operationResults, setOperationResults] = useState([]);
   const [selectedOperation, setSelectedOperation] = useState(null);
+  const [loadingOperations, setLoadingOperations] = useState(false);
 
   // Slot state
   const [slots, setSlots] = useState([]);
@@ -29,91 +31,57 @@ export default function SlotInfoPage() {
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [selectedSlotId, setSelectedSlotId] = useState(null);
 
-  /* =======================
-     Fetch Programs
-  ======================= */
+  /* ======================= FETCH PROGRAMS ======================= */
   useEffect(() => {
     if (!programQuery.trim()) {
       setProgramResults([]);
       return;
     }
 
-    const fetchPrograms = async () => {
-      const { data, error } = await supabase
-        .from("programs")
-        .select("id, name")
-        .eq("institution_id", currentInstituteId)
-        .eq("is_active", true)
-        .ilike("name", `%${programQuery}%`);
-
-      if (!error) setProgramResults(data || []);
-    };
-
-    fetchPrograms();
+    fetchPrograms(
+      currentInstituteId,
+      programQuery,
+      setProgramResults,
+      setLoadingPrograms
+    );
   }, [programQuery, currentInstituteId]);
 
-  /* =======================
-     Fetch Operations
-  ======================= */
+  /* ======================= FETCH OPERATIONS ======================= */
   useEffect(() => {
     if (!operationQuery.trim() || !selectedProgram) {
       setOperationResults([]);
       return;
     }
 
-    const fetchOperations = async () => {
-      const { data, error } = await supabase
-        .from("operations")
-        .select("id, name")
-        .eq("program_id", selectedProgram.id)
-        .eq("status", "active")
-        .ilike("name", `%${operationQuery}%`);
-
-      if (!error) setOperationResults(data || []);
-    };
-
-    fetchOperations();
+    fetchOperations(
+      selectedProgram.id,
+      operationQuery,
+      setOperationResults,
+      setLoadingOperations
+    );
   }, [operationQuery, selectedProgram]);
 
-  /* =======================
-     Fetch Slots
-  ======================= */
-  const fetchSlots = async () => {
-    if (!selectedOperation) return;
-
-    setLoadingSlots(true);
-
-    const { data, error } = await supabase
-      .from("slotinfo")
-      .select("*")
-      .eq("operation_id", selectedOperation.id)
-      .order("serial_no", { ascending: true });
-
-    if (!error) setSlots(data || []);
-    setLoadingSlots(false);
-  };
-
+  /* ======================= FETCH SLOTS ======================= */
   useEffect(() => {
-    fetchSlots();
+    fetchSlots(selectedOperation?.id, setSlots);
   }, [selectedOperation]);
 
   return (
     <div className="page-content">
       {/* ================= MODALS ================= */}
-
       <Modal
         isOpen={isCreateOpen}
         title="Create Slot"
         onClose={() => {
           setIsCreateOpen(false);
-          fetchSlots();
+          fetchSlots(selectedOperation?.id, setSlots);
         }}
       >
         <CreateSlots
           operationId={selectedOperation?.id}
           onSuccess={() => {
             setIsCreateOpen(false);
-            fetchSlots();
+            fetchSlots(selectedOperation?.id, setSlots);
           }}
         />
       </Modal>
@@ -123,7 +91,7 @@ export default function SlotInfoPage() {
         title="Edit Slot"
         onClose={() => {
           setIsEditOpen(false);
-          fetchSlots();
+          fetchSlots(selectedOperation?.id, setSlots);
         }}
       >
         <EditSlots
@@ -131,13 +99,12 @@ export default function SlotInfoPage() {
           onCancel={() => setIsEditOpen(false)}
           onSuccess={() => {
             setIsEditOpen(false);
-            fetchSlots();
+            fetchSlots(selectedOperation?.id, setSlots);
           }}
         />
       </Modal>
 
       {/* ================= HEADER ================= */}
-
       <div className="page-sidebar-title">
         <h2>Slot Info</h2>
         {selectedProgram && selectedOperation && (
@@ -149,7 +116,6 @@ export default function SlotInfoPage() {
       </div>
 
       {/* ================= PROGRAM SEARCH ================= */}
-
       <div className="form-field autocomplete-container">
         <label>Programs</label>
         <input
@@ -165,7 +131,7 @@ export default function SlotInfoPage() {
           }}
           onBlur={() => setTimeout(() => setProgramResults([]), 200)}
         />
-
+        {loadingPrograms && <div className="autocomplete-loading">Searching...</div>}
         {programResults.length > 0 && (
           <div className="autocomplete-list">
             {programResults.map((prog) => (
@@ -176,6 +142,9 @@ export default function SlotInfoPage() {
                   setSelectedProgram(prog);
                   setProgramQuery(prog.name);
                   setProgramResults([]);
+                  setSelectedOperation(null);
+                  setOperationQuery("");
+                  setSlots([]);
                 }}
               >
                 {prog.name}
@@ -185,9 +154,7 @@ export default function SlotInfoPage() {
         )}
       </div>
 
-
       {/* ================= OPERATION SEARCH ================= */}
-
       <div className="form-field autocomplete-container">
         <label>Operations</label>
         <input
@@ -202,7 +169,7 @@ export default function SlotInfoPage() {
           onBlur={() => setTimeout(() => setOperationResults([]), 200)}
           disabled={!selectedProgram}
         />
-
+        {loadingOperations && <div className="autocomplete-loading">Searching...</div>}
         {operationResults.length > 0 && (
           <div className="autocomplete-list">
             {operationResults.map((op) => (
@@ -222,13 +189,10 @@ export default function SlotInfoPage() {
         )}
       </div>
 
-
       {/* ================= SLOT LIST ================= */}
-
       {loadingSlots && <p>Loading…</p>}
 
       <div className="lists-container">
-        <br/>
         {slots.map((slot) => (
           <div
             key={slot.id}
