@@ -106,3 +106,110 @@ export async function fetchSubgroups(groupId, subgroupQuery, setSubgroupResults,
     }
 };
 
+export async function fetchRoutinesByProgram( programId, setRoutines, setLoading) {
+  if (!programId) return;
+
+  setLoading?.(true);
+
+  const { data, error } = await supabase
+  .from("routine")
+  .select(`
+    id,
+    name,
+    created_at,
+    operation:operation_id!inner (
+      id,
+      name,
+      program_id
+    )
+  `)
+  .eq("operation.program_id", programId)
+  .order("created_at", { ascending: false });
+
+  if (error) {
+    console.error("Error fetching routines:", error);
+    setRoutines([]);
+  } else {
+    setRoutines(data || []);
+  }
+
+  setLoading?.(false);
+}
+
+export async function fetchRecurringEventsByRoutine(routineId, setEvents, setLoading) {
+  if (!routineId) return;
+
+  setLoading?.(true);
+
+  const { data, error } = await supabase
+    .from("recurring_events")
+    .select(`
+      id,
+      created_at,
+      title,
+      type,
+      start_at,
+      end_at,
+      expire_at,
+      start_slot,
+      end_slot,
+      day_of_week,
+      repeat_every,
+      start_week,
+      course_id,
+      institute_id,
+      created_by,
+      description,
+      is_reschedulable,
+      for_users,
+      from_table,
+      routine_id
+    `)
+    .eq("routine_id", routineId)
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    console.error("Error fetching recurring events:", error);
+    setEvents?.([]);
+  } else {
+    setEvents?.(data || []);
+  }
+
+  setLoading?.(false);
+}
+
+export async function fetchRecurringEventsByGroup(groupId, setEvents, setLoading) {
+  if (!groupId) return;
+
+  setLoading?.(true);
+
+  try {
+    const { data: subgroups, error: subgroupsError } = await supabase
+      .from("subgroups")
+      .select("id")
+      .eq("group_id", groupId);
+
+    if (subgroupsError) throw subgroupsError;
+
+    const subgroupIds = subgroups?.map(sg => sg.id) || [];
+
+    const { data: events, error: eventsError } = await supabase
+      .from("recurring_events")
+      .select("*")
+      .or(
+        `and(from_table.eq.groups,for_users.eq.${groupId}),and(from_table.eq.subgroups,for_users.in.(${subgroupIds.join(
+          ","
+        )}))`
+      )
+      .order("created_at", { ascending: false });
+
+    if (eventsError) throw eventsError;
+
+    setEvents?.(events || []);
+  } catch (error) {
+    console.error("Error fetching recurring events by group:", error);
+    setEvents?.([]);
+  } finally {
+    setLoading?.(false);
+  }
+}

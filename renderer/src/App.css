@@ -178,31 +178,91 @@ html, body, #root {
   line-height: 1.5;
 }
 
-.routine-page {
-  display: flex;
-  flex-direction: column;
-  width: 100%;
-  height: 100%;
-  overflow: auto;         /* scroll if needed */
+.routine-container {
+  width: 80vw;
+  height: max-content;
+  overflow-x: auto;
+  padding: 16px;
 }
 
 .routine-table {
   width: 100%;
-  min-width: 600px;       /* table min width so it doesn’t compress too much */
   border-collapse: collapse;
+  table-layout: fixed;
 }
 
-.routine-table th,
-.routine-table td {
+.routine-header {
+  background-color: #f0f0f0;
   padding: 8px;
-  border: 1px solid #ccc;
   text-align: center;
 }
 
-.routine-add-btn {
-  padding: 4px 8px;
+.routine-slot-header {
+  background-color: #fafafa;
+  padding: 8px;
+  text-align: center;
+  border-left: 1px solid #ddd;
+}
+
+.routine-slot-name {
+  font-weight: bold;
+}
+
+.routine-slot-time {
   font-size: 0.85em;
+  color: #666;
+}
+
+.routine-row {
+  border-top: 1px solid #ddd;
+}
+
+.routine-day {
+  font-weight: bold;
+  padding: 8px;
+  background-color: #f9f9f9;
+}
+
+.routine-cell {
+  position: relative;
+  height: 8vh;
+  min-height: 60px;
+  border-left: 1px solid #ddd;
+  padding: 4px;
+  vertical-align: top;
+}
+
+.routine-events {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.routine-event {
+  background-color: #d0ebff;
+  padding: 2px 4px;
+  border-radius: 4px;
+  font-size: 0.85em;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.routine-add-btn {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  font-size: 10px;
+  padding: 2px 6px;
   cursor: pointer;
+  background-color: #4a90e2;
+  color: white;
+  border: none;
+  border-radius: 4px;
+}
+
+.routine-add-btn:hover {
+  background-color: #357abd;
 }
 
 
@@ -605,18 +665,7 @@ html, body, #root {
   overflow-y: auto;       /* scroll vertically if content is tall */
   overflow-x: auto;       /* scroll horizontally if table is wide */
 }
-.routine-modal-content {
-  background: white;
-  border-radius: 8px;
-  padding: 24px;
-  width: 80vw;
-  height: 90vh;
-  max-width: 80vw;
-  max-height: 90vh;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-}
+
 .modal-overlay {
   position: fixed;
   top: 0;
@@ -630,14 +679,6 @@ html, body, #root {
   z-index: 1000;
 }
 
-.modal-content {
-  background: white;
-  padding: 20px;
-  border-radius: 8px;
-  width: 500px;
-  max-width: 90%;
-  box-shadow: 0 5px 15px rgba(0,0,0,0.3);
-}
 
 .modal-header {
   display: flex;

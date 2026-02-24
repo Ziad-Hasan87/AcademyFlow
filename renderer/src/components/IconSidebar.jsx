@@ -25,6 +25,7 @@ export default function IconSidebar({ onIconClick, activePage }) {
     { id: "vacations", icon: FaRegCalendarTimes, name: "Vacations", minRole: "Moderator" },
     { id: "departments", icon: GoOrganization, name: "Departments", minRole: "Admin" },
     { id: "slotinfo", icon: MdOutlineGroupWork, name: "SlotInfo", minRole: "Moderator" },
+    { id: "routines", icon: FiActivity, name: "Routines", minRole: "Moderator" },
   ];
   
   const userRole = userData?.role;

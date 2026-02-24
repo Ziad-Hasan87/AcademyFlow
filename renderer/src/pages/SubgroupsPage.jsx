@@ -10,27 +10,22 @@ export default function SubgroupsPage() {
   const { userData } = useAuth();
   const currentInstituteId = userData?.institute_id;
 
-  // Modal state
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [selectedSubgroupId, setSelectedSubgroupId] = useState(null);
 
-  // Programs
   const [programQuery, setProgramQuery] = useState("");
   const [programResults, setProgramResults] = useState([]);
   const [selectedProgram, setSelectedProgram] = useState(null);
   const [loadingPrograms, setLoadingPrograms] = useState(false);
 
-  // Groups
   const [groups, setGroups] = useState([]);
   const [selectedGroup, setSelectedGroup] = useState("");
   const [loadingGroups, setLoadingGroups] = useState(false);
 
-  // Subgroups
   const [subgroups, setSubgroups] = useState([]);
   const [loadingSubgroups, setLoadingSubgroups] = useState(false);
 
-  /* ====================== Fetch Programs ====================== */
   useEffect(() => {
     if (!programQuery.trim()) {
       setProgramResults([]);
@@ -40,7 +35,6 @@ export default function SubgroupsPage() {
     fetchPrograms(currentInstituteId, programQuery, setProgramResults, setLoadingPrograms);
   }, [programQuery, currentInstituteId]);
 
-  /* ====================== Fetch Groups ====================== */
   useEffect(() => {
     if (!selectedProgram) {
       setGroups([]);
@@ -51,9 +45,7 @@ export default function SubgroupsPage() {
     fetchGroups(selectedProgram.id, "", setGroups, setLoadingGroups);
   }, [selectedProgram]);
 
-  /* ====================== Fetch Subgroups ====================== */
   useEffect(() => {
-    // Show all subgroups from all groups under the institution if no group is selected
     if (!selectedGroup) {
       fetchSubgroups(null, "", setSubgroups, setLoadingSubgroups);
       return;

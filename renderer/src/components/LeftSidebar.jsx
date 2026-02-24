@@ -9,6 +9,7 @@ import VacationsPage from "../pages/VacationsPage";
 import DepartmentsPage from "../pages/DepartmentsPage";
 import ProfilePage from "../pages/ProfilePage";
 import SlotInfoPage from "../pages/SlotInfoPage";
+import RoutinesPage from "../pages/RoutinesPage";
 
 export default function LeftSidebar({ width, onCreateClick, activePage }) {
   const renderPage = () => {
@@ -35,6 +36,8 @@ export default function LeftSidebar({ width, onCreateClick, activePage }) {
         return <ProfilePage />;
       case "slotinfo":
         return <SlotInfoPage />;
+      case "routines":
+        return <RoutinesPage />;
       default:
         return null;
     }
