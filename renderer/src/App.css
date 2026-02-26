@@ -178,6 +178,75 @@ html, body, #root {
   line-height: 1.5;
 }
 
+.timetable-grid {
+  display: grid;
+  border: 1px solid #ddd;
+}
+
+.grid-cell {
+  border: 1px solid #eee;
+  padding: 6px;
+  position: relative;
+}
+
+.routine-event {
+  border-radius: 6px;
+  background-color: #AEBDCA;
+  padding: 6px;
+  z-index: 2;
+  font-size: 1em;
+
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.routine-event-inactive {
+  background-color: #E8DFCA;
+  padding: 6px;
+  z-index: 2;
+  font-size: 1.5rem;
+  font-weight: bold;
+  color: #666666;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  transition: all 0.2s ease;
+}
+
+.routine-event:hover {
+  transform: scale(1.02);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  background-color: #7895B2;
+}
+
+.routine-event {
+  overflow: hidden;
+}
+
+.routine-event strong,
+.routine-event div {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.header-cell {
+  background: #f8f8f8;
+  font-weight: bold;
+  text-align: center;
+}
+
+.slot-label {
+  background: #fafafa;
+  font-weight: bold;
+}
+
 .routine-container {
   width: 80vw;
   height: max-content;
@@ -185,68 +254,7 @@ html, body, #root {
   padding: 16px;
 }
 
-.routine-table {
-  width: 100%;
-  border-collapse: collapse;
-  table-layout: fixed;
-}
 
-.routine-header {
-  background-color: #f0f0f0;
-  padding: 8px;
-  text-align: center;
-}
-
-.routine-slot-header {
-  background-color: #fafafa;
-  padding: 8px;
-  text-align: center;
-  border-left: 1px solid #ddd;
-}
-
-.routine-slot-name {
-  font-weight: bold;
-}
-
-.routine-slot-time {
-  font-size: 0.85em;
-  color: #666;
-}
-
-.routine-row {
-  border-top: 1px solid #ddd;
-}
-
-.routine-day {
-  font-weight: bold;
-  padding: 8px;
-  background-color: #f9f9f9;
-}
-
-.routine-cell {
-  position: relative;
-  height: 8vh;
-  min-height: 60px;
-  border-left: 1px solid #ddd;
-  padding: 4px;
-  vertical-align: top;
-}
-
-.routine-events {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.routine-event {
-  background-color: #d0ebff;
-  padding: 2px 4px;
-  border-radius: 4px;
-  font-size: 0.85em;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
 
 .routine-add-btn {
   position: absolute;
