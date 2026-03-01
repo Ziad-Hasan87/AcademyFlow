@@ -118,16 +118,45 @@ export default function UsersPage() {
 
       let query = supabase
         .from("users")
-        .select("id, name, role")
+        .select(`
+          id,
+          name,
+          role,
+          staffs (
+            staff_id,
+            codename
+          )
+        `)
         .eq("institute_id", currentInstituteId)
         .eq("role", selectedRole);
 
       if (nameSearch.trim()) {
-        query = query.ilike("name", `%${nameSearch}%`);
+        const search = nameSearch.trim();
+        const searchLike = `%${search}%`;
+
+        // Filter users table by name
+        query = query.or(`name.ilike.${searchLike}`);
+
+        // Only search staff_id if the input is numeric
+        if (!isNaN(search)) {
+          query = query.or(
+            `staff_id.eq.${search},codename.ilike.${searchLike}`,
+            { foreignTable: "staffs" }
+          );
+        } else {
+          // Only search codename if input is non-numeric
+          query = query.or(
+            `codename.ilike.${searchLike}`,
+            { foreignTable: "staffs" }
+          );
+        }
       }
 
-      const { data } = await query;
-      setUsers(data || []);
+      const { data, error } = await query;
+
+      if (error) console.error(error);
+      else setUsers(data || []);
+
       setLoading(false);
     };
 
@@ -302,12 +331,13 @@ export default function UsersPage() {
                 <h3>{user.users?.name}</h3>
                 <p>Roll No: {user.roll_no}</p>
               </>
-            ) : (
-              <>
-                <h3>{user.name}</h3>
-                <p>{user.role}</p>
-              </>
-            )}
+            ) : <>
+              <h3>{user.name}</h3>
+              <p>
+                {user.staff?.employee_id && `ID: ${user.staff.employee_id} `}
+                {user.staff?.codename && `| Code: ${user.staff.codename}`}
+              </p>
+            </>}
           </div>
         ))}
 
