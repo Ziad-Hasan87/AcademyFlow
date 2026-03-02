@@ -47,7 +47,7 @@ export default function SubgroupsPage() {
 
   useEffect(() => {
     if (!selectedGroup) {
-      fetchSubgroups(null, "", setSubgroups, setLoadingSubgroups);
+      setSubgroups([]);
       return;
     }
 

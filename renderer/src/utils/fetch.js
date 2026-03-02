@@ -51,6 +51,11 @@ export async function fetchOperations(programId, operationQuery, setOperationRes
 };
 
 export async function fetchSlots(operationId, setSlots) {
+    if (!operationId || operationId === 'null' || operationId === 'undefined') {
+        setSlots([]);
+        return;
+    }
+
     const { data, error } = await supabase
     .from("slotinfo")
     .select("*")
@@ -90,6 +95,12 @@ export async function fetchGroups(
 }
 
 export async function fetchSubgroups(groupId, subgroupQuery, setSubgroupResults, setLoadingSubgroups) {
+    if (!groupId || groupId === 'null' || groupId === 'undefined') {
+        setSubgroupResults([]);
+        setLoadingSubgroups(false);
+        return;
+    }
+
     setLoadingSubgroups(true);
     const { data, error } = await supabase
     .from("subgroups")

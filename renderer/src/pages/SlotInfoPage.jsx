@@ -63,7 +63,12 @@ export default function SlotInfoPage() {
 
   /* ======================= FETCH SLOTS ======================= */
   useEffect(() => {
-    fetchSlots(selectedOperation?.id, setSlots);
+    if (!selectedOperation?.id) {
+      setSlots([]);
+      return;
+    }
+
+    fetchSlots(selectedOperation.id, setSlots);
   }, [selectedOperation]);
 
   return (
