@@ -224,3 +224,74 @@ export async function fetchRecurringEventsByGroup(groupId, setEvents, setLoading
     setLoading?.(false);
   }
 }
+
+export async function fetchCoursesByOperation(operationId, setCourses, setLoading) {
+  if (!operationId) {
+    setCourses([]);
+    setLoading?.(false);
+    return;
+  }
+
+  setLoading?.(true);
+
+  const { data, error } = await supabase
+    .from("courses")
+    .select("id, name")
+    .eq("operation_id", operationId)
+    .order("name");
+
+  if (error) {
+    console.error("Error fetching courses:", error);
+    setCourses([]);
+  } else {
+    setCourses(data || []);
+  }
+
+  setLoading?.(false);
+}
+
+export async function fetchCourseModerators(courseId, setModerators, setLoading) {
+  if (!courseId) {
+    setModerators([]);
+    setLoading?.(false);
+    return;
+  }
+
+  setLoading?.(true);
+
+  const { data, error } = await supabase
+    .from("course_moderators")
+    .select("course_id, user_id, users(id, name, role)")
+    .eq("course_id", courseId);
+
+  if (error) {
+    console.error("Error fetching course moderators:", error);
+    setModerators([]);
+  } else {
+    setModerators(data || []);
+  }
+
+  setLoading?.(false);
+}
+
+export async function fetchTeachersByInstitute(instituteId, searchQuery, setResults, setLoading) {
+  if (!instituteId) return;
+
+  setLoading?.(true);
+
+  const { data, error } = await supabase
+    .from("users")
+    .select("id, name, role")
+    .eq("institute_id", instituteId)
+    .eq("role", "Teacher")
+    .ilike("name", `%${searchQuery}%`);
+
+  if (error) {
+    console.error("Error fetching teachers:", error);
+    setResults([]);
+  } else {
+    setResults(data || []);
+  }
+
+  setLoading?.(false);
+}
