@@ -4,6 +4,9 @@ import Modal from "./Modal";
 import CreateRoutineEvent from "./CreateRoutineEvent";
 import supabase from "../utils/supabase";
 import React from "react";
+import EditRoutineEvent from "./EditRoutineEvent";
+import GenerateRoutineEvents from "./GenerateRoutineEvents";
+import DeleteRoutineEvents from "./DeleteRoutineEvents";
 
 export default function EditRoutine({ selectedOperation, routine, onClose }) {
   const [slots, setSlots] = useState([]);
@@ -11,6 +14,10 @@ export default function EditRoutine({ selectedOperation, routine, onClose }) {
   const [isEventModalOpen, setIsEventModalOpen] = useState(false);
   const [selectedSlotId, setSelectedSlotId] = useState(null);
   const [selectedDay, setSelectedDay] = useState(null);
+  const [selectedEvent, setSelectedEvent] = useState(null);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isGenerateModalOpen, setIsGenerateModalOpen] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
 
   const [groups, setGroups] = useState([]);
   const [selectedGroup, setSelectedGroup] = useState("");
@@ -124,6 +131,34 @@ export default function EditRoutine({ selectedOperation, routine, onClose }) {
   };
   const getSerial = (slotId) => slots.find((s) => s.id === slotId)?.serial_no;
 
+  const getMaxEndSlotId = (startSlotId, day, editingEventId = null) => {
+    const startSerial = getSerial(startSlotId);
+      if (!startSerial) return startSlotId;
+
+      const relevantEvents = occupyingEvents
+        .filter(
+          (e) =>
+            e.day_of_week === day &&
+            e.start_slot !== startSlotId &&
+            e.id !== editingEventId
+        )
+        .map((e) => ({
+          start: getSerial(e.start_slot),
+        }))
+        .filter((e) => e.start > startSerial)
+        .sort((a, b) => a.start - b.start);
+
+      if (relevantEvents.length === 0) {
+        return slots[slots.length - 1]?.id;
+      }
+
+      const nextStartSerial = relevantEvents[0].start;
+      const maxSerial = nextStartSerial - 1;
+
+      const maxSlot = slots.find((s) => s.serial_no === maxSerial);
+      return maxSlot?.id || startSlotId;
+    };
+
   const getColIndex = (serial) => slots.findIndex((s) => s.serial_no === serial) + 2;
 
   const shouldShowDescription = (event) => {
@@ -194,6 +229,7 @@ export default function EditRoutine({ selectedOperation, routine, onClose }) {
 
         blocks.push({
           id: event.id,
+          eventRef:event,
           gridRow: rowStart,
           gridColumn: `${colStart} / span ${colSpan}`,
           showText,
@@ -212,6 +248,7 @@ export default function EditRoutine({ selectedOperation, routine, onClose }) {
 
           blocks.push({
             id: event.id + "-" + serial,
+            eventRef:event,
             gridRow: rowIndex,
             gridColumn: colIndex,
             showText: true, // we will display the group/subgroup name
@@ -270,6 +307,22 @@ export default function EditRoutine({ selectedOperation, routine, onClose }) {
           </div>
         )}
       </div>
+      <div style={{ display: "flex", gap: "15px", marginBottom: "20px" }}>
+        <button
+          className="form-submit"
+          onClick={() => setIsGenerateModalOpen(true)}
+        >
+          Generate
+        </button>
+
+        <button
+          className="form-cancel"
+          style={{ backgroundColor: "#d9534f", color: "white" }}
+          onClick={() => setIsDeleteModalOpen(true)}
+        >
+          Delete
+        </button>
+      </div>
       <div className="timetable-grid"
         style={{
           display: "grid",
@@ -322,6 +375,13 @@ export default function EditRoutine({ selectedOperation, routine, onClose }) {
               flexDirection: "column",
               justifyContent: "center",
               alignItems: "center",
+              cursor: block.inactive ? "default" : "pointer",
+            }}
+            onClick={() => {
+              if (!block.inactive) {
+                setSelectedEvent(block.eventRef);
+                setIsEditModalOpen(true);
+              }
             }}
           >
             {block.content}
@@ -333,13 +393,15 @@ export default function EditRoutine({ selectedOperation, routine, onClose }) {
           title="Create Routine Event"
         >
           <CreateRoutineEvent
-            routineId={routine.id}
-            slotId={selectedSlotId}
-            dayOfWeek={selectedDay}
-            fromTable={selectedSubgroup ? "subgroups" : "groups"} // Step 2–3
-            forUsers={selectedSubgroup || selectedGroup}  
-            operationId={selectedOperation.id}
-            onSuccess={() => {
+            slots={slots}
+              routineId={routine.id}
+              slotId={selectedSlotId}
+              dayOfWeek={selectedDay}
+              fromTable={selectedSubgroup ? "subgroups" : "groups"}
+              forUsers={selectedSubgroup || selectedGroup}
+              operationId={selectedOperation.id}
+              maxEndSlotId={getMaxEndSlotId(selectedSlotId, selectedDay)}
+              onSuccess={() => {
               // Refresh events after creating
               supabase
                 .from("recurring_events")
@@ -353,6 +415,62 @@ export default function EditRoutine({ selectedOperation, routine, onClose }) {
                 .eq("routine_id", routine.id)
                 .then(({ data }) => setEvents(data || []));
             }}
+          />
+        </Modal>
+        <Modal
+          isOpen={isEditModalOpen}
+          onClose={() => setIsEditModalOpen(false)}
+          title="Edit Routine Event"
+        >
+          <EditRoutineEvent
+            event={selectedEvent}
+            slots={slots}
+            maxEndSlotId={
+              selectedEvent
+                ? getMaxEndSlotId(
+                    selectedEvent.start_slot,
+                    selectedEvent.day_of_week,
+                    selectedEvent.id
+                  )
+                : null
+            }
+            onSuccess={() => {
+              setIsEditModalOpen(false);
+
+              // Refresh events
+              supabase
+                .from("recurring_events")
+                .select(`
+                  *,
+                  courses (
+                    id,
+                    name
+                  )
+                `)
+                .eq("routine_id", routine.id)
+                .then(({ data }) => setEvents(data || []));
+            }}
+          />
+        </Modal>
+        <Modal
+          isOpen={isGenerateModalOpen}
+          onClose={() => setIsGenerateModalOpen(false)}
+          title="Generate Routine Events"
+        >
+          <GenerateRoutineEvents
+            routineId={routine.id}
+            onSuccess={() => setIsGenerateModalOpen(false)}
+          />
+        </Modal>
+
+        <Modal
+          isOpen={isDeleteModalOpen}
+          onClose={() => setIsDeleteModalOpen(false)}
+          title="Delete Generated Events"
+        >
+          <DeleteRoutineEvents
+            routineId={routine.id}
+            onSuccess={() => setIsDeleteModalOpen(false)}
           />
         </Modal>
       </div>

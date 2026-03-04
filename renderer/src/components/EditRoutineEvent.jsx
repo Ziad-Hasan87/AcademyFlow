@@ -3,13 +3,13 @@ import supabase from "../utils/supabase";
 import { useAuth } from "../contexts/AuthContext";
 
 export default function EditRoutineEvent({
-  eventId,
-  routineId,
-  onClose, // callback after update or delete
+  event,
+  slots,
+  maxEndSlotId,
+  onSuccess,
 }) {
   const { userData } = useAuth();
   const currentUserId = userData?.id;
-  const currentInstituteId = userData?.institute_id;
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -18,128 +18,98 @@ export default function EditRoutineEvent({
   const [isReschedulable, setIsReschedulable] = useState(true);
   const [courses, setCourses] = useState([]);
   const [selectedCourseId, setSelectedCourseId] = useState("");
-  const [slots, setSlots] = useState([]);
-  const [startSlotId, setStartSlotId] = useState("");
   const [endSlotId, setEndSlotId] = useState("");
-  const [dayOfWeek, setDayOfWeek] = useState("");
-  const [fromTable, setFromTable] = useState("");
-  const [forUsers, setForUsers] = useState("");
   const [forUsersLabel, setForUsersLabel] = useState("");
+  const [startSlotLabel, setStartSlotLabel] = useState("");
 
-  // Fetch existing event data
+  // Pre-fill form with existing event data
   useEffect(() => {
-    if (!eventId) return;
+    if (!event) return;
 
-    const fetchEvent = async () => {
-      const { data, error } = await supabase
-        .from("recurring_events")
-        .select(`*, courses(id, name)`)
-        .eq("id", eventId)
-        .single();
+    setTitle(event.title || "");
+    setDescription(event.description || "");
+    setRepeatEvery(event.repeat_every || 1);
+    setStartWeek(event.start_week || 1);
+    setIsReschedulable(event.is_reschedulable ?? true);
+    setSelectedCourseId(event.course_id || "");
+    setEndSlotId(event.end_slot);
+  }, [event]);
 
-      if (error) {
-        console.error("Error fetching event:", error);
-        return;
-      }
+  // Set slot labels
+  useEffect(() => {
+    if (!event || slots.length === 0) return;
 
-      setTitle(data.title || "");
-      setDescription(data.description || "");
-      setRepeatEvery(data.repeat_every || 1);
-      setStartWeek(data.start_week || 1);
-      setIsReschedulable(data.is_reschedulable ?? true);
-      setSelectedCourseId(data.course_id || "");
-      setStartSlotId(data.start_slot);
-      setEndSlotId(data.end_slot);
-      setDayOfWeek(data.day_of_week);
-      setFromTable(data.from_table);
-      setForUsers(data.for_users);
+    const formatTimeToAMPM = (time24) => {
+      if (!time24) return "";
+      const [hourStr, minute] = time24.split(":");
+      let hour = parseInt(hourStr, 10);
+      const ampm = hour >= 12 ? "PM" : "AM";
+      hour = hour % 12 || 12;
+      return `${hour}:${minute} ${ampm}`;
     };
 
-    fetchEvent();
-  }, [eventId]);
+    const startSlot = slots.find((s) => s.id === event.start_slot);
 
-  // Fetch slot info
-  useEffect(() => {
-    const fetchSlots = async () => {
-      const { data, error } = await supabase
-        .from("slotinfo")
-        .select("*")
-        .order("serial_no", { ascending: true });
-      if (error) console.error(error);
-      else setSlots(data || []);
-    };
-    fetchSlots();
-  }, []);
+    if (startSlot) {
+      setStartSlotLabel(
+        `${startSlot.name} ${formatTimeToAMPM(startSlot.start)} - ${formatTimeToAMPM(startSlot.end)}`
+      );
+    }
 
-  // Fetch courses based on routine/operation
-  useEffect(() => {
-    const fetchCourses = async () => {
-      if (!routineId) return;
-      // Assuming routine contains operationId, otherwise fetch it
-      const { data: routineData, error: routineError } = await supabase
-        .from("operations")
-        .select("program_id")
-        .eq("id", routineId)
-        .single();
-
-      const operationId = routineData?.program_id;
-      if (!operationId) return;
-
-      const { data, error } = await supabase
-        .from("courses")
-        .select("id, name")
-        .eq("operation_id", operationId);
-      if (error) console.error(error);
-      else setCourses(data || []);
-    };
-    fetchCourses();
-  }, [routineId]);
-
-  // Fetch the label for group/subgroup
-  useEffect(() => {
+    // Fetch forUsers name
     const fetchForUsersName = async () => {
-      if (!forUsers || !fromTable) return;
-      if (fromTable === "groups") {
-        const { data, error } = await supabase
+      if (event.from_table === "groups") {
+        const { data } = await supabase
           .from("groups")
           .select("name")
-          .eq("id", forUsers)
+          .eq("id", event.for_users)
           .single();
-        if (!error) setForUsersLabel(data?.name || "");
-      } else if (fromTable === "subgroups") {
-        const { data, error } = await supabase
+        setForUsersLabel(data?.name || "");
+      } else if (event.from_table === "subgroups") {
+        const { data } = await supabase
           .from("subgroups")
           .select("name")
-          .eq("id", forUsers)
+          .eq("id", event.for_users)
           .single();
-        if (!error) setForUsersLabel(data?.name || "");
+        setForUsersLabel(data?.name || "");
       }
     };
+
     fetchForUsersName();
-  }, [forUsers, fromTable]);
+  }, [event, slots]);
 
-  const formatTimeToAMPM = (time24) => {
-    if (!time24) return "";
-    const [hourStr, minute] = time24.split(":");
-    let hour = parseInt(hourStr, 10);
-    const ampm = hour >= 12 ? "PM" : "AM";
-    hour = hour % 12 || 12;
-    return `${hour}:${minute} ${ampm}`;
-  };
+  // Fetch courses
+  useEffect(() => {
+    if (!event?.operation_id) return;
 
-  const startSlot = slots.find((s) => s.id === startSlotId);
-  const startSlotLabel = startSlot
-    ? `${startSlot.name} ${formatTimeToAMPM(startSlot.start)} - ${formatTimeToAMPM(startSlot.end)}`
-    : "";
+    const fetchCourses = async () => {
+      const { data } = await supabase
+        .from("courses")
+        .select("id, name")
+        .eq("operation_id", event.operation_id);
+
+      setCourses(data || []);
+    };
+
+    fetchCourses();
+  }, [event]);
+
+  const startSlot = slots.find((s) => s.id === event.start_slot);
+  const maxSerial = slots.find((s) => s.id === maxEndSlotId)?.serial_no;
 
   const endSlotOptions = slots
-    .filter((s) => s.serial_no >= (startSlot?.serial_no || 0))
+    .filter((s) => {
+      if (!startSlot) return false;
+      if (s.serial_no < startSlot.serial_no) return false;
+      if (maxSerial && s.serial_no > maxSerial) return false;
+      return true;
+    })
     .map((s) => ({
       id: s.id,
-      label: `${s.name} ${formatTimeToAMPM(s.start)} - ${formatTimeToAMPM(s.end)}`,
+      label: `${s.name}`,
     }));
 
-  const handleUpdate = async (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!title) return alert("Title is required");
 
@@ -150,42 +120,47 @@ export default function EditRoutineEvent({
         description,
         repeat_every: repeatEvery,
         start_week: startWeek,
-        is_reschedulable: isReschedulable,
-        start_slot: startSlotId,
-        end_slot: endSlotId,
-        day_of_week: dayOfWeek,
         course_id: selectedCourseId || null,
+        end_slot: endSlotId,
+        is_reschedulable: isReschedulable,
+        updated_by: currentUserId,
       })
-      .eq("id", eventId);
+      .eq("id", event.id);
 
     if (error) {
-      console.error(error);
+      console.error("Error updating routine event:", error);
       alert("Error updating event");
     } else {
-      onClose?.();
+      onSuccess?.();
     }
   };
-
   const handleDelete = async () => {
-    if (!confirm("Are you sure you want to delete this event?")) return;
+    const confirmDelete = window.confirm(
+      "Are you sure you want to delete this event?"
+    );
+
+    if (!confirmDelete) return;
 
     const { error } = await supabase
       .from("recurring_events")
       .delete()
-      .eq("id", eventId);
+      .eq("id", event.id);
 
     if (error) {
-      console.error(error);
+      console.error("Error deleting routine event:", error);
       alert("Error deleting event");
     } else {
-      onClose?.();
+      onSuccess?.(); // refresh + close modal
     }
   };
 
+  if (!event) return null;
+
   return (
-    <form onSubmit={handleUpdate} className="form" style={{ width: "20vw" }}>
+    <form onSubmit={handleSubmit} className="form" style={{ width: "20vw" }}>
       <h2 className="form-title">Edit Routine Event</h2>
 
+      {/* Title */}
       <div className="form-field">
         <label>Title</label>
         <input
@@ -197,6 +172,19 @@ export default function EditRoutineEvent({
         />
       </div>
 
+      {/* Type (read only) */}
+      <div className="form-field">
+        <label>Type</label>
+        <input
+          type="text"
+          className="form-input"
+          value="slot"
+          readOnly
+          style={{ backgroundColor: "#f0f0f0", color: "#555" }}
+        />
+      </div>
+
+      {/* Start Slot (read only) */}
       <div className="form-field">
         <label>Start Slot</label>
         <input
@@ -204,9 +192,11 @@ export default function EditRoutineEvent({
           className="form-input"
           value={startSlotLabel}
           readOnly
+          style={{ backgroundColor: "#f0f0f0", color: "#555" }}
         />
       </div>
 
+      {/* End Slot */}
       <div className="form-field">
         <label>End Slot</label>
         <select
@@ -222,11 +212,19 @@ export default function EditRoutineEvent({
         </select>
       </div>
 
+      {/* Day of Week (read only) */}
       <div className="form-field">
         <label>Day of Week</label>
-        <input type="text" className="form-input" value={dayOfWeek} readOnly />
+        <input
+          type="text"
+          className="form-input"
+          value={event.day_of_week}
+          readOnly
+          style={{ backgroundColor: "#f0f0f0", color: "#555" }}
+        />
       </div>
 
+      {/* Repeat Every */}
       <div className="form-field">
         <label>Repeat Every</label>
         <select
@@ -242,6 +240,7 @@ export default function EditRoutineEvent({
         </select>
       </div>
 
+      {/* Start Week */}
       <div className="form-field">
         <label>Start Week</label>
         <select
@@ -257,6 +256,7 @@ export default function EditRoutineEvent({
         </select>
       </div>
 
+      {/* Course */}
       <div className="form-field">
         <label>Course</label>
         <select
@@ -273,16 +273,31 @@ export default function EditRoutineEvent({
         </select>
       </div>
 
+      {/* From Table (read only) */}
       <div className="form-field">
         <label>From Table</label>
-        <input type="text" className="form-input" value={fromTable} readOnly />
+        <input
+          type="text"
+          className="form-input"
+          value={event.from_table}
+          readOnly
+          style={{ backgroundColor: "#f0f0f0", color: "#555" }}
+        />
       </div>
 
+      {/* For Users (read only) */}
       <div className="form-field">
         <label>For Users</label>
-        <input type="text" className="form-input" value={forUsersLabel} readOnly />
+        <input
+          type="text"
+          className="form-input"
+          value={forUsersLabel}
+          readOnly
+          style={{ backgroundColor: "#f0f0f0", color: "#555" }}
+        />
       </div>
 
+      {/* Description */}
       <div className="form-field">
         <label>Description</label>
         <textarea
@@ -292,6 +307,7 @@ export default function EditRoutineEvent({
         />
       </div>
 
+      {/* Reschedulable */}
       <div className="form-field">
         <label>
           <input
@@ -303,15 +319,27 @@ export default function EditRoutineEvent({
         </label>
       </div>
 
-      <div className="form-buttons">
+      {/* Buttons */}
+      <div className="form-buttons" style={{ gap: "10px" }}>
         <button type="submit" className="form-submit">
           Update Event
         </button>
-        <button type="button" className="form-cancel" onClick={handleDelete}>
-          Delete Event
-        </button>
-        <button type="button" className="form-cancel" onClick={onClose}>
+
+        <button
+          type="button"
+          className="form-cancel"
+          onClick={() => onSuccess?.()}
+        >
           Cancel
+        </button>
+
+        <button
+          type="button"
+          className="form-cancel"
+          style={{ backgroundColor: "#d9534f", color: "white" }}
+          onClick={handleDelete}
+        >
+          Delete
         </button>
       </div>
     </form>

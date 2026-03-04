@@ -9,6 +9,8 @@ export default function CreateRoutineEvent({
   fromTable,
   forUsers,
   operationId,
+  slots,
+  maxEndSlotId,
   onSuccess,
 }) {
   const { userData } = useAuth();
@@ -22,7 +24,6 @@ export default function CreateRoutineEvent({
   const [isReschedulable, setIsReschedulable] = useState(true);
   const [courses, setCourses] = useState([]);
   const [selectedCourseId, setSelectedCourseId] = useState("");
-  const [slots, setSlots] = useState([]);
   const [endSlotId, setEndSlotId] = useState("");
   const [forUsersLabel, setForUsersLabel] = useState("");
 
@@ -66,27 +67,19 @@ export default function CreateRoutineEvent({
     ? `${startSlot.name} ${formatTimeToAMPM(startSlot.start)} - ${formatTimeToAMPM(startSlot.end)}`
     : "";
 
+  const maxSerial = slots.find((s) => s.id === maxEndSlotId)?.serial_no;
+
   const endSlotOptions = slots
-    .filter(
-      (s) =>
-        s.serial_no >= (startSlot?.serial_no || 0)
-    )
+    .filter((s) => {
+      const startSerial = startSlot?.serial_no || 0;
+      if (s.serial_no < startSerial) return false;
+      if (maxSerial && s.serial_no > maxSerial) return false;
+      return true;
+    })
     .map((s) => ({
       id: s.id,
       label: `${s.name} ${formatTimeToAMPM(s.start)} - ${formatTimeToAMPM(s.end)}`,
     }));
-
-  useEffect(() => {
-    const fetchSlots = async () => {
-      const { data, error } = await supabase
-        .from("slotinfo")
-        .select("*")
-        .order("serial_no", { ascending: true });
-      if (error) console.error("Error fetching slots:", error);
-      else setSlots(data || []);
-    };
-    fetchSlots();
-  }, []);
 
   useEffect(() => {
     if (slotId) setEndSlotId(slotId);
