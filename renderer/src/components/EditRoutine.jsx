@@ -3,6 +3,7 @@ import { fetchSlots, fetchGroups, fetchSubgroups } from "../utils/fetch";
 import Modal from "./Modal";
 import CreateRoutineEvent from "./CreateRoutineEvent";
 import supabase from "../utils/supabase";
+import React from "react";
 
 export default function EditRoutine({ selectedOperation, routine, onClose }) {
   const [slots, setSlots] = useState([]);
@@ -21,6 +22,8 @@ export default function EditRoutine({ selectedOperation, routine, onClose }) {
   const [loadingSubgroups, setLoadingSubgroups] = useState(false);
 
   const days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+  const totalCols = slots.length+1;
+  const totalRows = days.length+1;
 
   // Fetch slots for the selected operation
   useEffect(() => {
@@ -81,7 +84,13 @@ export default function EditRoutine({ selectedOperation, routine, onClose }) {
     const fetchRoutineEvents = async () => {
       const { data, error } = await supabase
         .from("recurring_events")
-        .select("*")
+        .select(`
+          *,
+          courses (
+            id,
+            name
+          )
+        `)
         .eq("routine_id", routine.id);
 
       if (error) {
@@ -112,6 +121,114 @@ export default function EditRoutine({ selectedOperation, routine, onClose }) {
     setSelectedSlotId(slotId);
     setSelectedDay(day);
     setIsEventModalOpen(true);
+  };
+  const getSerial = (slotId) => slots.find((s) => s.id === slotId)?.serial_no;
+
+  const getColIndex = (serial) => slots.findIndex((s) => s.serial_no === serial) + 2;
+
+  const shouldShowDescription = (event) => {
+    if (!selectedGroup) return true; 
+
+    if (selectedSubgroup) {
+      return event.from_table === "subgroups" && event.for_users === selectedSubgroup;
+    } else {
+      return event.from_table === "groups" && event.for_users === selectedGroup;
+    }
+  };
+  
+  const isCovered = (slot, day) => {
+    return occupyingEvents.some((event) => {
+      if (event.day_of_week !== day) return false;
+
+      const start = getSerial(event.start_slot);
+      const end = getSerial(event.end_slot);
+
+      return slot.serial_no >= start && slot.serial_no <= end;
+    });
+  };
+
+  // Events that occupy slots
+  const occupyingEvents = events.filter((event) => {
+    if (!selectedGroup) return false; // nothing selected
+    if (selectedSubgroup) {
+      // Subgroup chosen: only parent group + selected subgroup
+      return (
+        (event.from_table === "groups" && event.for_users === selectedGroup) ||
+        (event.from_table === "subgroups" && event.for_users === selectedSubgroup)
+      );
+    } else {
+      // Only group chosen: group + all its subgroups
+      const subgroupIds = subgroups.map(sg => sg.id);
+      return (
+        (event.from_table === "groups" && event.for_users === selectedGroup) ||
+        (event.from_table === "subgroups" && subgroupIds.includes(event.for_users))
+      );
+    }
+  });
+
+  // Events that show description
+  const descriptionEvents = events.filter((event) => {
+    if (selectedSubgroup) {
+      return event.from_table === "subgroups" && event.for_users === selectedSubgroup;
+    } else if (selectedGroup) {
+      return event.from_table === "groups" && event.for_users === selectedGroup;
+    }
+    return false;
+  });
+  const getOccupyingSlotBlocks = () => {
+    const blocks = [];
+
+    occupyingEvents.forEach((event) => {
+      const startSerial = getSerial(event.start_slot);
+      const endSerial = getSerial(event.end_slot);
+
+      if (!startSerial || !endSerial) return;
+
+      const showText = descriptionEvents.includes(event);
+
+      // If the event is active (show description), keep as one block
+      if (showText) {
+        const colStart = getColIndex(startSerial);
+        const colSpan = endSerial - startSerial + 1;
+        const rowStart = days.indexOf(event.day_of_week) + 2;
+
+        blocks.push({
+          id: event.id,
+          gridRow: rowStart,
+          gridColumn: `${colStart} / span ${colSpan}`,
+          showText,
+          content: (
+            <>
+              <strong>{event.courses?.name || "Unnamed Course"}</strong>
+              <div>{event.title}</div>
+            </>
+          ),
+        });
+      } else {
+        // Inactive: create one block per slot
+        for (let serial = startSerial; serial <= endSerial; serial++) {
+          const colIndex = getColIndex(serial);
+          const rowIndex = days.indexOf(event.day_of_week) + 2;
+
+          blocks.push({
+            id: event.id + "-" + serial,
+            gridRow: rowIndex,
+            gridColumn: colIndex,
+            showText: true, // we will display the group/subgroup name
+            content: (
+              <div style={{ fontSize: "0.7em", textAlign: "center" }}>
+                {event.from_table === "groups"
+                  ? groups.find((g) => g.id === event.for_users)?.name
+                  : subgroups.find((sg) => sg.id === event.for_users)?.name}
+              </div>
+            ),
+            inactive: true,
+          });
+        }
+      }
+    });
+
+    return blocks;
   };
 
   return (
@@ -153,44 +270,63 @@ export default function EditRoutine({ selectedOperation, routine, onClose }) {
           </div>
         )}
       </div>
-      <div className="routine-container">
-        <table className="routine-table">
-          <thead>
-            <tr>
-              <th className="routine-header">Day / Slot</th>
-              {slots.map((slot) => (
-                <th key={slot.id} className="routine-slot-header">
-                  <div className="routine-slot-name">{slot.name}</div>
-                  <div className="routine-slot-time">
-                    {formatTimeToAMPM(slot.start)} - {formatTimeToAMPM(slot.end)}
-                  </div>
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {days.map((day) => (
-              <tr key={day} className="routine-row">
-                <td className="routine-day">{day}</td>
-                {slots.map((slot) => (
-                  <td key={slot.id} className="routine-cell">
-                    <div className="routine-events">
-                      {getCellEvents(slot.id, day).map((ev) => (
-                        <div key={ev.id} className="routine-event">
-                          {ev.title}
-                        </div>
-                      ))}
-                    </div>
-                    <button className="routine-add-btn" onClick={() => openEventModal(slot.id, day)}>
-                      +
-                    </button>
-                  </td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <div className="timetable-grid"
+        style={{
+          display: "grid",
+          gridTemplateColumns: `7vw repeat(${slots.length}, 8vw)`,
+          gridTemplateRows: `5vh repeat(${days.length}, 8vh)`
+        }}
+          >
+        {/* Empty top-left corner */}
+        <div className="grid-cell header-cell"></div>
 
+        {/* Slot headers */}
+        {slots.map((slot) => (
+          <div key={slot.id} className="grid-cell header-cell">
+            {slot.name}
+            {slot.start && slot.end && (
+              <div style={{ fontSize: "0.75em", color: "#555" }}>
+                {formatTimeToAMPM(slot.start)} - {formatTimeToAMPM(slot.end)}
+              </div>
+            )}
+          </div>
+        ))}
+        {days.map((day) => (
+          <React.Fragment key={day}>
+            
+            {/* Day label column */}
+            <div className="grid-cell slot-label">
+              {day}
+            </div>
+
+            {/* Slot cells */}
+            {slots.map((slot) => (
+              <div key={day + slot.id} className="grid-cell">
+                {!isCovered(slot, day) && (
+                  <button onClick={() => openEventModal(slot.id, day)}>
+                    +
+                  </button>
+                )}
+              </div>
+            ))}
+          </React.Fragment>
+        ))}
+        {getOccupyingSlotBlocks().map((block) => (
+          <div
+            key={block.id}
+            className={`${block.inactive ? "routine-event-inactive" : "routine-event"}`}
+            style={{
+              gridRow: block.gridRow,
+              gridColumn: block.gridColumn,
+              display: "flex",
+              flexDirection: "column",
+              justifyContent: "center",
+              alignItems: "center",
+            }}
+          >
+            {block.content}
+          </div>
+        ))}
         <Modal
           isOpen={isEventModalOpen}
           onClose={() => setIsEventModalOpen(false)}
@@ -207,10 +343,15 @@ export default function EditRoutine({ selectedOperation, routine, onClose }) {
               // Refresh events after creating
               supabase
                 .from("recurring_events")
-                .select("*")
+                .select(`
+                  *,
+                  courses (
+                    id,
+                    name
+                  )
+                `)
                 .eq("routine_id", routine.id)
                 .then(({ data }) => setEvents(data || []));
-              setIsEventModalOpen(false);
             }}
           />
         </Modal>

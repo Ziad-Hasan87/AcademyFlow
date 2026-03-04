@@ -5,7 +5,7 @@ import { MdOutlineEmail } from "react-icons/md";
 import supabase from "../utils/supabase";
 import { showToast } from "../utils/toast";
 import { useAuth } from "../contexts/AuthContext";
-import { fetchPrograms, fetchOperations, fetchGroups, fetchSubgroups} from "../utils/fetch";
+import { fetchPrograms, fetchOperations, fetchGroups, fetchSubgroups, fetchDepartments} from "../utils/fetch";
 
 export default function CreateUserForm() {
   const { userData } = useAuth();
@@ -30,6 +30,13 @@ export default function CreateUserForm() {
     subgroup_id: "",
   });
 
+  // Staff-specific fields
+  const [staffInfo, setStaffInfo] = useState({
+    staff_id: "",
+    department_id: "",
+    codename: "",
+  });
+
   // Autocomplete states
   const [programQuery, setProgramQuery] = useState("");
   const [programResults, setProgramResults] = useState([]);
@@ -45,6 +52,11 @@ export default function CreateUserForm() {
   const [loadingGroups, setLoadingGroups] = useState(false);
   const [loadingSubgroups, setLoadingSubgroups] = useState(false);
 
+  // Department autocomplete (Staff)
+  const [departmentQuery, setDepartmentQuery] = useState("");
+  const [departmentResults, setDepartmentResults] = useState([]);
+  const [loadingDepartments, setLoadingDepartments] = useState(false);
+
   // Fetch programs for autocomplete
   useEffect(() => {
     if (programQuery.trim() === "") {
@@ -54,6 +66,30 @@ export default function CreateUserForm() {
 
     fetchPrograms(currentInstituteId, programQuery, setProgramResults, setLoadingPrograms);
   }, [programQuery, currentInstituteId]);
+
+  // Fetch departments for autocomplete (Staff)
+  useEffect(() => {
+    if (
+      departmentQuery.trim() === "" ||
+      !currentInstituteId ||
+      form.role === "Student"
+    ) {
+      setDepartmentResults([]);
+      return;
+    }
+
+    fetchDepartments(
+      currentInstituteId,
+      departmentQuery,
+      setDepartmentResults,
+      setLoadingDepartments
+    );
+  }, [departmentQuery, currentInstituteId, form.role]);
+
+  useEffect(() => {
+    console.log("Selected Program ID:", studentInfo.program_id);
+    console.log("Institute ID:", currentInstituteId);
+  }, [studentInfo.program_id]);
 
   // Fetch operations for autocomplete based on selected program
   useEffect(() => {
@@ -71,7 +107,7 @@ export default function CreateUserForm() {
       setGroups([]);
       return;
     }
-    fetchGroups(currentInstituteId, studentInfo.program_id, setGroups, setLoadingGroups);
+    fetchGroups(studentInfo.program_id, "", setGroups, setLoadingGroups);
   }, [studentInfo.program_id]);
 
   // Fetch subgroups when group is selected
@@ -81,7 +117,7 @@ export default function CreateUserForm() {
       return;
     }
 
-    fetchSubgroups(studentInfo.group_id, setSubgroups, setLoadingSubgroups);
+    fetchSubgroups(studentInfo.group_id, "", setSubgroups, setLoadingSubgroups);
   }, [studentInfo.group_id]);
 
   /* ----------------------------------
@@ -105,48 +141,92 @@ export default function CreateUserForm() {
         name: form.name,
       });
 
-      // If role is Student, insert into student table
-      if (form.role === "Student") {
-        const { error: studentError } = await supabase
-          .from("students")
-          .insert([
-            {
-              id: user.id,
-              program_id: studentInfo.program_id,
-              is_representative: studentInfo.is_representative,
-              operation_id: studentInfo.operation_id,
-              roll_no: studentInfo.roll_no,
-              group_id: studentInfo.group_id || null,
-              subgroup_id: studentInfo.subgroup_id || null,
-            },
-          ]);
+    // ================================
+    // STUDENT INSERT
+    // ================================
+    if (form.role === "Student") {
+      const { error: studentError } = await supabase
+        .from("students")
+        .insert([
+          {
+            id: user.id,
+            program_id: studentInfo.program_id,
+            is_representative: studentInfo.is_representative,
+            operation_id: studentInfo.operation_id,
+            roll_no: studentInfo.roll_no,
+            group_id: studentInfo.group_id || null,
+            subgroup_id: studentInfo.subgroup_id || null,
+          },
+        ]);
 
-        if (studentError) {
-          console.error(studentError);
-          alert("User created, but student info failed");
-          return;
-        }
+      if (studentError) {
+        console.error(studentError);
+        alert("User created, but student info failed");
+        return;
+      }
+    }
+
+    // ================================
+    // STAFF INSERT (non-students)
+    // ================================
+    if (form.role !== "Student") {
+      if (!staffInfo.department_id) {
+        alert("Please select a valid department from the dropdown.");
+        return;
       }
 
-      showToast("User created successfully");
+      const { error: staffError } = await supabase
+        .from("staffs")
+        .insert([
+          {
+            id: user.id,
+            staff_id: Number(staffInfo.staff_id),
+            department_id: staffInfo.department_id,
+            codename: staffInfo.codename,
+          },
+        ]);
 
-      // Reset form
-      setForm({ name: "", role: "", institute_id: currentInstituteId, password: "", email: "" });
-      setStudentInfo({
-        program_id: "",
-        is_representative: false,
-        operation_id: "",
-        roll_no: "",
-        group_id: "",
-        subgroup_id: "",
-      });
-      setProgramQuery("");
-      setOperationQuery("");
-    } catch (error) {
-      console.error(error);
-      alert(`Failed to create user: ${error.message}`);
+      if (staffError) {
+        console.error(staffError);
+        alert("User created, but staff info failed");
+        return;
+      }
     }
-  };
+
+    showToast("User created successfully");
+
+    // Reset form
+    setForm({
+      name: "",
+      role: "",
+      institute_id: currentInstituteId,
+      password: "",
+      email: "",
+    });
+
+    setStudentInfo({
+      program_id: "",
+      is_representative: false,
+      operation_id: "",
+      roll_no: "",
+      group_id: "",
+      subgroup_id: "",
+    });
+
+    setStaffInfo({
+      staff_id: "",
+      department_id: "",
+      codename: "",
+    });
+
+    setProgramQuery("");
+    setOperationQuery("");
+
+  } catch (error) {
+    console.error(error);
+    alert(`Failed to create user: ${error.message}`);
+  }
+};
 
   return (
     <form onSubmit={handleSubmit} className="form">
@@ -405,6 +485,88 @@ export default function CreateUserForm() {
                 </option>
               ))}
             </select>
+          </div>
+        </div>
+      )}
+      {/* Staff-only fields (Non-students) */}
+      {form.role && form.role !== "Student" && (
+        <div className="form-group-box">
+          <h3 className="form-section-title">Staff Details</h3>
+
+          <div className="form-field">
+            <label>Staff ID</label>
+            <input
+              type="number"
+              className="form-input"
+              value={staffInfo.staff_id}
+              onChange={(e) =>
+                setStaffInfo({ ...staffInfo, staff_id: e.target.value })
+              }
+              placeholder="Enter staff ID"
+              required
+            />
+          </div>
+
+          <div className="form-field autocomplete-container">
+            <label>Department</label>
+            <input
+              className="form-input"
+              value={departmentQuery}
+              onChange={(e) => {
+                setDepartmentQuery(e.target.value);
+                setStaffInfo({ ...staffInfo, department_id: "" });
+              }}
+              onBlur={() => {
+                setTimeout(() => setDepartmentResults([]), 200);
+              }}
+              placeholder="Type department name..."
+              required
+            />
+
+            {loadingDepartments && (
+              <div className="autocomplete-loading">Searching...</div>
+            )}
+
+            {departmentResults.length > 0 && (
+              <div className="autocomplete-list">
+                {departmentResults.map((dept) => (
+                  <div
+                    key={dept.id}
+                    className="autocomplete-item"
+                    onMouseDown={() => {
+                      setDepartmentQuery(`${dept.name} (${dept.code})`);
+                      setStaffInfo({
+                        ...staffInfo,
+                        department_id: dept.id,
+                      });
+                      setDepartmentResults([]);
+                    }}
+                  >
+                    {dept.name}
+                    {dept.code && (
+                      <span style={{ color: "#999", fontSize: "12px" }}>
+                        {" "}
+                        ({dept.code})
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="form-field">
+            <label>Codename</label>
+            <input
+              type="text"
+              className="form-input"
+              value={staffInfo.codename}
+              onChange={(e) =>
+                setStaffInfo({ ...staffInfo, codename: e.target.value })
+              }
+              placeholder="Enter codename"
+              required
+            />
           </div>
         </div>
       )}
