@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import supabase from "../utils/supabase";
 import { useAuth } from "../contexts/AuthContext";
+import { notifyRoutineEventChange } from "../utils/telegramNotifications";
 
 export default function CreateRoutineEvent({
   routineId,
@@ -128,6 +129,27 @@ export default function CreateRoutineEvent({
       console.error("Error creating routine event:", error);
       alert("Error creating event");
     } else {
+      const endSlot = slots.find((s) => s.id === endSlotId);
+      const selectedCourse = courses.find((c) => c.id === selectedCourseId);
+      const actorName = userData?.name || userData?.email || currentUserId || "Unknown user";
+
+      notifyRoutineEventChange({
+        action: "Created",
+        actor: actorName,
+        eventData: {
+          title,
+          courseName: selectedCourse?.name,
+          dayOfWeek,
+          startSlot: startSlot?.name,
+          endSlot: endSlot?.name,
+          targetType: fromTable,
+          targetName: forUsersLabel,
+          description
+        }
+      }).catch((notifyError) => {
+        console.warn("Routine event created but Telegram notification failed:", notifyError);
+      });
+
       onSuccess?.();
     }
   };

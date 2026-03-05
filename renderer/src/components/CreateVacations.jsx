@@ -3,6 +3,7 @@ import supabase from "../utils/supabase";
 import { useAuth } from "../contexts/AuthContext";
 import { showToast } from "../utils/toast";
 import { fetchPrograms, fetchOperations, fetchDepartments } from "../utils/fetch";
+import { notifyVacationChange } from "../utils/telegramNotifications";
 
 export default function CreateVacations({ onSuccess }) {
     const { userData } = useAuth();
@@ -78,6 +79,28 @@ export default function CreateVacations({ onSuccess }) {
         if (error) {
             alert("Failed to create vacation: " + error.message);
         } else {
+            const targetName =
+                forType === "all"
+                    ? "All"
+                    : forType === "operations"
+                    ? selectedOperation?.name
+                    : idQuery;
+            const actorName = userData?.name || userData?.email || "Unknown user";
+
+            notifyVacationChange({
+                action: "Created",
+                actor: actorName,
+                vacationData: {
+                    targetType: fromTable,
+                    targetName,
+                    startDay,
+                    endDay,
+                    description,
+                },
+            }).catch((notifyError) => {
+                console.warn("Vacation created but Telegram notification failed:", notifyError);
+            });
+
             showToast("Vacation created successfully!");
             // Reset
             setForType("all");

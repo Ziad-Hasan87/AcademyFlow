@@ -3,6 +3,7 @@ import supabase from "../utils/supabase";
 import { useAuth } from "../contexts/AuthContext";
 import { showToast } from "../utils/toast";
 import { fetchPrograms, fetchOperations, fetchDepartments } from "../utils/fetch";
+import { notifyVacationChange } from "../utils/telegramNotifications";
 
 export default function EditVacations({ vacationId, onCancel, onSuccess }) {
   const { userData } = useAuth();
@@ -129,6 +130,28 @@ export default function EditVacations({ vacationId, onCancel, onSuccess }) {
 
     if (error) alert("Failed to update vacation: " + error.message);
     else {
+      const targetName =
+        forType === "all"
+          ? "All"
+          : forType === "operations"
+          ? selectedOperation?.name
+          : idQuery;
+      const actorName = userData?.name || userData?.email || "Unknown user";
+
+      notifyVacationChange({
+        action: "Updated",
+        actor: actorName,
+        vacationData: {
+          targetType: fromTable,
+          targetName,
+          startDay,
+          endDay,
+          description,
+        },
+      }).catch((notifyError) => {
+        console.warn("Vacation updated but Telegram notification failed:", notifyError);
+      });
+
       showToast("Vacation updated successfully!");
       onSuccess();
     }

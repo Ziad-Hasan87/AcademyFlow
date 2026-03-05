@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import supabase from "../utils/supabase";
 import { useAuth } from "../contexts/AuthContext";
+import { notifyRoutineEventChange } from "../utils/telegramNotifications";
 
 export default function EditRoutineEvent({
   event,
@@ -131,6 +132,27 @@ export default function EditRoutineEvent({
       console.error("Error updating routine event:", error);
       alert("Error updating event");
     } else {
+      const endSlot = slots.find((s) => s.id === endSlotId);
+      const selectedCourse = courses.find((c) => c.id === selectedCourseId);
+      const actorName = userData?.name || userData?.email || currentUserId || "Unknown user";
+
+      notifyRoutineEventChange({
+        action: "Updated",
+        actor: actorName,
+        eventData: {
+          title,
+          courseName: selectedCourse?.name,
+          dayOfWeek: event.day_of_week,
+          startSlot: slots.find((s) => s.id === event.start_slot)?.name,
+          endSlot: endSlot?.name,
+          targetType: event.from_table,
+          targetName: forUsersLabel,
+          description
+        }
+      }).catch((notifyError) => {
+        console.warn("Routine event updated but Telegram notification failed:", notifyError);
+      });
+
       onSuccess?.();
     }
   };
@@ -150,6 +172,25 @@ export default function EditRoutineEvent({
       console.error("Error deleting routine event:", error);
       alert("Error deleting event");
     } else {
+      const actorName = userData?.name || userData?.email || currentUserId || "Unknown user";
+
+      notifyRoutineEventChange({
+        action: "Deleted",
+        actor: actorName,
+        eventData: {
+          title: event.title,
+          courseName: event.courses?.name,
+          dayOfWeek: event.day_of_week,
+          startSlot: slots.find((s) => s.id === event.start_slot)?.name,
+          endSlot: slots.find((s) => s.id === event.end_slot)?.name,
+          targetType: event.from_table,
+          targetName: forUsersLabel,
+          description: event.description
+        }
+      }).catch((notifyError) => {
+        console.warn("Routine event deleted but Telegram notification failed:", notifyError);
+      });
+
       onSuccess?.(); // refresh + close modal
     }
   };
