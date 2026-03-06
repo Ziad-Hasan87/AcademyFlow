@@ -212,6 +212,7 @@ export default function EditRoutine({ selectedOperation, routine, onClose }) {
   });
   const getOccupyingSlotBlocks = () => {
     const blocks = [];
+    const cellEventMap = {}; // Track multiple events per cell
 
     occupyingEvents.forEach((event) => {
       const startSerial = getSerial(event.start_slot);
@@ -226,19 +227,16 @@ export default function EditRoutine({ selectedOperation, routine, onClose }) {
         const colStart = getColIndex(startSerial);
         const colSpan = endSerial - startSerial + 1;
         const rowStart = days.indexOf(event.day_of_week) + 2;
+        const cellKey = `${rowStart}-${colStart}`;
 
-        blocks.push({
-          id: event.id,
-          eventRef:event,
+        // Group events by cell
+        if (!cellEventMap[cellKey]) {
+          cellEventMap[cellKey] = [];
+        }
+        cellEventMap[cellKey].push({
+          event,
           gridRow: rowStart,
           gridColumn: `${colStart} / span ${colSpan}`,
-          showText,
-          content: (
-            <>
-              <strong>{event.courses?.name || "Unnamed Course"}</strong>
-              <div>{event.title}</div>
-            </>
-          ),
         });
       } else {
         // Inactive: create one block per slot
@@ -251,9 +249,9 @@ export default function EditRoutine({ selectedOperation, routine, onClose }) {
             eventRef:event,
             gridRow: rowIndex,
             gridColumn: colIndex,
-            showText: true, // we will display the group/subgroup name
+            showText: true,
             content: (
-              <div style={{ fontSize: "0.7em", textAlign: "center" }}>
+              <div style={{ fontSize: "0.85em", textAlign: "center" }}>
                 {event.from_table === "groups"
                   ? groups.find((g) => g.id === event.for_users)?.name
                   : subgroups.find((sg) => sg.id === event.for_users)?.name}
@@ -263,6 +261,119 @@ export default function EditRoutine({ selectedOperation, routine, onClose }) {
           });
         }
       }
+    });
+
+    // Convert cell event map to blocks with multiple events stacked
+    Object.entries(cellEventMap).forEach(([cellKey, eventList]) => {
+      blocks.push({
+        id: cellKey,
+        eventRef: eventList[0].event, // For click handling, use first event
+        gridRow: eventList[0].gridRow,
+        gridColumn: eventList[0].gridColumn,
+        showText: true,
+        multipleEvents: eventList,
+        content: (
+          <div style={{ display: "flex", flexDirection: "column", gap: "0px", width: "100%", height: "100%", justifyContent: "center" }}>
+            {eventList.map((item, idx) => {
+              // Parse metadata from description
+              let course1Name = "";
+              let course1Subgroup = "";
+              let course1Teachers = "";
+              let course2Name = "";
+              let course2Subgroup = "";
+              let course2Teachers = "";
+              
+              try {
+                const descData = JSON.parse(item.event.description || "{}");
+                
+                // New format with separate course data
+                if (descData.course1) {
+                  course1Subgroup = descData.course1.subgroup || "";
+                  course1Teachers = descData.course1.teacherCodenames || "";
+                } else {
+                  // Old format for backward compatibility
+                  course1Subgroup = descData.subgroup || "";
+                  course1Teachers = descData.teacherCodenames || "";
+                }
+                
+                if (descData.course2 && descData.courseId2) {
+                  course2Subgroup = descData.course2.subgroup || "";
+                  course2Teachers = descData.course2.teacherCodenames || "";
+                  
+                  // Parse both course names from title
+                  const titleParts = item.event.title?.split(" | ");
+                  if (titleParts && titleParts.length > 0) {
+                    course1Name = titleParts[0].split("(")[0].trim();
+                    if (titleParts.length > 1) {
+                      course2Name = titleParts[1].split("(")[0].trim();
+                    }
+                  }
+                }
+              } catch {
+                // Fallback: parse from title
+                const titleMatch = item.event.title?.match(/^(.+?)(?:\\s*\\(([^)]+)\\))?(?:\\s*\\(([^)]+)\\))?$/);
+                if (titleMatch) {
+                  course1Name = titleMatch[1];
+                  course1Subgroup = titleMatch[2] || "";
+                  course1Teachers = titleMatch[3] || "";
+                }
+              }
+              
+              // Get course name from relation or title if not already set
+              if (!course1Name) {
+                course1Name = item.event.courses?.name || item.event.title?.split("(")[0]?.trim() || "Unnamed";
+              }
+
+              return (
+                <div 
+                  key={item.event.id}
+                  style={{ 
+                    fontSize: "0.85em", 
+                    textAlign: "center", 
+                    lineHeight: "1.3",
+                    padding: "4px 2px",
+                    borderBottom: idx < eventList.length - 1 ? "1px solid rgba(0,0,0,0.3)" : "none",
+                    cursor: "pointer",
+                    display: "flex",
+                    flexDirection: "column",
+                    justifyContent: "center",
+                    flex: 1
+                  }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setSelectedEvent(item.event);
+                    setIsEditModalOpen(true);
+                  }}
+                >
+                  {/* Course 1 */}
+                  <div style={{ fontWeight: "bold" }}>
+                    {course1Name}{course1Subgroup ? ` (${course1Subgroup})` : ""}
+                  </div>
+                  {course1Teachers && (
+                    <div style={{ fontSize: "0.95em", marginTop: "1px" }}>
+                      ({course1Teachers})
+                    </div>
+                  )}
+                  
+                  {/* Course 2 (if exists) */}
+                  {course2Name && (
+                    <>
+                      <div style={{ fontWeight: "bold", marginTop: "2px" }}>
+                        {course2Name}{course2Subgroup ? ` (${course2Subgroup})` : ""}
+                      </div>
+                      {course2Teachers && (
+                        <div style={{ fontSize: "0.95em", marginTop: "1px" }}>
+                          ({course2Teachers})
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        ),
+      });
     });
 
     return blocks;
@@ -344,22 +455,28 @@ export default function EditRoutine({ selectedOperation, routine, onClose }) {
             )}
           </div>
         ))}
-        {days.map((day) => (
+        {days.map((day, dayIndex) => (
           <React.Fragment key={day}>
             
             {/* Day label column */}
-            <div className="grid-cell slot-label">
+            <div
+              className="grid-cell slot-label"
+              style={{ gridRow: dayIndex + 2, gridColumn: 1 }}
+            >
               {day}
             </div>
 
-            {/* Slot cells */}
-            {slots.map((slot) => (
-              <div key={day + slot.id} className="grid-cell">
-                {!isCovered(slot, day) && (
-                  <button onClick={() => openEventModal(slot.id, day)}>
-                    +
-                  </button>
-                )}
+            {/* Slot cells — explicitly placed so event overlaps can't displace them */}
+            {slots.map((slot, slotIndex) => (
+              <div
+                key={day + slot.id}
+                className="grid-cell"
+                style={{ gridRow: dayIndex + 2, gridColumn: slotIndex + 2, cursor: "pointer" }}
+                onClick={() => openEventModal(slot.id, day)}
+              >
+                <button onClick={(e) => { e.stopPropagation(); openEventModal(slot.id, day); }}>
+                  +
+                </button>
               </div>
             ))}
           </React.Fragment>
@@ -378,7 +495,8 @@ export default function EditRoutine({ selectedOperation, routine, onClose }) {
               cursor: block.inactive ? "default" : "pointer",
             }}
             onClick={() => {
-              if (!block.inactive) {
+              // Only handle click if not multiple events (multiple events handle clicks individually)
+              if (!block.inactive && !block.multipleEvents) {
                 setSelectedEvent(block.eventRef);
                 setIsEditModalOpen(true);
               }
@@ -387,93 +505,101 @@ export default function EditRoutine({ selectedOperation, routine, onClose }) {
             {block.content}
           </div>
         ))}
-        <Modal
-          isOpen={isEventModalOpen}
-          onClose={() => setIsEventModalOpen(false)}
-          title="Create Routine Event"
-        >
-          <CreateRoutineEvent
-            slots={slots}
-              routineId={routine.id}
-              slotId={selectedSlotId}
-              dayOfWeek={selectedDay}
-              fromTable={selectedSubgroup ? "subgroups" : "groups"}
-              forUsers={selectedSubgroup || selectedGroup}
-              operationId={selectedOperation.id}
-              maxEndSlotId={getMaxEndSlotId(selectedSlotId, selectedDay)}
-              onSuccess={() => {
-              // Refresh events after creating
-              supabase
-                .from("recurring_events")
-                .select(`
-                  *,
-                  courses (
-                    id,
-                    name
-                  )
-                `)
-                .eq("routine_id", routine.id)
-                .then(({ data }) => setEvents(data || []));
-            }}
-          />
-        </Modal>
-        <Modal
-          isOpen={isEditModalOpen}
-          onClose={() => setIsEditModalOpen(false)}
-          title="Edit Routine Event"
-        >
-          <EditRoutineEvent
-            event={selectedEvent}
-            slots={slots}
-            maxEndSlotId={
-              selectedEvent
-                ? getMaxEndSlotId(
-                    selectedEvent.start_slot,
-                    selectedEvent.day_of_week,
-                    selectedEvent.id
-                  )
-                : null
-            }
-            onSuccess={() => {
-              setIsEditModalOpen(false);
-
-              // Refresh events
-              supabase
-                .from("recurring_events")
-                .select(`
-                  *,
-                  courses (
-                    id,
-                    name
-                  )
-                `)
-                .eq("routine_id", routine.id)
-                .then(({ data }) => setEvents(data || []));
-            }}
-          />
-        </Modal>
-        <Modal
-          isOpen={isGenerateModalOpen}
-          onClose={() => setIsGenerateModalOpen(false)}
-          title="Generate Routine Events"
-        >
-          <GenerateRoutineEvents
-            routineId={routine.id}
-            onSuccess={() => setIsGenerateModalOpen(false)}
-          />
-        </Modal>
-
-        <Modal
-          isOpen={isDeleteModalOpen}
-          onClose={() => setIsDeleteModalOpen(false)}
-          title="Delete Generated Events"
-        >
-          <DeleteRoutineEvents
-            routineId={routine.id}
-            onSuccess={() => setIsDeleteModalOpen(false)}
-          />
-        </Modal>
       </div>
+
+      {/* Modals placed outside grid */}
+      <Modal
+        isOpen={isEventModalOpen}
+        onClose={() => setIsEventModalOpen(false)}
+        title="Create Routine Event"
+      >
+        <CreateRoutineEvent
+          slots={slots}
+            routineId={routine.id}
+            slotId={selectedSlotId}
+            dayOfWeek={selectedDay}
+            fromTable={selectedSubgroup ? "subgroups" : "groups"}
+            forUsers={selectedSubgroup || selectedGroup}
+            operationId={selectedOperation.id}
+            maxEndSlotId={getMaxEndSlotId(selectedSlotId, selectedDay)}
+            onSuccess={() => {
+            // Close modal first, then refresh events
+            setIsEventModalOpen(false);
+            setTimeout(() => {
+              supabase
+                .from("recurring_events")
+                .select(`
+                  *,
+                  courses (
+                    id,
+                    name
+                  )
+                `)
+                .eq("routine_id", routine.id)
+                .then(({ data }) => setEvents(data || []));
+            }, 100);
+          }}
+        />
+      </Modal>
+      <Modal
+        isOpen={isEditModalOpen}
+        onClose={() => setIsEditModalOpen(false)}
+        title="Edit Routine Event"
+      >
+        <EditRoutineEvent
+          event={selectedEvent}
+          slots={slots}
+          operationId={selectedOperation.id}
+          maxEndSlotId={
+            selectedEvent
+              ? getMaxEndSlotId(
+                  selectedEvent.start_slot,
+                  selectedEvent.day_of_week,
+                  selectedEvent.id
+                )
+              : null
+          }
+          onSuccess={() => {
+            setIsEditModalOpen(false);
+
+            // Refresh events
+            setTimeout(() => {
+              supabase
+                .from("recurring_events")
+                .select(`
+                  *,
+                  courses (
+                    id,
+                    name
+                  )
+                `)
+                .eq("routine_id", routine.id)
+                .then(({ data }) => setEvents(data || []));
+            }, 100);
+          }}
+        />
+      </Modal>
+      <Modal
+        isOpen={isGenerateModalOpen}
+        onClose={() => setIsGenerateModalOpen(false)}
+        title="Generate Routine Events"
+      >
+        <GenerateRoutineEvents
+          routineId={routine.id}
+          onSuccess={() => setIsGenerateModalOpen(false)}
+        />
+      </Modal>
+
+      <Modal
+        isOpen={isDeleteModalOpen}
+        onClose={() => setIsDeleteModalOpen(false)}
+        title="Delete Generated Events"
+      >
+        <DeleteRoutineEvents
+          routineId={routine.id}
+          onSuccess={() => setIsDeleteModalOpen(false)}
+        />
+      </Modal>
     </div>
   );
 }
