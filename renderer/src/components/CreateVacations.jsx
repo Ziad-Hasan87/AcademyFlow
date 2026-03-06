@@ -25,21 +25,20 @@ export default function CreateVacations({ onSuccess }) {
     const [endDay, setEndDay] = useState("");
     const [description, setDescription] = useState("");
 
-    /** SEARCH PROGRAMS **/
     useEffect(() => {
-        if (forType === "programs" && idQuery.trim() !== "") {
-            fetchPrograms(currentInstituteId, idQuery, setIdResults, () => {});
+        if (forType === "operations" && programQuery.trim() !== "") {
+            fetchPrograms(currentInstituteId, programQuery, setProgramResults, () => {});
+        } else {
+            setProgramResults([]);
         }
     }, [programQuery, forType, currentInstituteId]);
 
-    /** SEARCH OPERATIONS **/
     useEffect(() => {
         if (forType === "operations" && selectedProgram && operationQuery.trim() !== "") {
             fetchOperations(selectedProgram.id, operationQuery, setOperationResults, () => {});
         } else setOperationResults([]);
     }, [operationQuery, selectedProgram, forType]);
 
-    // SEARCH DEPARTMENTS / PROGRAMS FOR ID FIELD
     useEffect(() => {
         if (forType === "programs" && idQuery.trim() !== "") {
             fetchPrograms(currentInstituteId, idQuery, setIdResults, () => {});

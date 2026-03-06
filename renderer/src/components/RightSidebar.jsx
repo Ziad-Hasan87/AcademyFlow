@@ -1,7 +1,7 @@
 import React, {useState} from "react";
 import MonthlyCalendar from "./MonthlyCalendar";
 
-export default function RightSidebar({ width }) {
+export default function RightSidebar({ width, setWeekRange }) {
 
     const [selectedDate, setSelectedDate] = useState(null);
     
@@ -9,23 +9,21 @@ export default function RightSidebar({ width }) {
     const [currentYear, setCurrentYear] = useState(today.getFullYear());
     const [currentMonth, setCurrentMonth] = useState(today.getMonth());
 
-    const events = [
-        { date: "2026-01-10", title: "Meeting" },
-        { date: "2026-01-15", title: "Project Due" },
-        { date: "2026-01-19", title: "Call" },
-    ];
-
     const handleMonthYearChange = (year, month) => {
         setCurrentYear(year);
         setCurrentMonth(month);
     };
 
-    const handleDateSelect = (date) => {
-        // Toggle: if clicking the same date, unselect it
+    const handleDateSelect = (date, startOfWeek, endOfWeek) => {
+
         if (selectedDate === date) {
-            setSelectedDate(null);
+        setSelectedDate(null);
+        setWeekRange(null, null);
         } else {
-            setSelectedDate(date);
+        setSelectedDate(date);
+        setWeekRange(startOfWeek, endOfWeek);
+        console.log("Selected date:", date);
+        console.log("Week range:", startOfWeek, "to", endOfWeek);
         }
     };
 
@@ -40,7 +38,6 @@ export default function RightSidebar({ width }) {
              <MonthlyCalendar
                 currentYear={currentYear}
                 currentMonth={currentMonth}
-                events={events}
                 selectedDate={selectedDate}
                 onSelectDate={handleDateSelect}
                 onMonthYearChange={handleMonthYearChange}

@@ -1,6 +1,6 @@
 import React, { useRef, useState, useEffect } from "react";
 
-function SingleMonthCalendar({ year, month, events = [], onSelectDate, selectedDate }) {
+function SingleMonthCalendar({ year, month, onSelectDate, selectedDate }) {
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const firstDay = new Date(year, month, 1).getDay();
 
@@ -9,6 +9,28 @@ function SingleMonthCalendar({ year, month, events = [], onSelectDate, selectedD
   const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
 
   // Calculate which week the selected date belongs to
+  const getWeekRange = (dateStr) => {
+    if (!dateStr) return { startOfWeek: null, endOfWeek: null };
+
+    const date = new Date(dateStr);
+    const day = date.getDay(); // Sunday = 0
+
+    const start = new Date(date);
+    start.setDate(date.getDate() - day);
+
+    const end = new Date(start);
+    end.setDate(start.getDate() + 6);
+
+    const format = (d) =>
+      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
+        d.getDate()
+      ).padStart(2, "0")}`;
+
+    return {
+      startOfWeek: format(start),
+      endOfWeek: format(end),
+    };
+  };
   const getWeekOfMonth = (dateStr) => {
     if (!dateStr) return null;
     const [y, m, d] = dateStr.split("-").map(Number);
@@ -41,7 +63,6 @@ function SingleMonthCalendar({ year, month, events = [], onSelectDate, selectedD
     const isWeekSelected = selectedWeek !== null && currentWeek === selectedWeek;
     
     const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-    const dayEvents = events.filter((e) => e.date === dateStr);
     const isSelected = selectedDate === dateStr;
     const isToday = dateStr === todayStr;
 
@@ -49,12 +70,12 @@ function SingleMonthCalendar({ year, month, events = [], onSelectDate, selectedD
       <div
         key={day}
         className={`calendar-day ${isToday ? "today" : ""} ${isSelected ? "selected" : ""} ${isWeekSelected ? "week-selected" : ""}`}
-        onClick={() => onSelectDate?.(dateStr)}
+        onClick={() => {
+          const { startOfWeek, endOfWeek } = getWeekRange(dateStr);
+          onSelectDate?.(dateStr, startOfWeek, endOfWeek);
+        }}
       >
         <div className="day-number"> {day} </div>
-        {dayEvents.length > 2 && (
-          <div className="day-event"> +{dayEvents.length - 2} more </div>
-        )}
       </div>
     );
   }
@@ -78,7 +99,6 @@ function SingleMonthCalendar({ year, month, events = [], onSelectDate, selectedD
 export default function MonthlyCalendar({
   currentYear,
   currentMonth,
-  events = [],
   onSelectDate,
   selectedDate,
   onMonthYearChange,
@@ -177,7 +197,6 @@ export default function MonthlyCalendar({
         <SingleMonthCalendar
           year={currentYear}
           month={currentMonth}
-          events={events}
           onSelectDate={onSelectDate}
           selectedDate={selectedDate}
         />

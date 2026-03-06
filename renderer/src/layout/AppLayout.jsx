@@ -3,7 +3,7 @@ import "../App.css";
 
 import LeftSidebar from "../components/LeftSidebar";
 import RightSidebar from "../components/RightSidebar";
-import BottomSidebar from "../components/BottomSideBar";
+import BottomSidebar from "../components/BottomSidebar";
 import HorizontalResizer from "../components/HorizontalResizer";
 import VerticalResizer from "../components/VerticalResizer";
 import MainContent from "../components/MainContent";
@@ -16,16 +16,26 @@ export default function AppLayout() {
   const [rightWidth, setRightWidth] = useState(300);
   const [bottomHeight, setBottomHeight] = useState(200);
 
-  const [showCreateRoutine, setShowCreateRoutine] = useState(false); 
+  const [showCreateRoutine, setShowCreateRoutine] = useState(false);
   const [showCreateUser, setShowCreateUser] = useState(false); // ✅ modal state
   const [activePage, setActivePage] = useState(null); // active page state
+
+  const [startOfWeek, setStartOfWeek] = useState(null);
+  const [endOfWeek, setEndOfWeek] = useState(null);
+
+  const [events, setEvents] = useState([]);
+
+  const setWeekRange = (start, end) => {
+    setStartOfWeek(start);
+    setEndOfWeek(end);
+  };
 
   return (
     <>
       {/* MAIN APP */}
       <div className="main-app">
         <IconSidebar onIconClick={setActivePage} activePage={activePage} />
-        
+
         <LeftSidebar
           width={leftWidth}
           onCreateClick={() => setShowCreateRoutine(true)}
@@ -39,7 +49,7 @@ export default function AppLayout() {
         />
 
         <div className="middle-group">
-          <MainContent />
+          <MainContent events={events} />
 
           <HorizontalResizer
             onDrag={(dy) =>
@@ -49,7 +59,12 @@ export default function AppLayout() {
             }
           />
 
-          <BottomSidebar height={bottomHeight} />
+          <BottomSidebar
+            height={bottomHeight}
+            startDate={startOfWeek}
+            endDate={endOfWeek}
+            onEventsFetched={setEvents}
+          />
         </div>
 
         <VerticalResizer
@@ -60,11 +75,14 @@ export default function AppLayout() {
           }
         />
 
-        <RightSidebar width={rightWidth} />
+        <RightSidebar
+          width={rightWidth}
+          setWeekRange={setWeekRange}
+        />
       </div>
 
       {/* MODAL OVERLAY */}
-      
+
       {/* Toast Notifications */}
       <Toast />
     </>
