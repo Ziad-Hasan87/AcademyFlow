@@ -20,11 +20,24 @@ export default function CreateRoutineEvent({
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [repeatEvery, setRepeatEvery] = useState(1);
-  const [startWeek, setStartWeek] = useState(1);
   const [isReschedulable, setIsReschedulable] = useState(true);
   const [courses, setCourses] = useState([]);
-  const [selectedCourseId, setSelectedCourseId] = useState("");
+  const [selectedCourseId, setSelectedCourseId] = useState(""); // First course
+  const [selectedCourseId2, setSelectedCourseId2] = useState(""); // Second optional course
+  
+  // Course 1 fields
+  const [subgroupLabel1, setSubgroupLabel1] = useState("");
+  const [teachers1, setTeachers1] = useState([]);
+  const [selectedTeacherIds1, setSelectedTeacherIds1] = useState([]);
+  const [teacherCodenames1, setTeacherCodenames1] = useState("");
+  
+  // Course 2 fields
+  const [subgroupLabel2, setSubgroupLabel2] = useState("");
+  const [teachers2, setTeachers2] = useState([]);
+  const [selectedTeacherIds2, setSelectedTeacherIds2] = useState([]);
+  const [teacherCodenames2, setTeacherCodenames2] = useState("");
+  
+  const [actualDescription, setActualDescription] = useState("");
   const [endSlotId, setEndSlotId] = useState("");
   const [forUsersLabel, setForUsersLabel] = useState("");
 
@@ -86,6 +99,80 @@ export default function CreateRoutineEvent({
     if (slotId) setEndSlotId(slotId);
   }, [slotId]);
 
+  // Fetch teachers for Course 1
+  useEffect(() => {
+    if (!selectedCourseId) {
+      setTeachers1([]);
+      setSelectedTeacherIds1([]);
+      return;
+    }
+    const fetchTeachers = async () => {
+      const { data: modsData, error: modsError } = await supabase
+        .from("course_moderators")
+        .select("user_id")
+        .eq("course_id", selectedCourseId);
+      if (modsError) {
+        console.error("Error fetching course moderators:", modsError);
+        return;
+      }
+      const userIds = (modsData || []).map((m) => m.user_id);
+      if (userIds.length === 0) {
+        setTeachers1([]);
+        return;
+      }
+      const [{ data: usersData }, { data: staffsData }] = await Promise.all([
+        supabase.from("users").select("id, name").in("id", userIds),
+        supabase.from("staffs").select("id, codename").in("id", userIds),
+      ]);
+      setTeachers1(
+        (usersData || []).map((u) => ({
+          id: u.id,
+          name: u.name,
+          codename: staffsData?.find((s) => s.id === u.id)?.codename || "",
+        }))
+      );
+      setSelectedTeacherIds1([]);
+    };
+    fetchTeachers();
+  }, [selectedCourseId]);
+
+  // Fetch teachers for Course 2
+  useEffect(() => {
+    if (!selectedCourseId2) {
+      setTeachers2([]);
+      setSelectedTeacherIds2([]);
+      return;
+    }
+    const fetchTeachers = async () => {
+      const { data: modsData, error: modsError } = await supabase
+        .from("course_moderators")
+        .select("user_id")
+        .eq("course_id", selectedCourseId2);
+      if (modsError) {
+        console.error("Error fetching course moderators:", modsError);
+        return;
+      }
+      const userIds = (modsData || []).map((m) => m.user_id);
+      if (userIds.length === 0) {
+        setTeachers2([]);
+        return;
+      }
+      const [{ data: usersData }, { data: staffsData }] = await Promise.all([
+        supabase.from("users").select("id, name").in("id", userIds),
+        supabase.from("staffs").select("id, codename").in("id", userIds),
+      ]);
+      setTeachers2(
+        (usersData || []).map((u) => ({
+          id: u.id,
+          name: u.name,
+          codename: staffsData?.find((s) => s.id === u.id)?.codename || "",
+        }))
+      );
+      setSelectedTeacherIds2([]);
+    };
+    fetchTeachers();
+  }, [selectedCourseId2]);
+
   useEffect(() => {
     if (!operationId) return;
     const fetchCourses = async () => {
@@ -100,12 +187,77 @@ export default function CreateRoutineEvent({
     fetchCourses();
   }, [operationId]);
 
+  // Auto-update title when courses, subgroups, or teachers change
+  useEffect(() => {
+    const titleParts = [];
+    
+    if (selectedCourseId) {
+      const course1 = courses.find(c => c.id === selectedCourseId);
+      if (course1) {
+        let line1 = course1.name;
+        if (subgroupLabel1) line1 += ` (${subgroupLabel1})`;
+        if (teacherCodenames1) line1 += ` (${teacherCodenames1})`;
+        titleParts.push(line1);
+      }
+    }
+    
+    if (selectedCourseId2) {
+      const course2 = courses.find(c => c.id === selectedCourseId2);
+      if (course2) {
+        let line2 = course2.name;
+        if (subgroupLabel2) line2 += ` (${subgroupLabel2})`;
+        if (teacherCodenames2) line2 += ` (${teacherCodenames2})`;
+        titleParts.push(line2);
+      }
+    }
+    
+    setTitle(titleParts.join(" | "));
+  }, [selectedCourseId, selectedCourseId2, subgroupLabel1, subgroupLabel2, teacherCodenames1, teacherCodenames2, courses]);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!title) return alert("Title is required");
+    if (!selectedCourseId) return alert("Please select at least one course");
 
-    const { data, error } = await supabase.from("recurring_events").insert({
-      title,
+    // Build title with both courses on separate lines
+    const titleParts = [];
+    const course1 = courses.find(c => c.id === selectedCourseId);
+    if (course1) {
+      let line1 = course1.name;
+      if (subgroupLabel1) line1 += ` (${subgroupLabel1})`;
+      if (teacherCodenames1) line1 += ` (${teacherCodenames1})`;
+      titleParts.push(line1);
+    }
+    if (selectedCourseId2) {
+      const course2 = courses.find(c => c.id === selectedCourseId2);
+      if (course2) {
+        let line2 = course2.name;
+        if (subgroupLabel2) line2 += ` (${subgroupLabel2})`;
+        if (teacherCodenames2) line2 += ` (${teacherCodenames2})`;
+        titleParts.push(line2);
+      }
+    }
+    const eventTitle = titleParts.join(" | ");
+    
+    // Build description with metadata for both courses
+    const descriptionData = {
+      course1: {
+        subgroup: subgroupLabel1,
+        teachers: selectedTeacherIds1,
+        teacherCodenames: teacherCodenames1
+      },
+      course2: selectedCourseId2 ? {
+        subgroup: subgroupLabel2,
+        teachers: selectedTeacherIds2,
+        teacherCodenames: teacherCodenames2
+      } : null,
+      courseId2: selectedCourseId2 || "",
+      description: actualDescription
+    };
+    const finalDescription = JSON.stringify(descriptionData);
+
+    // Create ONE event with both courses
+    const eventData = {
+      title: eventTitle,
       type: "slot",
       start_at: null,
       end_at: null,
@@ -113,41 +265,46 @@ export default function CreateRoutineEvent({
       start_slot: slotId,
       end_slot: endSlotId,
       day_of_week: dayOfWeek,
-      repeat_every: repeatEvery,
-      start_week: startWeek,
-      course_id: selectedCourseId || null,
+      repeat_every: 1,
+      start_week: 1,
+      course_id: selectedCourseId, // Primary course
       institute_id: currentInstituteId,
       created_by: currentUserId,
-      description,
+      description: finalDescription,
       is_reschedulable: isReschedulable,
       from_table: fromTable,
       for_users: forUsers,
       routine_id: routineId,
-    });
+    };
+
+    const { data, error } = await supabase.from("recurring_events").insert(eventData);
 
     if (error) {
-      console.error("Error creating routine event:", error);
-      alert("Error creating event");
+      console.error("Error creating routine events:", error);
+      alert("Error creating events");
     } else {
       const endSlot = slots.find((s) => s.id === endSlotId);
-      const selectedCourse = courses.find((c) => c.id === selectedCourseId);
+      const course1Name = courses.find(c => c.id === selectedCourseId)?.name || "";
+      const course2Name = selectedCourseId2 ? courses.find(c => c.id === selectedCourseId2)?.name || "" : "";
+      const selectedCourseNames = [course1Name, course2Name].filter(Boolean).join(", ");
       const actorName = userData?.name || userData?.email || currentUserId || "Unknown user";
 
       notifyRoutineEventChange({
         action: "Created",
         actor: actorName,
         eventData: {
-          title,
-          courseName: selectedCourse?.name,
+          title: eventTitle,
+          courseName: selectedCourseNames,
           dayOfWeek,
           startSlot: startSlot?.name,
           endSlot: endSlot?.name,
           targetType: fromTable,
           targetName: forUsersLabel,
-          description
+          description: actualDescription,
+          teachers: [teacherCodenames1, teacherCodenames2].filter(Boolean).join(", ")
         }
       }).catch((notifyError) => {
-        console.warn("Routine event created but Telegram notification failed:", notifyError);
+        console.warn("Routine events created but Telegram notification failed:", notifyError);
       });
 
       onSuccess?.();
@@ -158,15 +315,15 @@ export default function CreateRoutineEvent({
     <form onSubmit={handleSubmit} className="form" style={{ width: "20vw" }}>
       <h2 className="form-title">Create Routine Event</h2>
 
-      {/* Title */}
+      {/* Title (auto-generated from course + subgroup) */}
       <div className="form-field">
-        <label>Title</label>
+        <label>Title (Course Name)</label>
         <input
           type="text"
           className="form-input"
           value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          required
+          readOnly
+          style={{ backgroundColor: "#f0f0f0", color: "#555" }}
         />
       </div>
 
@@ -222,47 +379,16 @@ export default function CreateRoutineEvent({
         />
       </div>
 
-      {/* Repeat Every */}
+      {/* Course 1 */}
       <div className="form-field">
-        <label>Repeat Every</label>
-        <select
-          className="form-select"
-          value={repeatEvery}
-          onChange={(e) => setRepeatEvery(Number(e.target.value))}
-        >
-          {[1, 2, 3, 4, 5].map((v) => (
-            <option key={v} value={v}>
-              {v}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      {/* Start Week */}
-      <div className="form-field">
-        <label>Start Week</label>
-        <select
-          className="form-select"
-          value={startWeek}
-          onChange={(e) => setStartWeek(Number(e.target.value))}
-        >
-          {[1, 2, 3, 4, 5].map((v) => (
-            <option key={v} value={v}>
-              {v}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      {/* Course */}
-      <div className="form-field autocomplete-container">
         <label>Course</label>
         <select
           className="form-select"
           value={selectedCourseId}
           onChange={(e) => setSelectedCourseId(e.target.value)}
+          required
         >
-          <option value="">None</option>
+          <option value="">Select Course</option>
           {courses.map((c) => (
             <option key={c.id} value={c.id}>
               {c.name}
@@ -270,6 +396,116 @@ export default function CreateRoutineEvent({
           ))}
         </select>
       </div>
+
+      {/* Subgroup for Course 1 */}
+      {selectedCourseId && (
+        <div className="form-field">
+          <label>Subgroup for {courses.find(c => c.id === selectedCourseId)?.name || "Course 1"} (optional)</label>
+          <input
+            type="text"
+            className="form-input"
+            value={subgroupLabel1}
+            onChange={(e) => setSubgroupLabel1(e.target.value)}
+            placeholder="e.g., B1/B2"
+          />
+        </div>
+      )}
+
+      {/* Teachers for Course 1 */}
+      {selectedCourseId && teachers1.length > 0 && (
+        <div className="form-field">
+          <label>Teachers for {courses.find(c => c.id === selectedCourseId)?.name || "Course 1"}</label>
+          <div style={{ maxHeight: "150px", overflowY: "auto", border: "1px solid #ccc", padding: "8px", borderRadius: "4px" }}>
+            {teachers1.map((t) => (
+              <label key={t.id} style={{ display: "block", marginBottom: "6px", cursor: "pointer" }}>
+                <input
+                  type="checkbox"
+                  checked={selectedTeacherIds1.includes(t.id)}
+                  onChange={(e) => {
+                    let newIds;
+                    if (e.target.checked) {
+                      newIds = [...selectedTeacherIds1, t.id];
+                    } else {
+                      newIds = selectedTeacherIds1.filter(id => id !== t.id);
+                    }
+                    setSelectedTeacherIds1(newIds);
+                    
+                    // Update teacher codenames
+                    const selectedTeachers = teachers1.filter(teacher => newIds.includes(teacher.id));
+                    const codenames = selectedTeachers.map(teacher => teacher.codename).filter(Boolean);
+                    setTeacherCodenames1(codenames.join(" + "));
+                  }}
+                />
+                {" "}{t.name}{t.codename ? ` (${t.codename})` : ""}
+              </label>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Course 2 (Optional) */}
+      <div className="form-field">
+        <label>Course 2 (optional)</label>
+        <select
+          className="form-select"
+          value={selectedCourseId2}
+          onChange={(e) => setSelectedCourseId2(e.target.value)}
+        >
+          <option value="">None</option>
+          {courses.filter(c => c.id !== selectedCourseId).map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.name}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {/* Subgroup for Course 2 */}
+      {selectedCourseId2 && (
+        <div className="form-field">
+          <label>Subgroup for {courses.find(c => c.id === selectedCourseId2)?.name || "Course 2"} (optional)</label>
+          <input
+            type="text"
+            className="form-input"
+            value={subgroupLabel2}
+            onChange={(e) => setSubgroupLabel2(e.target.value)}
+            placeholder="e.g., B2/B1"
+          />
+        </div>
+      )}
+
+      {/* Teachers for Course 2 */}
+      {selectedCourseId2 && teachers2.length > 0 && (
+        <div className="form-field">
+          <label>Teachers for {courses.find(c => c.id === selectedCourseId2)?.name || "Course 2"}</label>
+          <div style={{ maxHeight: "150px", overflowY: "auto", border: "1px solid #ccc", padding: "8px", borderRadius: "4px" }}>
+            {teachers2.map((t) => (
+              <label key={t.id} style={{ display: "block", marginBottom: "6px", cursor: "pointer" }}>
+                <input
+                  type="checkbox"
+                  checked={selectedTeacherIds2.includes(t.id)}
+                  onChange={(e) => {
+                    let newIds;
+                    if (e.target.checked) {
+                      newIds = [...selectedTeacherIds2, t.id];
+                    } else {
+                      newIds = selectedTeacherIds2.filter(id => id !== t.id);
+                    }
+                    setSelectedTeacherIds2(newIds);
+                    
+                    // Update teacher codenames
+                    const selectedTeachers = teachers2.filter(teacher => newIds.includes(teacher.id));
+                    const codenames = selectedTeachers.map(teacher => teacher.codename).filter(Boolean);
+                    setTeacherCodenames2(codenames.join(" + "));
+                  }}
+                />
+                {" "}{t.name}{t.codename ? ` (${t.codename})` : ""}
+              </label>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* From Table */}
       <div className="form-field">
         <label>From Table</label>
@@ -298,8 +534,8 @@ export default function CreateRoutineEvent({
         <label>Description</label>
         <textarea
           className="form-input"
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
+          value={actualDescription}
+          onChange={(e) => setActualDescription(e.target.value)}
         />
       </div>
 
