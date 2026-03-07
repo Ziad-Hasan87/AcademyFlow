@@ -3,10 +3,6 @@ import { fetchSlots, fetchGroups, fetchSubgroups } from "../utils/fetch";
 import Modal from "./Modal";
 import CreateRoutineEvent from "./CreateRoutineEvent";
 import supabase from "../utils/supabase";
-import React from "react";
-import EditRoutineEvent from "./EditRoutineEvent";
-import GenerateRoutineEvents from "./GenerateRoutineEvents";
-import DeleteRoutineEvents from "./DeleteRoutineEvents";
 
 export default function EditRoutine({ selectedOperation, routine, onClose }) {
   const [slots, setSlots] = useState([]);
@@ -14,10 +10,6 @@ export default function EditRoutine({ selectedOperation, routine, onClose }) {
   const [isEventModalOpen, setIsEventModalOpen] = useState(false);
   const [selectedSlotId, setSelectedSlotId] = useState(null);
   const [selectedDay, setSelectedDay] = useState(null);
-  const [selectedEvent, setSelectedEvent] = useState(null);
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [isGenerateModalOpen, setIsGenerateModalOpen] = useState(false);
-  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
 
   const [groups, setGroups] = useState([]);
   const [selectedGroup, setSelectedGroup] = useState("");
@@ -29,8 +21,6 @@ export default function EditRoutine({ selectedOperation, routine, onClose }) {
   const [loadingSubgroups, setLoadingSubgroups] = useState(false);
 
   const days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-  const totalCols = slots.length+1;
-  const totalRows = days.length+1;
 
   // Fetch slots for the selected operation
   useEffect(() => {
@@ -89,27 +79,48 @@ export default function EditRoutine({ selectedOperation, routine, onClose }) {
     if (!routine?.id) return;
 
     const fetchRoutineEvents = async () => {
-      const { data, error } = await supabase
-        .from("recurring_events")
-        .select(`
-          *,
-          courses (
-            id,
-            name
-          )
-        `)
-        .eq("routine_id", routine.id);
+      let rpcName = "";
+      let params = {};
+
+      if (selectedGroup && !selectedSubgroup) {
+        // Only group selected
+        rpcName = "getgrouproutine";
+        params = { p_group_id: selectedGroup };
+      } else if (selectedSubgroup) {
+        // Subgroup selected
+        rpcName = "getsubgrouproutine";
+        params = { p_subgroup_id: selectedSubgroup };
+      } else {
+        // Neither group nor subgroup selected, fallback to all routine events
+        const { data, error } = await supabase
+          .from("recurring_events")
+          .select("*")
+          .eq("routine_id", routine.id);
+
+        if (error) {
+          console.error("Error fetching routine events:", error);
+          setEvents([]);
+        } else {
+          setEvents(data || []);
+        }
+        return;
+      }
+
+      // Call the RPC function
+      const { data, error } = await supabase.rpc(rpcName, params);
 
       if (error) {
-        console.error("Error fetching routine events:", error);
+        console.error(`Error fetching events from ${rpcName}:`, error);
         setEvents([]);
       } else {
-        setEvents(data || []);
+        // Optional: filter only events for the current routine
+        const filtered = data.filter((e) => e.routine_id === routine.id);
+        setEvents(filtered || []);
       }
     };
 
     fetchRoutineEvents();
-  }, [routine]);
+  }, [routine, selectedGroup, selectedSubgroup]);
 
   // Format 24h to AM/PM
   const formatTimeToAMPM = (time24) => {
@@ -129,148 +140,12 @@ export default function EditRoutine({ selectedOperation, routine, onClose }) {
     setSelectedDay(day);
     setIsEventModalOpen(true);
   };
-  const getSerial = (slotId) => slots.find((s) => s.id === slotId)?.serial_no;
-
-  const getMaxEndSlotId = (startSlotId, day, editingEventId = null) => {
-    const startSerial = getSerial(startSlotId);
-      if (!startSerial) return startSlotId;
-
-      const relevantEvents = occupyingEvents
-        .filter(
-          (e) =>
-            e.day_of_week === day &&
-            e.start_slot !== startSlotId &&
-            e.id !== editingEventId
-        )
-        .map((e) => ({
-          start: getSerial(e.start_slot),
-        }))
-        .filter((e) => e.start > startSerial)
-        .sort((a, b) => a.start - b.start);
-
-      if (relevantEvents.length === 0) {
-        return slots[slots.length - 1]?.id;
-      }
-
-      const nextStartSerial = relevantEvents[0].start;
-      const maxSerial = nextStartSerial - 1;
-
-      const maxSlot = slots.find((s) => s.serial_no === maxSerial);
-      return maxSlot?.id || startSlotId;
-    };
-
-  const getColIndex = (serial) => slots.findIndex((s) => s.serial_no === serial) + 2;
-
-  const shouldShowDescription = (event) => {
-    if (!selectedGroup) return true; 
-
-    if (selectedSubgroup) {
-      return event.from_table === "subgroups" && event.for_users === selectedSubgroup;
-    } else {
-      return event.from_table === "groups" && event.for_users === selectedGroup;
-    }
-  };
-  
-  const isCovered = (slot, day) => {
-    return occupyingEvents.some((event) => {
-      if (event.day_of_week !== day) return false;
-
-      const start = getSerial(event.start_slot);
-      const end = getSerial(event.end_slot);
-
-      return slot.serial_no >= start && slot.serial_no <= end;
-    });
-  };
-
-  // Events that occupy slots
-  const occupyingEvents = events.filter((event) => {
-    if (!selectedGroup) return false; // nothing selected
-    if (selectedSubgroup) {
-      // Subgroup chosen: only parent group + selected subgroup
-      return (
-        (event.from_table === "groups" && event.for_users === selectedGroup) ||
-        (event.from_table === "subgroups" && event.for_users === selectedSubgroup)
-      );
-    } else {
-      // Only group chosen: group + all its subgroups
-      const subgroupIds = subgroups.map(sg => sg.id);
-      return (
-        (event.from_table === "groups" && event.for_users === selectedGroup) ||
-        (event.from_table === "subgroups" && subgroupIds.includes(event.for_users))
-      );
-    }
-  });
-
-  // Events that show description
-  const descriptionEvents = events.filter((event) => {
-    if (selectedSubgroup) {
-      return event.from_table === "subgroups" && event.for_users === selectedSubgroup;
-    } else if (selectedGroup) {
-      return event.from_table === "groups" && event.for_users === selectedGroup;
-    }
-    return false;
-  });
-  const getOccupyingSlotBlocks = () => {
-    const blocks = [];
-
-    occupyingEvents.forEach((event) => {
-      const startSerial = getSerial(event.start_slot);
-      const endSerial = getSerial(event.end_slot);
-
-      if (!startSerial || !endSerial) return;
-
-      const showText = descriptionEvents.includes(event);
-
-      // If the event is active (show description), keep as one block
-      if (showText) {
-        const colStart = getColIndex(startSerial);
-        const colSpan = endSerial - startSerial + 1;
-        const rowStart = days.indexOf(event.day_of_week) + 2;
-
-        blocks.push({
-          id: event.id,
-          eventRef:event,
-          gridRow: rowStart,
-          gridColumn: `${colStart} / span ${colSpan}`,
-          showText,
-          content: (
-            <>
-              <strong>{event.courses?.name || "Unnamed Course"}</strong>
-              <div>{event.title}</div>
-            </>
-          ),
-        });
-      } else {
-        // Inactive: create one block per slot
-        for (let serial = startSerial; serial <= endSerial; serial++) {
-          const colIndex = getColIndex(serial);
-          const rowIndex = days.indexOf(event.day_of_week) + 2;
-
-          blocks.push({
-            id: event.id + "-" + serial,
-            eventRef:event,
-            gridRow: rowIndex,
-            gridColumn: colIndex,
-            showText: true, // we will display the group/subgroup name
-            content: (
-              <div style={{ fontSize: "0.7em", textAlign: "center" }}>
-                {event.from_table === "groups"
-                  ? groups.find((g) => g.id === event.for_users)?.name
-                  : subgroups.find((sg) => sg.id === event.for_users)?.name}
-              </div>
-            ),
-            inactive: true,
-          });
-        }
-      }
-    });
-
-    return blocks;
-  };
 
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", width: "100%" }}>
-      <div style={{ display: "flex", justifyContent: "center", gap: "20px", width: "100%", maxWidth: "600px"}}>
+
+      {/* Group / Subgroup Selectors */}
+      <div style={{ display: "flex", justifyContent: "center", gap: "20px", width: "100%", maxWidth: "600px" }}>
         {selectedProgram && (
           <div className="form-field" style={{ maxWidth: "300px", marginBottom: "16px" }}>
             <label>Group</label>
@@ -288,6 +163,7 @@ export default function EditRoutine({ selectedOperation, routine, onClose }) {
             </select>
           </div>
         )}
+
         {selectedGroup && (
           <div className="form-field" style={{ maxWidth: "300px", marginBottom: "16px" }}>
             <label>Subgroup</label>
@@ -307,172 +183,106 @@ export default function EditRoutine({ selectedOperation, routine, onClose }) {
           </div>
         )}
       </div>
-      <div style={{ display: "flex", gap: "15px", marginBottom: "20px" }}>
-        <button
-          className="form-submit"
-          onClick={() => setIsGenerateModalOpen(true)}
-        >
-          Generate
-        </button>
 
-        <button
-          className="form-cancel"
-          style={{ backgroundColor: "#d9534f", color: "white" }}
-          onClick={() => setIsDeleteModalOpen(true)}
-        >
-          Delete
-        </button>
-      </div>
-      <div className="timetable-grid"
+      {/* Timetable Grid */}
+      <div
+        className="timetable-grid"
         style={{
           display: "grid",
           gridTemplateColumns: `7vw repeat(${slots.length}, 8vw)`,
           gridTemplateRows: `5vh repeat(${days.length}, 8vh)`
         }}
-          >
-        {/* Empty top-left corner */}
+      >
+
+        {/* Empty top-left */}
         <div className="grid-cell header-cell"></div>
 
         {/* Slot headers */}
         {slots.map((slot) => (
           <div key={slot.id} className="grid-cell header-cell">
-            {slot.name}
-            {slot.start && slot.end && (
-              <div style={{ fontSize: "0.75em", color: "#555" }}>
-                {formatTimeToAMPM(slot.start)} - {formatTimeToAMPM(slot.end)}
-              </div>
-            )}
+            <div>{slot.name}</div>
+            <div style={{ fontSize: "0.75em", color: "#555" }}>
+              {formatTimeToAMPM(slot.start)} - {formatTimeToAMPM(slot.end)}
+            </div>
           </div>
         ))}
-        {days.map((day) => (
-          <React.Fragment key={day}>
-            
-            {/* Day label column */}
-            <div className="grid-cell slot-label">
+
+        {/* Days + Cells */}
+        {days.map((day, dayIndex) => (
+          <>
+            {/* Day label */}
+            <div
+              key={`day-${day}`}
+              className="grid-cell header-cell"
+              style={{ gridRow: dayIndex + 2, gridColumn: 1 }}
+            >
               {day}
             </div>
 
-            {/* Slot cells */}
-            {slots.map((slot) => (
-              <div key={day + slot.id} className="grid-cell">
-                {!isCovered(slot, day) && (
-                  <button onClick={() => openEventModal(slot.id, day)}>
+            {/* Slots */}
+            {slots.map((slot, slotIndex) => {
+              const cellEvents = getCellEvents(slot.id, day);
+
+              return (
+                <div
+                  key={`${day}-${slot.id}`}
+                  className="grid-cell"
+                  style={{
+                    gridRow: dayIndex + 2,
+                    gridColumn: slotIndex + 2,
+                    position: "relative"
+                  }}
+                  onClick={() => openEventModal(slot.id, day)}
+                >
+                  <div className="routine-events">
+                    {cellEvents.map((ev) => (
+                      <div key={ev.id} className="routine-event">
+                        {ev.title}
+                      </div>
+                    ))}
+                  </div>
+
+                  <button
+                    className="routine-add-btn"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      openEventModal(slot.id, day);
+                    }}
+                  >
                     +
                   </button>
-                )}
-              </div>
-            ))}
-          </React.Fragment>
+                </div>
+              );
+            })}
+          </>
         ))}
-        {getOccupyingSlotBlocks().map((block) => (
-          <div
-            key={block.id}
-            className={`${block.inactive ? "routine-event-inactive" : "routine-event"}`}
-            style={{
-              gridRow: block.gridRow,
-              gridColumn: block.gridColumn,
-              display: "flex",
-              flexDirection: "column",
-              justifyContent: "center",
-              alignItems: "center",
-              cursor: block.inactive ? "default" : "pointer",
-            }}
-            onClick={() => {
-              if (!block.inactive) {
-                setSelectedEvent(block.eventRef);
-                setIsEditModalOpen(true);
-              }
-            }}
-          >
-            {block.content}
-          </div>
-        ))}
+
         <Modal
           isOpen={isEventModalOpen}
           onClose={() => setIsEventModalOpen(false)}
           title="Create Routine Event"
         >
           <CreateRoutineEvent
+            routineId={routine.id}
+            slotId={selectedSlotId}
+            dayOfWeek={selectedDay}
+            fromTable={selectedSubgroup ? "subgroups" : "groups"}
+            forUsers={selectedSubgroup || selectedGroup}
+            operationId={selectedOperation.id}
             slots={slots}
-              routineId={routine.id}
-              slotId={selectedSlotId}
-              dayOfWeek={selectedDay}
-              fromTable={selectedSubgroup ? "subgroups" : "groups"}
-              forUsers={selectedSubgroup || selectedGroup}
-              operationId={selectedOperation.id}
-              maxEndSlotId={getMaxEndSlotId(selectedSlotId, selectedDay)}
-              onSuccess={() => {
-              // Refresh events after creating
-              supabase
-                .from("recurring_events")
-                .select(`
-                  *,
-                  courses (
-                    id,
-                    name
-                  )
-                `)
-                .eq("routine_id", routine.id)
-                .then(({ data }) => setEvents(data || []));
-            }}
-          />
-        </Modal>
-        <Modal
-          isOpen={isEditModalOpen}
-          onClose={() => setIsEditModalOpen(false)}
-          title="Edit Routine Event"
-        >
-          <EditRoutineEvent
-            event={selectedEvent}
-            slots={slots}
-            maxEndSlotId={
-              selectedEvent
-                ? getMaxEndSlotId(
-                    selectedEvent.start_slot,
-                    selectedEvent.day_of_week,
-                    selectedEvent.id
-                  )
-                : null
-            }
+            maxEndSlotId={slots[slots.length - 1]?.id}
             onSuccess={() => {
-              setIsEditModalOpen(false);
-
-              // Refresh events
               supabase
                 .from("recurring_events")
-                .select(`
-                  *,
-                  courses (
-                    id,
-                    name
-                  )
-                `)
+                .select("*")
                 .eq("routine_id", routine.id)
                 .then(({ data }) => setEvents(data || []));
+
+              setIsEventModalOpen(false);
             }}
           />
         </Modal>
-        <Modal
-          isOpen={isGenerateModalOpen}
-          onClose={() => setIsGenerateModalOpen(false)}
-          title="Generate Routine Events"
-        >
-          <GenerateRoutineEvents
-            routineId={routine.id}
-            onSuccess={() => setIsGenerateModalOpen(false)}
-          />
-        </Modal>
 
-        <Modal
-          isOpen={isDeleteModalOpen}
-          onClose={() => setIsDeleteModalOpen(false)}
-          title="Delete Generated Events"
-        >
-          <DeleteRoutineEvents
-            routineId={routine.id}
-            onSuccess={() => setIsDeleteModalOpen(false)}
-          />
-        </Modal>
       </div>
     </div>
   );
