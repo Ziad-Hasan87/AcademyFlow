@@ -14,7 +14,11 @@ export default function EditRoutineEvent({ event, slots = [], maxEndSlotId, onSu
   const [courses, setCourses] = useState([]);
   const [selectedCourseId, setSelectedCourseId] = useState("");
   const [endSlotId, setEndSlotId] = useState("");
-  const [forUsersLabel, setForUsersLabel] = useState("");
+  const [fromTable, setFromTable] = useState("groups");
+  const [groups, setGroups] = useState([]);
+  const [subgroups, setSubgroups] = useState([]);
+  const [selectedGroupId, setSelectedGroupId] = useState("");
+  const [selectedSubgroupId, setSelectedSubgroupId] = useState("");
   const [startSlotLabel, setStartSlotLabel] = useState("");
   const [endSlotOptions, setEndSlotOptions] = useState([]);
 
@@ -48,8 +52,10 @@ export default function EditRoutineEvent({ event, slots = [], maxEndSlotId, onSu
     setIsReschedulable(eventData?.is_reschedulable ?? true);
     setSelectedCourseId(eventData?.course_id || "");
     setEndSlotId(eventData?.end_slot || "");
+    setFromTable(eventData?.from_table || "groups");
 
     // 2. Fetch routine → operation → courses
+    let routineProgramId = null;
     if (eventData?.routine_id) {
       const { data: routineData, error: routineError } = await supabase
         .from("routine")
@@ -59,6 +65,17 @@ export default function EditRoutineEvent({ event, slots = [], maxEndSlotId, onSu
 
       if (routineError) console.error("Error fetching routine:", routineError);
       else if (routineData?.operation_id) {
+        const { data: opData, error: opError } = await supabase
+          .from("operations")
+          .select("id, program_id")
+          .eq("id", routineData.operation_id)
+          .single();
+        if (opError) {
+          console.error("Error fetching operation:", opError);
+        } else {
+          routineProgramId = opData?.program_id || null;
+        }
+
         const { data: coursesData, error: coursesError } = await supabase
           .from("courses")
           .select("id, name")
@@ -68,22 +85,49 @@ export default function EditRoutineEvent({ event, slots = [], maxEndSlotId, onSu
       }
     }
 
-    // 3. Fetch forUsers label
-    if (eventData?.for_users && eventData?.from_table) {
-      if (eventData.from_table === "groups") {
-        const { data, error } = await supabase
-          .from("groups")
-          .select("name")
-          .eq("id", eventData.for_users)
-          .single();
-        if (!error) setForUsersLabel(data?.name || "");
-      } else if (eventData.from_table === "subgroups") {
-        const { data, error } = await supabase
+    // 3. Fetch groups and resolve selected group/subgroup from existing for_users
+    if (routineProgramId) {
+      const { data: groupsData, error: groupsError } = await supabase
+        .from("groups")
+        .select("id, name")
+        .eq("program_id", routineProgramId)
+        .order("name", { ascending: true });
+      if (groupsError) {
+        console.error("Error fetching groups:", groupsError);
+      } else {
+        setGroups(groupsData || []);
+      }
+    }
+
+    if (eventData?.for_users && eventData?.from_table === "groups") {
+      setSelectedGroupId(eventData.for_users);
+      setSelectedSubgroupId("");
+    }
+
+    if (eventData?.for_users && eventData?.from_table === "subgroups") {
+      const { data: subData, error: subError } = await supabase
+        .from("subgroups")
+        .select("id, name, group_id")
+        .eq("id", eventData.for_users)
+        .single();
+
+      if (subError) {
+        console.error("Error fetching selected subgroup:", subError);
+      } else if (subData?.group_id) {
+        setSelectedGroupId(subData.group_id);
+        setSelectedSubgroupId(subData.id);
+
+        const { data: subgroupOptions, error: subgroupOptionsError } = await supabase
           .from("subgroups")
-          .select("name")
-          .eq("id", eventData.for_users)
-          .single();
-        if (!error) setForUsersLabel(data?.name || "");
+          .select("id, name")
+          .eq("group_id", subData.group_id)
+          .order("name", { ascending: true });
+
+        if (subgroupOptionsError) {
+          console.error("Error fetching subgroups:", subgroupOptionsError);
+        } else {
+          setSubgroups(subgroupOptions || []);
+        }
       }
     }
 
@@ -124,9 +168,46 @@ export default function EditRoutineEvent({ event, slots = [], maxEndSlotId, onSu
     fetchEventDetails();
   }, [event, slots]);
 
+  useEffect(() => {
+    const fetchSubgroupsForGroup = async () => {
+      if (fromTable !== "subgroups" || !selectedGroupId) {
+        setSubgroups([]);
+        if (fromTable !== "subgroups") {
+          setSelectedSubgroupId("");
+        }
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from("subgroups")
+        .select("id, name")
+        .eq("group_id", selectedGroupId)
+        .order("name", { ascending: true });
+
+      if (error) {
+        console.error("Error fetching subgroups:", error);
+        setSubgroups([]);
+      } else {
+        setSubgroups(data || []);
+      }
+    };
+
+    fetchSubgroupsForGroup();
+  }, [fromTable, selectedGroupId]);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!title) return alert("Title is required");
+
+    let selectedForUsers = null;
+    if (fromTable === "groups") {
+      if (!selectedGroupId) return alert("Please select a group");
+      selectedForUsers = selectedGroupId;
+    } else if (fromTable === "subgroups") {
+      if (!selectedGroupId) return alert("Please select a group first");
+      if (!selectedSubgroupId) return alert("Please select a subgroup");
+      selectedForUsers = selectedSubgroupId;
+    }
 
     const { error } = await supabase
       .from("recurring_events")
@@ -138,6 +219,8 @@ export default function EditRoutineEvent({ event, slots = [], maxEndSlotId, onSu
         course_id: selectedCourseId || null,
         end_slot: endSlotId,
         is_reschedulable: isReschedulable,
+        from_table: fromTable,
+        for_users: selectedForUsers,
         updated_by: currentUserId,
       })
       .eq("id", event.id);
@@ -215,13 +298,64 @@ export default function EditRoutineEvent({ event, slots = [], maxEndSlotId, onSu
 
       <div className="form-field">
         <label>From Table</label>
-        <input type="text" className="form-input" value={event.from_table} readOnly style={{ backgroundColor: "#f0f0f0", color: "#555" }} />
+        <select
+          className="form-select"
+          value={fromTable}
+          onChange={(e) => {
+            const value = e.target.value;
+            setFromTable(value);
+            if (value === "groups") {
+              setSelectedSubgroupId("");
+            }
+          }}
+        >
+          <option value="groups">groups</option>
+          <option value="subgroups">subgroups</option>
+        </select>
       </div>
 
       <div className="form-field">
-        <label>For Users</label>
-        <input type="text" className="form-input" value={forUsersLabel} readOnly style={{ backgroundColor: "#f0f0f0", color: "#555" }} />
+        <label>Group</label>
+        <select
+          className="form-select"
+          value={selectedGroupId}
+          onChange={(e) => {
+            const nextGroupId = e.target.value;
+            setSelectedGroupId(nextGroupId);
+            if (fromTable === "subgroups") {
+              setSelectedSubgroupId("");
+            }
+          }}
+          required
+        >
+          <option value="">Select Group</option>
+          {groups.map((g) => (
+            <option key={g.id} value={g.id}>
+              {g.name}
+            </option>
+          ))}
+        </select>
       </div>
+
+      {fromTable === "subgroups" && (
+        <div className="form-field">
+          <label>Subgroup</label>
+          <select
+            className="form-select"
+            value={selectedSubgroupId}
+            onChange={(e) => setSelectedSubgroupId(e.target.value)}
+            required
+            disabled={!selectedGroupId}
+          >
+            <option value="">Select Subgroup</option>
+            {subgroups.map((sg) => (
+              <option key={sg.id} value={sg.id}>
+                {sg.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
 
       <div className="form-field">
         <label>Description</label>
