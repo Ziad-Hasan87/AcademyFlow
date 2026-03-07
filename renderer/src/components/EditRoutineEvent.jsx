@@ -2,12 +2,7 @@ import { useEffect, useState } from "react";
 import supabase from "../utils/supabase";
 import { useAuth } from "../contexts/AuthContext";
 
-export default function EditRoutineEvent({
-  event,
-  slots,
-  maxEndSlotId,
-  onSuccess,
-}) {
+export default function EditRoutineEvent({ event, slots = [], maxEndSlotId, onSuccess }) {
   const { userData } = useAuth();
   const currentUserId = userData?.id;
 
@@ -21,93 +16,113 @@ export default function EditRoutineEvent({
   const [endSlotId, setEndSlotId] = useState("");
   const [forUsersLabel, setForUsersLabel] = useState("");
   const [startSlotLabel, setStartSlotLabel] = useState("");
+  const [endSlotOptions, setEndSlotOptions] = useState([]);
 
-  // Pre-fill form with existing event data
-  useEffect(() => {
+  const formatTimeToAMPM = (time24) => {
+    if (!time24) return "";
+    const [hourStr, minute] = time24.split(":");
+    let hour = parseInt(hourStr, 10);
+    const ampm = hour >= 12 ? "PM" : "AM";
+    hour = hour % 12 || 12;
+    return `${hour}:${minute} ${ampm}`;
+  };
+
+  const fetchEventDetails = async () => {
     if (!event) return;
 
-    setTitle(event.title || "");
-    setDescription(event.description || "");
-    setRepeatEvery(event.repeat_every || 1);
-    setStartWeek(event.start_week || 1);
-    setIsReschedulable(event.is_reschedulable ?? true);
-    setSelectedCourseId(event.course_id || "");
-    setEndSlotId(event.end_slot);
-  }, [event]);
-
-  // Set slot labels
-  useEffect(() => {
-    if (!event || slots.length === 0) return;
-
-    const formatTimeToAMPM = (time24) => {
-      if (!time24) return "";
-      const [hourStr, minute] = time24.split(":");
-      let hour = parseInt(hourStr, 10);
-      const ampm = hour >= 12 ? "PM" : "AM";
-      hour = hour % 12 || 12;
-      return `${hour}:${minute} ${ampm}`;
-    };
-
-    const startSlot = slots.find((s) => s.id === event.start_slot);
-
-    if (startSlot) {
-      setStartSlotLabel(
-        `${startSlot.name} ${formatTimeToAMPM(startSlot.start)} - ${formatTimeToAMPM(startSlot.end)}`
-      );
+    // 1. Get the recurring event
+    const { data: eventData, error: eventError } = await supabase
+      .from("recurring_events")
+      .select("*")
+      .eq("id", event.id)
+      .single();
+    if (eventError) {
+      console.error("Error fetching event:", eventError);
+      return;
     }
 
-    // Fetch forUsers name
-    const fetchForUsersName = async () => {
-      if (event.from_table === "groups") {
-        const { data } = await supabase
+    setTitle(eventData?.title || "");
+    setDescription(eventData?.description || "");
+    setRepeatEvery(eventData?.repeat_every || 1);
+    setStartWeek(eventData?.start_week || 1);
+    setIsReschedulable(eventData?.is_reschedulable ?? true);
+    setSelectedCourseId(eventData?.course_id || "");
+    setEndSlotId(eventData?.end_slot || "");
+
+    // 2. Fetch routine → operation → courses
+    if (eventData?.routine_id) {
+      const { data: routineData, error: routineError } = await supabase
+        .from("routine")
+        .select("id, operation_id")
+        .eq("id", eventData.routine_id)
+        .single();
+
+      if (routineError) console.error("Error fetching routine:", routineError);
+      else if (routineData?.operation_id) {
+        const { data: coursesData, error: coursesError } = await supabase
+          .from("courses")
+          .select("id, name")
+          .eq("operation_id", routineData.operation_id);
+        if (!coursesError) setCourses(coursesData || []);
+        else console.error("Error fetching courses:", coursesError);
+      }
+    }
+
+    // 3. Fetch forUsers label
+    if (eventData?.for_users && eventData?.from_table) {
+      if (eventData.from_table === "groups") {
+        const { data, error } = await supabase
           .from("groups")
           .select("name")
-          .eq("id", event.for_users)
+          .eq("id", eventData.for_users)
           .single();
-        setForUsersLabel(data?.name || "");
-      } else if (event.from_table === "subgroups") {
-        const { data } = await supabase
+        if (!error) setForUsersLabel(data?.name || "");
+      } else if (eventData.from_table === "subgroups") {
+        const { data, error } = await supabase
           .from("subgroups")
           .select("name")
-          .eq("id", event.for_users)
+          .eq("id", eventData.for_users)
           .single();
-        setForUsersLabel(data?.name || "");
+        if (!error) setForUsersLabel(data?.name || "");
       }
-    };
+    }
 
-    fetchForUsersName();
-  }, [event, slots]);
+    // 4. Set start slot label and end slot options
+    if (slots.length > 0) {
+      console.log("Slots available:", slots);
+      const startSlot = slots.find((s) => s.id === eventData.start_slot);
+      if (startSlot) {
+        setStartSlotLabel(
+          `${startSlot.name} ${formatTimeToAMPM(startSlot.start)} - ${formatTimeToAMPM(startSlot.end)}`
+        );
 
-  // Fetch courses
+        const maxSerial = maxEndSlotId
+          ? slots.find((s) => s.id === maxEndSlotId)?.serial_no
+          : null;
+
+        const options = slots
+          .filter(
+            (s) =>
+              s.serial_no >= startSlot.serial_no &&
+              (!maxSerial || s.serial_no <= maxSerial)
+          )
+          .map((s) => ({ id: s.id, label: s.name }));
+
+        setEndSlotOptions(options);
+
+        // Pre-select endSlotId if not already set
+        if (!endSlotId && options.length > 0) setEndSlotId(options[0].id);
+      }
+    }
+    else {
+      console.warn("No slots available to set start slot label and end slot options.");
+    }
+  };
+
   useEffect(() => {
-    if (!event?.operation_id) return;
-
-    const fetchCourses = async () => {
-      const { data } = await supabase
-        .from("courses")
-        .select("id, name")
-        .eq("operation_id", event.operation_id);
-
-      setCourses(data || []);
-    };
-
-    fetchCourses();
-  }, [event]);
-
-  const startSlot = slots.find((s) => s.id === event.start_slot);
-  const maxSerial = slots.find((s) => s.id === maxEndSlotId)?.serial_no;
-
-  const endSlotOptions = slots
-    .filter((s) => {
-      if (!startSlot) return false;
-      if (s.serial_no < startSlot.serial_no) return false;
-      if (maxSerial && s.serial_no > maxSerial) return false;
-      return true;
-    })
-    .map((s) => ({
-      id: s.id,
-      label: `${s.name}`,
-    }));
+    if (!event) return;
+    fetchEventDetails();
+  }, [event, slots]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -130,28 +145,17 @@ export default function EditRoutineEvent({
     if (error) {
       console.error("Error updating routine event:", error);
       alert("Error updating event");
-    } else {
-      onSuccess?.();
-    }
+    } else onSuccess?.();
   };
+
   const handleDelete = async () => {
-    const confirmDelete = window.confirm(
-      "Are you sure you want to delete this event?"
-    );
+    if (!window.confirm("Are you sure you want to delete this event?")) return;
 
-    if (!confirmDelete) return;
-
-    const { error } = await supabase
-      .from("recurring_events")
-      .delete()
-      .eq("id", event.id);
-
+    const { error } = await supabase.from("recurring_events").delete().eq("id", event.id);
     if (error) {
       console.error("Error deleting routine event:", error);
       alert("Error deleting event");
-    } else {
-      onSuccess?.(); // refresh + close modal
-    }
+    } else onSuccess?.();
   };
 
   if (!event) return null;
@@ -160,187 +164,80 @@ export default function EditRoutineEvent({
     <form onSubmit={handleSubmit} className="form" style={{ width: "20vw" }}>
       <h2 className="form-title">Edit Routine Event</h2>
 
-      {/* Title */}
       <div className="form-field">
         <label>Title</label>
-        <input
-          type="text"
-          className="form-input"
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          required
-        />
+        <input type="text" className="form-input" value={title} onChange={(e) => setTitle(e.target.value)} required />
       </div>
 
-      {/* Type (read only) */}
       <div className="form-field">
         <label>Type</label>
-        <input
-          type="text"
-          className="form-input"
-          value="slot"
-          readOnly
-          style={{ backgroundColor: "#f0f0f0", color: "#555" }}
-        />
+        <input type="text" className="form-input" value="slot" readOnly style={{ backgroundColor: "#f0f0f0", color: "#555" }} />
       </div>
 
-      {/* Start Slot (read only) */}
       <div className="form-field">
         <label>Start Slot</label>
-        <input
-          type="text"
-          className="form-input"
-          value={startSlotLabel}
-          readOnly
-          style={{ backgroundColor: "#f0f0f0", color: "#555" }}
-        />
+        <input type="text" className="form-input" value={startSlotLabel} readOnly style={{ backgroundColor: "#f0f0f0", color: "#555" }} />
       </div>
 
-      {/* End Slot */}
       <div className="form-field">
         <label>End Slot</label>
-        <select
-          className="form-select"
-          value={endSlotId}
-          onChange={(e) => setEndSlotId(e.target.value)}
-        >
-          {endSlotOptions.map((s) => (
-            <option key={s.id} value={s.id}>
-              {s.label}
-            </option>
-          ))}
+        <select className="form-select" value={endSlotId} onChange={(e) => setEndSlotId(e.target.value)}>
+          {endSlotOptions.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
         </select>
       </div>
 
-      {/* Day of Week (read only) */}
       <div className="form-field">
         <label>Day of Week</label>
-        <input
-          type="text"
-          className="form-input"
-          value={event.day_of_week}
-          readOnly
-          style={{ backgroundColor: "#f0f0f0", color: "#555" }}
-        />
+        <input type="text" className="form-input" value={event.day_of_week} readOnly style={{ backgroundColor: "#f0f0f0", color: "#555" }} />
       </div>
 
-      {/* Repeat Every */}
       <div className="form-field">
         <label>Repeat Every</label>
-        <select
-          className="form-select"
-          value={repeatEvery}
-          onChange={(e) => setRepeatEvery(Number(e.target.value))}
-        >
-          {[1, 2, 3, 4, 5].map((v) => (
-            <option key={v} value={v}>
-              {v}
-            </option>
-          ))}
+        <select className="form-select" value={repeatEvery} onChange={(e) => setRepeatEvery(Number(e.target.value))}>
+          {[1,2,3,4,5].map(v => <option key={v} value={v}>{v}</option>)}
         </select>
       </div>
 
-      {/* Start Week */}
       <div className="form-field">
         <label>Start Week</label>
-        <select
-          className="form-select"
-          value={startWeek}
-          onChange={(e) => setStartWeek(Number(e.target.value))}
-        >
-          {[1, 2, 3, 4, 5].map((v) => (
-            <option key={v} value={v}>
-              {v}
-            </option>
-          ))}
+        <select className="form-select" value={startWeek} onChange={(e) => setStartWeek(Number(e.target.value))}>
+          {[1,2,3,4,5].map(v => <option key={v} value={v}>{v}</option>)}
         </select>
       </div>
 
-      {/* Course */}
       <div className="form-field">
         <label>Course</label>
-        <select
-          className="form-select"
-          value={selectedCourseId}
-          onChange={(e) => setSelectedCourseId(e.target.value)}
-        >
+        <select className="form-select" value={selectedCourseId} onChange={(e) => setSelectedCourseId(e.target.value)}>
           <option value="">None</option>
-          {courses.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.name}
-            </option>
-          ))}
+          {courses.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
       </div>
 
-      {/* From Table (read only) */}
       <div className="form-field">
         <label>From Table</label>
-        <input
-          type="text"
-          className="form-input"
-          value={event.from_table}
-          readOnly
-          style={{ backgroundColor: "#f0f0f0", color: "#555" }}
-        />
+        <input type="text" className="form-input" value={event.from_table} readOnly style={{ backgroundColor: "#f0f0f0", color: "#555" }} />
       </div>
 
-      {/* For Users (read only) */}
       <div className="form-field">
         <label>For Users</label>
-        <input
-          type="text"
-          className="form-input"
-          value={forUsersLabel}
-          readOnly
-          style={{ backgroundColor: "#f0f0f0", color: "#555" }}
-        />
+        <input type="text" className="form-input" value={forUsersLabel} readOnly style={{ backgroundColor: "#f0f0f0", color: "#555" }} />
       </div>
 
-      {/* Description */}
       <div className="form-field">
         <label>Description</label>
-        <textarea
-          className="form-input"
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-        />
+        <textarea className="form-input" value={description} onChange={(e) => setDescription(e.target.value)} />
       </div>
 
-      {/* Reschedulable */}
       <div className="form-field">
         <label>
-          <input
-            type="checkbox"
-            checked={isReschedulable}
-            onChange={(e) => setIsReschedulable(e.target.checked)}
-          />{" "}
-          Reschedulable
+          <input type="checkbox" checked={isReschedulable} onChange={(e) => setIsReschedulable(e.target.checked)} /> Reschedulable
         </label>
       </div>
 
-      {/* Buttons */}
       <div className="form-buttons" style={{ gap: "10px" }}>
-        <button type="submit" className="form-submit">
-          Update Event
-        </button>
-
-        <button
-          type="button"
-          className="form-cancel"
-          onClick={() => onSuccess?.()}
-        >
-          Cancel
-        </button>
-
-        <button
-          type="button"
-          className="form-cancel"
-          style={{ backgroundColor: "#d9534f", color: "white" }}
-          onClick={handleDelete}
-        >
-          Delete
-        </button>
+        <button type="submit" className="form-submit">Update Event</button>
+        <button type="button" className="form-cancel" onClick={() => onSuccess?.()}>Cancel</button>
+        <button type="button" className="form-cancel" style={{ backgroundColor: "#d9534f", color: "white" }} onClick={handleDelete}>Delete</button>
       </div>
     </form>
   );

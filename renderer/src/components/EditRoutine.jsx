@@ -3,6 +3,8 @@ import { fetchSlots, fetchGroups, fetchSubgroups } from "../utils/fetch";
 import Modal from "./Modal";
 import CreateRoutineEvent from "./CreateRoutineEvent";
 import supabase from "../utils/supabase";
+import EditRoutineEvent from "./EditRoutineEvent";
+import React from "react";
 
 export default function EditRoutine({ selectedOperation, routine, onClose }) {
   const [slots, setSlots] = useState([]);
@@ -10,6 +12,7 @@ export default function EditRoutine({ selectedOperation, routine, onClose }) {
   const [isEventModalOpen, setIsEventModalOpen] = useState(false);
   const [selectedSlotId, setSelectedSlotId] = useState(null);
   const [selectedDay, setSelectedDay] = useState(null);
+  const [editModalOpen, setEditModalOpen] = useState(false);
 
   const [groups, setGroups] = useState([]);
   const [selectedGroup, setSelectedGroup] = useState("");
@@ -19,6 +22,8 @@ export default function EditRoutine({ selectedOperation, routine, onClose }) {
   const [subgroups, setSubgroups] = useState([]);
   const [selectedSubgroup, setSelectedSubgroup] = useState("");
   const [loadingSubgroups, setLoadingSubgroups] = useState(false);
+
+  const [selectedEvent, setSelectedEvent] = useState(null);
 
   const days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
@@ -141,6 +146,25 @@ export default function EditRoutine({ selectedOperation, routine, onClose }) {
     setIsEventModalOpen(true);
   };
 
+  const getSpanningEvents = () => {
+    return events.map((ev) => {
+      const dayIndex = days.indexOf(ev.day_of_week);
+      const startIndex = slots.findIndex((s) => s.id === ev.start_slot);
+      const endIndex = slots.findIndex((s) => s.id === ev.end_slot);
+
+      if (dayIndex === -1 || startIndex === -1) return null;
+
+      const span = endIndex >= startIndex ? endIndex - startIndex + 1 : 1;
+
+      return {
+        id: ev.id,
+        title: ev.title,
+        gridRow: dayIndex + 2,
+        gridColumn: `${startIndex + 2} / span ${span}`,
+      };
+    }).filter(Boolean);
+  };
+
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", width: "100%" }}>
 
@@ -190,7 +214,8 @@ export default function EditRoutine({ selectedOperation, routine, onClose }) {
         style={{
           display: "grid",
           gridTemplateColumns: `7vw repeat(${slots.length}, 8vw)`,
-          gridTemplateRows: `5vh repeat(${days.length}, 8vh)`
+          gridTemplateRows: `5vh repeat(${days.length}, 8vh)`,
+          position: "relative"
         }}
       >
 
@@ -206,55 +231,90 @@ export default function EditRoutine({ selectedOperation, routine, onClose }) {
             </div>
           </div>
         ))}
+        {/* EVENT LAYER */}
+        {events.map((ev) => {
+          const dayIndex = days.indexOf(ev.day_of_week);
+          const startIndex = slots.findIndex((s) => s.id === ev.start_slot);
+          const endIndex = slots.findIndex((s) => s.id === ev.end_slot);
 
-        {/* Days + Cells */}
+          if (dayIndex === -1 || startIndex === -1) return null;
+
+          const span = endIndex >= startIndex ? endIndex - startIndex + 1 : 1;
+
+          return (
+            <div
+              key={ev.id}
+              className="routine-event"
+              style={{
+                gridRow: dayIndex + 2,
+                gridColumn: `${startIndex + 2} / span ${span}`,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                zIndex: 2,
+                cursor: "pointer"
+              }}
+              onClick={(e) => {
+                e.stopPropagation();
+                setSelectedEvent(ev);
+                setEditModalOpen(true);
+              }}
+            >
+              <div
+                style={{ pointerEvents: "auto", cursor: "pointer" }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setEditModalOpen(true);
+                }}
+              >
+                {ev.title}
+              </div>
+            </div>
+          );
+        })}
+        {/* Day labels + slot cells */}
         {days.map((day, dayIndex) => (
-          <>
+          <React.Fragment key={day}>
             {/* Day label */}
             <div
-              key={`day-${day}`}
               className="grid-cell header-cell"
               style={{ gridRow: dayIndex + 2, gridColumn: 1 }}
             >
               {day}
             </div>
 
-            {/* Slots */}
-            {slots.map((slot, slotIndex) => {
-              const cellEvents = getCellEvents(slot.id, day);
-
-              return (
-                <div
-                  key={`${day}-${slot.id}`}
-                  className="grid-cell"
+            {/* Slot cells */}
+            {slots.map((slot, slotIndex) => (
+              <div
+                key={`${day}-${slot.id}`}
+                className="grid-cell"
+                style={{
+                  gridRow: dayIndex + 2,
+                  gridColumn: slotIndex + 2,
+                  position: "relative",
+                  cursor: "pointer",
+                  zIndex: 1
+                }}
+                onClick={() => openEventModal(slot.id, day)}
+              >
+                <button
+                  className="routine-add-btn"
                   style={{
-                    gridRow: dayIndex + 2,
-                    gridColumn: slotIndex + 2,
-                    position: "relative"
+                    position: "absolute",
+                    top: "2px",
+                    right: "2px",
+                    zIndex: 10
                   }}
-                  onClick={() => openEventModal(slot.id, day)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    openEventModal(slot.id, day);
+                  }}
                 >
-                  <div className="routine-events">
-                    {cellEvents.map((ev) => (
-                      <div key={ev.id} className="routine-event">
-                        {ev.title}
-                      </div>
-                    ))}
-                  </div>
-
-                  <button
-                    className="routine-add-btn"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      openEventModal(slot.id, day);
-                    }}
-                  >
-                    +
-                  </button>
-                </div>
-              );
-            })}
-          </>
+                  +
+                </button>
+              </div>
+            ))}
+          </React.Fragment>
         ))}
 
         <Modal
@@ -283,6 +343,28 @@ export default function EditRoutine({ selectedOperation, routine, onClose }) {
           />
         </Modal>
 
+        <Modal
+          isOpen={editModalOpen}
+          onClose={() => setEditModalOpen(false)}
+          title="Edit Routine Event"
+        >
+          {selectedEvent && (
+            <EditRoutineEvent
+              event={selectedEvent}
+              slots={slots}
+              onClose={() => setEditModalOpen(false)}
+              maxEndSlotId={slots[slots.length-1]?.id}
+              onSuccess={() => {
+                supabase
+                  .from("recurring_events")
+                  .select("*")
+                  .eq("routine_id", routine.id)
+                  .then(({ data }) => setEvents(data || []));
+                setEditModalOpen(false);
+              }}
+            />
+          )}
+        </Modal>
       </div>
     </div>
   );
