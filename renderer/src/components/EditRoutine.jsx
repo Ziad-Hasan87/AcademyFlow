@@ -27,6 +27,13 @@ export default function EditRoutine({ selectedOperation, routine, onClose }) {
 
   const days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
+  const eventsByCell = {};
+  events.forEach((ev) => {
+    const key = `${ev.day_of_week}-${ev.start_slot}`;
+    if (!eventsByCell[key]) eventsByCell[key] = [];
+    eventsByCell[key].push(ev);
+  });
+
   // Fetch slots for the selected operation
   useEffect(() => {
     if (!selectedOperation) return;
@@ -232,48 +239,50 @@ export default function EditRoutine({ selectedOperation, routine, onClose }) {
             </div>
           </div>
         ))}
-        {/* EVENT LAYER */}
-        {events.map((ev) => {
-          const dayIndex = days.indexOf(ev.day_of_week);
-          const startIndex = slots.findIndex((s) => s.id === ev.start_slot);
-          const endIndex = slots.findIndex((s) => s.id === ev.end_slot);
+        {/* EVENTS LAYER */}
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            display: "grid",
+            gridTemplateColumns: `7vw repeat(${slots.length}, 8vw)`,
+            gridTemplateRows: `5vh repeat(${days.length}, 8vh)`,
+            zIndex: 1,
+            pointerEvents: "none"
+          }}
+        >
+          {events.map((ev) => {
+            const dayIndex = days.indexOf(ev.day_of_week);
+            const startIndex = slots.findIndex((s) => s.id === ev.start_slot);
+            const endIndex = slots.findIndex((s) => s.id === ev.end_slot);
 
-          if (dayIndex === -1 || startIndex === -1) return null;
+            if (dayIndex === -1 || startIndex === -1) return null;
 
-          const span = endIndex >= startIndex ? endIndex - startIndex + 1 : 1;
+            const span = Math.max(1, endIndex - startIndex + 1);
 
-          return (
-            <div
-              key={ev.id}
-              className="routine-event"
-              style={{
-                gridRow: dayIndex + 2,
-                gridColumn: `${startIndex + 2} / span ${span}`,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                zIndex: 2,
-                cursor: "pointer"
-              }}
-              onClick={(e) => {
-                e.stopPropagation();
-                setSelectedEvent(ev);
-                setEditModalOpen(true);
-              }}
-            >
+            return (
               <div
-                style={{ pointerEvents: "auto", cursor: "pointer" }}
+                key={ev.id}
+                className="routine-event"
+                style={{
+                  gridRow: dayIndex + 2,
+                  gridColumn: `${startIndex + 2} / span ${span}`,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  pointerEvents: "auto"
+                }}
                 onClick={(e) => {
                   e.stopPropagation();
+                  setSelectedEvent(ev);
                   setEditModalOpen(true);
                 }}
               >
                 {ev.title}
               </div>
-            </div>
-          );
-        })}
-        {/* Day labels + slot cells */}
+            );
+          })}
+        </div>
         {days.map((day, dayIndex) => (
           <React.Fragment key={day}>
             {/* Day label */}
@@ -304,7 +313,7 @@ export default function EditRoutine({ selectedOperation, routine, onClose }) {
                     position: "absolute",
                     top: "2px",
                     right: "2px",
-                    zIndex: 10
+                    zIndex: 100
                   }}
                   onClick={(e) => {
                     e.stopPropagation();
@@ -317,6 +326,9 @@ export default function EditRoutine({ selectedOperation, routine, onClose }) {
             ))}
           </React.Fragment>
         ))}
+        {/* EVENT LAYER */}
+
+        {/* Day labels + slot cells */}
 
         <Modal
           isOpen={isEventModalOpen}
