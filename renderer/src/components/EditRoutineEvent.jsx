@@ -1,250 +1,244 @@
 import { useEffect, useState } from "react";
 import supabase from "../utils/supabase";
 import { useAuth } from "../contexts/AuthContext";
-import { notifyRoutineEventChange } from "../utils/telegramNotifications";
 
-export default function EditRoutineEvent({
-  event,
-  slots,
-  maxEndSlotId,
-  operationId,
-  onSuccess,
-}) {
+export default function EditRoutineEvent({ event, slots = [], maxEndSlotId, onSuccess }) {
   const { userData } = useAuth();
-  const currentUserId = userData?.id;
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
+  const [repeatEvery, setRepeatEvery] = useState(1);
+  const [startWeek, setStartWeek] = useState(1);
   const [isReschedulable, setIsReschedulable] = useState(true);
+
   const [courses, setCourses] = useState([]);
   const [selectedCourseId, setSelectedCourseId] = useState("");
-  
-  // Single course fields
-  const [subgroupLabel, setSubgroupLabel] = useState("");
-  const [teachers, setTeachers] = useState([]);
-  const [selectedTeacherIds, setSelectedTeacherIds] = useState([]);
-  const [teacherCodenames, setTeacherCodenames] = useState("");
-  
-  const [actualDescription, setActualDescription] = useState("");
-  const [endSlotId, setEndSlotId] = useState("");
-  const [forUsersLabel, setForUsersLabel] = useState("");
-  const [startSlotLabel, setStartSlotLabel] = useState("");
 
-  // Pre-fill form with existing event data
-  useEffect(() => {
+  const [endSlotId, setEndSlotId] = useState("");
+  const [startSlotLabel, setStartSlotLabel] = useState("");
+  const [endSlotOptions, setEndSlotOptions] = useState([]);
+
+  const [fromTable, setFromTable] = useState("groups");
+
+  const [groups, setGroups] = useState([]);
+  const [subgroups, setSubgroups] = useState([]);
+
+  const [selectedGroupId, setSelectedGroupId] = useState("");
+  const [selectedSubgroupId, setSelectedSubgroupId] = useState("");
+
+  const formatTimeToAMPM = (time24) => {
+    if (!time24) return "";
+    const [hourStr, minute] = time24.split(":");
+    let hour = parseInt(hourStr, 10);
+    const ampm = hour >= 12 ? "PM" : "AM";
+    hour = hour % 12 || 12;
+    return `${hour}:${minute} ${ampm}`;
+  };
+
+  const fetchEventDetails = async () => {
     if (!event) return;
 
-    setTitle(event.title || "");
-    
-    // Parse description for metadata
-    try {
-      const descData = JSON.parse(event.description || "{}");
-      setSubgroupLabel(descData.subgroup || "");
-      setSelectedTeacherIds(descData.teachers || []);
-      setTeacherCodenames(descData.teacherCodenames || "");
-      setActualDescription(descData.description || "");
-    } catch {
-      // Not JSON, use as plain description
-      setActualDescription(event.description || "");
+    const { data: eventData, error } = await supabase
+      .from("recurring_events")
+      .select("*")
+      .eq("id", event.id)
+      .single();
+
+    if (error) {
+      console.error("Error fetching event:", error);
+      return;
     }
 
-    setIsReschedulable(event.is_reschedulable ?? true);
-    setSelectedCourseId(event.course_id || "");
-    setEndSlotId(event.end_slot);
+    setTitle(eventData?.title || "");
+    setDescription(eventData?.description || "");
+    setRepeatEvery(eventData?.repeat_every || 1);
+    setStartWeek(eventData?.start_week || 1);
+    setIsReschedulable(eventData?.is_reschedulable ?? true);
+    setSelectedCourseId(eventData?.course_id || "");
+    setEndSlotId(eventData?.end_slot || "");
+    setFromTable(eventData?.from_table || "groups");
+
+    let routineProgramId = null;
+
+    if (eventData?.routine_id) {
+      const { data: routineData } = await supabase
+        .from("routine")
+        .select("operation_id")
+        .eq("id", eventData.routine_id)
+        .single();
+
+      if (routineData?.operation_id) {
+
+        const { data: opData } = await supabase
+          .from("operations")
+          .select("program_id")
+          .eq("id", routineData.operation_id)
+          .single();
+
+        routineProgramId = opData?.program_id || null;
+
+        const { data: coursesData } = await supabase
+          .from("courses")
+          .select("id,name")
+          .eq("operation_id", routineData.operation_id);
+
+        setCourses(coursesData || []);
+      }
+    }
+
+    if (routineProgramId) {
+      const { data: groupsData } = await supabase
+        .from("groups")
+        .select("id,name")
+        .eq("program_id", routineProgramId)
+        .order("name");
+
+      setGroups(groupsData || []);
+    }
+
+    if (eventData?.for_users && eventData?.from_table === "groups") {
+      setSelectedGroupId(eventData.for_users);
+      setSelectedSubgroupId("");
+    }
+
+    if (eventData?.for_users && eventData?.from_table === "subgroups") {
+
+      const { data: subData } = await supabase
+        .from("subgroups")
+        .select("id,name,group_id")
+        .eq("id", eventData.for_users)
+        .single();
+
+      if (subData?.group_id) {
+
+        setSelectedGroupId(subData.group_id);
+        setSelectedSubgroupId(subData.id);
+
+        const { data: subgroupOptions } = await supabase
+          .from("subgroups")
+          .select("id,name")
+          .eq("group_id", subData.group_id)
+          .order("name");
+
+        setSubgroups(subgroupOptions || []);
+      }
+    }
+  };
+
+  useEffect(() => {
+    fetchEventDetails();
   }, [event]);
 
-  // Set slot labels
   useEffect(() => {
-    if (!event || slots.length === 0) return;
-
-    const formatTimeToAMPM = (time24) => {
-      if (!time24) return "";
-      const [hourStr, minute] = time24.split(":");
-      let hour = parseInt(hourStr, 10);
-      const ampm = hour >= 12 ? "PM" : "AM";
-      hour = hour % 12 || 12;
-      return `${hour}:${minute} ${ampm}`;
-    };
+    if (!slots.length || !event) return;
 
     const startSlot = slots.find((s) => s.id === event.start_slot);
 
-    if (startSlot) {
-      setStartSlotLabel(
-        `${startSlot.name} ${formatTimeToAMPM(startSlot.start)} - ${formatTimeToAMPM(startSlot.end)}`
-      );
-    }
-
-    // Fetch forUsers name
-    const fetchForUsersName = async () => {
-      if (event.from_table === "groups") {
-        const { data } = await supabase
-          .from("groups")
-          .select("name")
-          .eq("id", event.for_users)
-          .single();
-        setForUsersLabel(data?.name || "");
-      } else if (event.from_table === "subgroups") {
-        const { data } = await supabase
-          .from("subgroups")
-          .select("name")
-          .eq("id", event.for_users)
-          .single();
-        setForUsersLabel(data?.name || "");
-      }
-    };
-
-    fetchForUsersName();
-  }, [event, slots]);
-
-  // Fetch courses
-  useEffect(() => {
-    if (!operationId) return;
-
-    const fetchCourses = async () => {
-      const { data } = await supabase
-        .from("courses")
-        .select("id, name")
-        .eq("operation_id", operationId);
-
-      setCourses(data || []);
-    };
-
-    fetchCourses();
-  }, [operationId]);
-
-  // Auto-update title when courses, subgroups, or teachers change
-  useEffect(() => {
-    if (selectedCourseId) {
-      const course = courses.find(c => c.id === selectedCourseId);
-      if (course) {
-        let newTitle = course.name;
-        if (subgroupLabel) newTitle += ` (${subgroupLabel})`;
-        if (teacherCodenames) newTitle += ` (${teacherCodenames})`;
-        setTitle(newTitle);
-      }
-    }
-  }, [selectedCourseId, subgroupLabel, teacherCodenames, courses]);
-
-  // Fetch teachers for the selected course
-  useEffect(() => {
-    if (!selectedCourseId) {
-      setTeachers([]);
+    if (!startSlot) {
+      console.warn("Start slot not found");
       return;
     }
-    const fetchTeachers = async () => {
-      const { data: modsData, error: modsError } = await supabase
-        .from("course_moderators")
-        .select("user_id")
-        .eq("course_id", selectedCourseId);
-      if (modsError) {
-        console.error("Error fetching course moderators:", modsError);
+
+    setStartSlotLabel(
+      `${startSlot.name} ${formatTimeToAMPM(startSlot.start)} - ${formatTimeToAMPM(startSlot.end)}`
+    );
+
+    const maxSerial = maxEndSlotId
+      ? slots.find((s) => s.id === maxEndSlotId)?.serial_no
+      : null;
+
+    const options = slots
+      .filter(
+        (s) =>
+          s.serial_no >= startSlot.serial_no &&
+          (!maxSerial || s.serial_no <= maxSerial)
+      )
+      .map((s) => ({
+        id: s.id,
+        label: `${s.name} ${formatTimeToAMPM(s.start)} - ${formatTimeToAMPM(s.end)}`
+      }));
+
+    setEndSlotOptions(options);
+
+  }, [slots, event, maxEndSlotId]);
+
+  useEffect(() => {
+
+    const fetchSubgroups = async () => {
+
+      if (fromTable !== "subgroups" || !selectedGroupId) {
+        setSubgroups([]);
+        setSelectedSubgroupId("");
         return;
       }
-      const userIds = (modsData || []).map((m) => m.user_id);
-      if (userIds.length === 0) {
-        setTeachers([]);
-        return;
-      }
-      const [{ data: usersData }, { data: staffsData }] = await Promise.all([
-        supabase.from("users").select("id, name").in("id", userIds),
-        supabase.from("staffs").select("id, codename").in("id", userIds),
-      ]);
-      setTeachers(
-        (usersData || []).map((u) => ({
-          id: u.id,
-          name: u.name,
-          codename: staffsData?.find((s) => s.id === u.id)?.codename || "",
-        }))
-      );
+
+      const { data } = await supabase
+        .from("subgroups")
+        .select("id,name")
+        .eq("group_id", selectedGroupId)
+        .order("name");
+
+      setSubgroups(data || []);
     };
-    fetchTeachers();
-  }, [selectedCourseId]);
 
-  const startSlot = slots.find((s) => s.id === event.start_slot);
-  const maxSerial = slots.find((s) => s.id === maxEndSlotId)?.serial_no;
+    fetchSubgroups();
 
-  const endSlotOptions = slots
-    .filter((s) => {
-      if (!startSlot) return false;
-      if (s.serial_no < startSlot.serial_no) return false;
-      if (maxSerial && s.serial_no > maxSerial) return false;
-      return true;
-    })
-    .map((s) => ({
-      id: s.id,
-      label: `${s.name}`,
-    }));
+  }, [fromTable, selectedGroupId]);
 
   const handleSubmit = async (e) => {
+
     e.preventDefault();
+
     if (!title) return alert("Title is required");
 
-    // Build title with single course
-    const course = courses.find(c => c.id === selectedCourseId);
-    let eventTitle = "";
-    if (course) {
-      eventTitle = course.name;
-      if (subgroupLabel) eventTitle += ` (${subgroupLabel})`;
-      if (teacherCodenames) eventTitle += ` (${teacherCodenames})`;
+    let selectedForUsers = null;
+
+    if (fromTable === "groups") {
+
+      if (!selectedGroupId) return alert("Select a group");
+
+      selectedForUsers = selectedGroupId;
     }
 
-    // Build description with single-course metadata
-    const descriptionData = {
-      subgroup: subgroupLabel,
-      teachers: selectedTeacherIds,
-      teacherCodenames: teacherCodenames,
-      description: actualDescription
-    };
-    const finalDescription = JSON.stringify(descriptionData);
+    if (fromTable === "subgroups") {
+
+      if (!selectedGroupId) return alert("Select group first");
+
+      if (!selectedSubgroupId) return alert("Select subgroup");
+
+      selectedForUsers = selectedSubgroupId;
+    }
 
     const { error } = await supabase
       .from("recurring_events")
       .update({
-        title: eventTitle,
-        description: finalDescription,
-        repeat_every: 1,
-        start_week: 1,
+        title,
+        description,
+        repeat_every: repeatEvery,
+        start_week: startWeek,
         course_id: selectedCourseId || null,
         end_slot: endSlotId,
         is_reschedulable: isReschedulable,
+        from_table: fromTable,
+        for_users: selectedForUsers
       })
       .eq("id", event.id);
 
     if (error) {
-      console.error("Error updating routine event:", error);
-      alert("Error updating event");
-    } else {
-      const endSlot = slots.find((s) => s.id === endSlotId);
-      const selectedCourse = courses.find((c) => c.id === selectedCourseId);
-      const actorName = userData?.name || userData?.email || currentUserId || "Unknown user";
 
-      notifyRoutineEventChange({
-        action: "Updated",
-        actor: actorName,
-        eventData: {
-          title,
-          courseName: selectedCourse?.name,
-          dayOfWeek: event.day_of_week,
-          startSlot: slots.find((s) => s.id === event.start_slot)?.name,
-          endSlot: endSlot?.name,
-          targetType: event.from_table,
-          targetName: forUsersLabel,
-          description: actualDescription,
-          teachers: teacherCodenames
-        }
-      }).catch((notifyError) => {
-        console.warn("Routine event updated but Telegram notification failed:", notifyError);
-      });
+      console.error("Error updating event:", error);
+
+      alert("Error updating event");
+
+    } else {
 
       onSuccess?.();
     }
   };
-  const handleDelete = async () => {
-    const confirmDelete = window.confirm(
-      "Are you sure you want to delete this event?"
-    );
 
-    if (!confirmDelete) return;
+  const handleDelete = async () => {
+
+    if (!window.confirm("Delete this event?")) return;
 
     const { error } = await supabase
       .from("recurring_events")
@@ -252,29 +246,14 @@ export default function EditRoutineEvent({
       .eq("id", event.id);
 
     if (error) {
-      console.error("Error deleting routine event:", error);
+
+      console.error("Delete error:", error);
+
       alert("Error deleting event");
+
     } else {
-      const actorName = userData?.name || userData?.email || currentUserId || "Unknown user";
 
-      notifyRoutineEventChange({
-        action: "Deleted",
-        actor: actorName,
-        eventData: {
-          title: event.title,
-          courseName: event.courses?.name,
-          dayOfWeek: event.day_of_week,
-          startSlot: slots.find((s) => s.id === event.start_slot)?.name,
-          endSlot: slots.find((s) => s.id === event.end_slot)?.name,
-          targetType: event.from_table,
-          targetName: forUsersLabel,
-          description: event.description
-        }
-      }).catch((notifyError) => {
-        console.warn("Routine event deleted but Telegram notification failed:", notifyError);
-      });
-
-      onSuccess?.(); // refresh + close modal
+      onSuccess?.();
     }
   };
 
@@ -282,45 +261,29 @@ export default function EditRoutineEvent({
 
   return (
     <form onSubmit={handleSubmit} className="form" style={{ width: "20vw" }}>
+
       <h2 className="form-title">Edit Routine Event</h2>
 
-      {/* Title (auto-generated from course + subgroup) */}
       <div className="form-field">
-        <label>Title (Course Name)</label>
+        <label>Title</label>
         <input
-          type="text"
           className="form-input"
           value={title}
-          readOnly
-          style={{ backgroundColor: "#f0f0f0", color: "#555" }}
+          onChange={(e) => setTitle(e.target.value)}
+          required
         />
       </div>
 
-      {/* Type (read only) */}
-      <div className="form-field">
-        <label>Type</label>
-        <input
-          type="text"
-          className="form-input"
-          value="slot"
-          readOnly
-          style={{ backgroundColor: "#f0f0f0", color: "#555" }}
-        />
-      </div>
-
-      {/* Start Slot (read only) */}
       <div className="form-field">
         <label>Start Slot</label>
         <input
-          type="text"
           className="form-input"
           value={startSlotLabel}
           readOnly
-          style={{ backgroundColor: "#f0f0f0", color: "#555" }}
+          style={{ background: "#f0f0f0" }}
         />
       </div>
 
-      {/* End Slot */}
       <div className="form-field">
         <label>End Slot</label>
         <select
@@ -336,131 +299,107 @@ export default function EditRoutineEvent({
         </select>
       </div>
 
-      {/* Day of Week (read only) */}
       <div className="form-field">
-        <label>Day of Week</label>
+        <label>Day</label>
         <input
-          type="text"
           className="form-input"
           value={event.day_of_week}
           readOnly
-          style={{ backgroundColor: "#f0f0f0", color: "#555" }}
+          style={{ background: "#f0f0f0" }}
         />
       </div>
 
-      {/* Course */}
+      <div className="form-field">
+        <label>Repeat Every</label>
+        <select
+          className="form-select"
+          value={repeatEvery}
+          onChange={(e) => setRepeatEvery(Number(e.target.value))}
+        >
+          {[1,2,3,4,5].map(v=>(
+            <option key={v} value={v}>{v}</option>
+          ))}
+        </select>
+      </div>
+
       <div className="form-field">
         <label>Course</label>
         <select
           className="form-select"
           value={selectedCourseId}
-          onChange={(e) => setSelectedCourseId(e.target.value)}
-          required
+          onChange={(e)=>setSelectedCourseId(e.target.value)}
         >
-          <option value="">Select Course</option>
-          {courses.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.name}
-            </option>
+          <option value="">None</option>
+          {courses.map(c=>(
+            <option key={c.id} value={c.id}>{c.name}</option>
           ))}
         </select>
       </div>
 
-      {/* Subgroup */}
-      {selectedCourseId && (
-        <div className="form-field">
-          <label>Subgroup (optional)</label>
-          <input
-            type="text"
-            className="form-input"
-            value={subgroupLabel}
-            onChange={(e) => setSubgroupLabel(e.target.value)}
-            placeholder="e.g., B1/B2"
-          />
-        </div>
-      )}
-
-      {/* Teachers */}
-      {selectedCourseId && teachers.length > 0 && (
-        <div className="form-field">
-          <label>Teachers</label>
-          <div style={{ maxHeight: "150px", overflowY: "auto", border: "1px solid #ccc", padding: "8px", borderRadius: "4px" }}>
-            {teachers.map((t) => (
-              <label key={t.id} style={{ display: "block", marginBottom: "6px", cursor: "pointer" }}>
-                <input
-                  type="checkbox"
-                  checked={selectedTeacherIds.includes(t.id)}
-                  onChange={(e) => {
-                    let newIds;
-                    if (e.target.checked) {
-                      newIds = [...selectedTeacherIds, t.id];
-                    } else {
-                      newIds = selectedTeacherIds.filter(id => id !== t.id);
-                    }
-                    setSelectedTeacherIds(newIds);
-                    
-                    // Update teacher codenames
-                    const selectedTeachers = teachers.filter(teacher => newIds.includes(teacher.id));
-                    const codenames = selectedTeachers.map(teacher => teacher.codename).filter(Boolean);
-                    setTeacherCodenames(codenames.join(" + "));
-                  }}
-                />
-                {" "}{t.name}{t.codename ? ` (${t.codename})` : ""}
-              </label>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* From Table (read only) */}
       <div className="form-field">
         <label>From Table</label>
-        <input
-          type="text"
-          className="form-input"
-          value={event.from_table}
-          readOnly
-          style={{ backgroundColor: "#f0f0f0", color: "#555" }}
-        />
+        <select
+          className="form-select"
+          value={fromTable}
+          onChange={(e)=>setFromTable(e.target.value)}
+        >
+          <option value="groups">groups</option>
+          <option value="subgroups">subgroups</option>
+        </select>
       </div>
 
-      {/* For Users (read only) */}
       <div className="form-field">
-        <label>For Users</label>
-        <input
-          type="text"
-          className="form-input"
-          value={forUsersLabel}
-          readOnly
-          style={{ backgroundColor: "#f0f0f0", color: "#555" }}
-        />
+        <label>Group</label>
+        <select
+          className="form-select"
+          value={selectedGroupId}
+          onChange={(e)=>setSelectedGroupId(e.target.value)}
+        >
+          <option value="">Select Group</option>
+          {groups.map(g=>(
+            <option key={g.id} value={g.id}>{g.name}</option>
+          ))}
+        </select>
       </div>
 
-      {/* Description */}
+      {fromTable==="subgroups" && (
+        <div className="form-field">
+          <label>Subgroup</label>
+          <select
+            className="form-select"
+            value={selectedSubgroupId}
+            onChange={(e)=>setSelectedSubgroupId(e.target.value)}
+          >
+            <option value="">Select Subgroup</option>
+            {subgroups.map(sg=>(
+              <option key={sg.id} value={sg.id}>{sg.name}</option>
+            ))}
+          </select>
+        </div>
+      )}
+
       <div className="form-field">
         <label>Description</label>
         <textarea
           className="form-input"
-          value={actualDescription}
-          onChange={(e) => setActualDescription(e.target.value)}
+          value={description}
+          onChange={(e)=>setDescription(e.target.value)}
         />
       </div>
 
-      {/* Reschedulable */}
       <div className="form-field">
         <label>
           <input
             type="checkbox"
             checked={isReschedulable}
-            onChange={(e) => setIsReschedulable(e.target.checked)}
-          />{" "}
+            onChange={(e)=>setIsReschedulable(e.target.checked)}
+          />
           Reschedulable
         </label>
       </div>
 
-      {/* Buttons */}
       <div className="form-buttons" style={{ gap: "10px" }}>
-        <button type="submit" className="form-submit">
+        <button className="form-submit" type="submit">
           Update Event
         </button>
 
@@ -475,12 +414,13 @@ export default function EditRoutineEvent({
         <button
           type="button"
           className="form-cancel"
-          style={{ backgroundColor: "#d9534f", color: "white" }}
+          style={{ background: "#d9534f", color: "white" }}
           onClick={handleDelete}
         >
           Delete
         </button>
       </div>
+
     </form>
   );
 }

@@ -184,7 +184,7 @@ html, body, #root {
 }
 
 .grid-cell {
-  border: 1px solid #eee;
+  border: 1px solid rgba(200, 200, 200, 0.5);
   padding: 6px;
   position: relative;
 }
@@ -195,6 +195,7 @@ html, body, #root {
   padding: 6px;
   z-index: 2;
   font-size: 1em;
+  border: 1px solid darkgreen;
 
   display: flex;
   flex-direction: column;
