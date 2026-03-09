@@ -80,52 +80,50 @@ export default function EditRoutine({ selectedOperation, routine, onClose }) {
     }
   }, [groups, selectedGroup]);
 
-  useEffect(() => {
+  const loadRoutineEvents = async () => {
     if (!routine?.id) return;
 
-    const fetchRoutineEvents = async () => {
-      let rpcName = "";
-      let params = {};
+    try {
+      let data = null;
+      let error = null;
 
-      if (selectedGroup && !selectedSubgroup) {
-        // Only group selected
-        rpcName = "getgrouproutine";
-        params = { p_group_id: selectedGroup };
-      } else if (selectedSubgroup) {
-        // Subgroup selected
-        rpcName = "getsubgrouproutine";
-        params = { p_subgroup_id: selectedSubgroup };
-      } else {
-        // Neither group nor subgroup selected, fallback to all routine events
-        const { data, error } = await supabase
+      if (selectedSubgroup) {
+        ({ data, error } = await supabase.rpc("getsubgrouproutine", {
+          p_subgroup_id: selectedSubgroup,
+        }));
+      }
+      else if (selectedGroup) {
+        ({ data, error } = await supabase.rpc("getgrouproutine", {
+          p_group_id: selectedGroup,
+        }));
+      }
+      else {
+        ({ data, error } = await supabase
           .from("recurring_events")
           .select("*")
-          .eq("routine_id", routine.id);
+          .eq("routine_id", routine.id));
+      }
 
-        if (error) {
-          console.error("Error fetching routine events:", error);
-          setEvents([]);
-        } else {
-          setEvents(data || []);
-        }
+      if (error) {
+        console.error("Error fetching routine events:", error);
+        setEvents([]);
         return;
       }
 
-      // Call the RPC function
-      const { data, error } = await supabase.rpc(rpcName, params);
+      // ensure routine filter always applies
+      const filtered = (data || []).filter(e => e.routine_id === routine.id);
 
-      if (error) {
-        console.error(`Error fetching events from ${rpcName}:`, error);
-        setEvents([]);
-      } else {
-        // Optional: filter only events for the current routine
-        const filtered = data.filter((e) => e.routine_id === routine.id);
-        setEvents(filtered || []);
-      }
-    };
+      setEvents(filtered);
+    } catch (err) {
+      console.error("Unexpected error loading routine events:", err);
+      setEvents([]);
+    }
+  };
 
-    fetchRoutineEvents();
-  }, [routine, selectedGroup, selectedSubgroup]);
+  useEffect(() => {
+    if (!routine?.id) return;
+    loadRoutineEvents();
+  }, [routine?.id, selectedGroup, selectedSubgroup]);
 
   // Format 24h to AM/PM
   const formatTimeToAMPM = (time24) => {
@@ -176,7 +174,10 @@ export default function EditRoutine({ selectedOperation, routine, onClose }) {
             <select
               className="form-select"
               value={selectedGroup}
-              onChange={(e) => setSelectedGroup(e.target.value)}
+              onChange={(e) => {
+                setSelectedGroup(e.target.value);
+                setSelectedSubgroup("");
+              }}
             >
               <option value="">All Groups</option>
               {groups.map((grp) => (
@@ -332,12 +333,7 @@ export default function EditRoutine({ selectedOperation, routine, onClose }) {
             slots={slots}
             maxEndSlotId={slots[slots.length - 1]?.id}
             onSuccess={() => {
-              supabase
-                .from("recurring_events")
-                .select("*")
-                .eq("routine_id", routine.id)
-                .then(({ data }) => setEvents(data || []));
-
+              loadRoutineEvents();
               setIsEventModalOpen(false);
             }}
           />
@@ -353,13 +349,9 @@ export default function EditRoutine({ selectedOperation, routine, onClose }) {
               event={selectedEvent}
               slots={slots}
               onClose={() => setEditModalOpen(false)}
-              maxEndSlotId={slots[slots.length-1]?.id}
+              maxEndSlotId={slots[slots.length - 1]?.id}
               onSuccess={() => {
-                supabase
-                  .from("recurring_events")
-                  .select("*")
-                  .eq("routine_id", routine.id)
-                  .then(({ data }) => setEvents(data || []));
+                loadRoutineEvents();
                 setEditModalOpen(false);
               }}
             />
