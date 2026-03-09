@@ -10,6 +10,7 @@ import MainContent from "../components/MainContent";
 import CreateRoutineModal from "../components/CreateRoutine"; // ✅ import modal
 import IconSidebar from "../components/IconSidebar"; // ✅ import icon sidebar
 import Toast from "../components/Toast";
+import Chatbot from "../components/Chatbot";
 
 export default function AppLayout() {
   const [leftWidth, setLeftWidth] = useState(240);
@@ -85,6 +86,9 @@ export default function AppLayout() {
 
       {/* Toast Notifications */}
       <Toast />
+
+      {/* AI Chatbot */}
+      <Chatbot />
     </>
   );
 }
