@@ -169,6 +169,58 @@ export default function EditRoutine({ selectedOperation, routine, onClose }) {
       };
     }).filter(Boolean);
   };
+  function computeEventLanes(events, slots, days) {
+    const lanesByDay = {};
+
+    days.forEach((day) => {
+      const dayEvents = events
+        .filter((e) => e.day_of_week === day)
+        .sort((a, b) => {
+          const sa = slots.findIndex((s) => s.id === a.start_slot);
+          const sb = slots.findIndex((s) => s.id === b.start_slot);
+          return sa - sb;
+        });
+
+      const lanes = [];
+
+      dayEvents.forEach((ev) => {
+        const start = slots.findIndex((s) => s.id === ev.start_slot);
+        const end = slots.findIndex((s) => s.id === ev.end_slot);
+
+        let placed = false;
+
+        for (let lane of lanes) {
+          const overlap = lane.some((existing) => {
+            const es = slots.findIndex((s) => s.id === existing.start_slot);
+            const ee = slots.findIndex((s) => s.id === existing.end_slot);
+
+            return !(end < es || start > ee);
+          });
+
+          if (!overlap) {
+            lane.push(ev);
+            ev._lane = lanes.indexOf(lane);
+            placed = true;
+            break;
+          }
+        }
+
+        if (!placed) {
+          lanes.push([ev]);
+          ev._lane = lanes.length - 1;
+        }
+      });
+
+      lanesByDay[day] = lanes.length || 1;
+    });
+
+    return lanesByDay;
+  }
+  const lanesByDay = computeEventLanes(events, slots, days);
+  const gridRows = [
+    "5vh",
+    ...days.map((day) => `${lanesByDay[day] * 8}vh`)
+  ].join(" ");
 
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", width: "100%" }}>
@@ -222,7 +274,7 @@ export default function EditRoutine({ selectedOperation, routine, onClose }) {
         style={{
           display: "grid",
           gridTemplateColumns: `7vw repeat(${slots.length}, 8vw)`,
-          gridTemplateRows: `5vh repeat(${days.length}, 8vh)`,
+          gridTemplateRows: gridRows,
           position: "relative"
         }}
       >
@@ -240,49 +292,45 @@ export default function EditRoutine({ selectedOperation, routine, onClose }) {
           </div>
         ))}
         {/* EVENTS LAYER */}
-        <div
-          style={{
-            position: "absolute",
-            inset: 0,
-            display: "grid",
-            gridTemplateColumns: `7vw repeat(${slots.length}, 8vw)`,
-            gridTemplateRows: `5vh repeat(${days.length}, 8vh)`,
-            zIndex: 1,
-            pointerEvents: "none"
-          }}
-        >
-          {events.map((ev) => {
-            const dayIndex = days.indexOf(ev.day_of_week);
-            const startIndex = slots.findIndex((s) => s.id === ev.start_slot);
-            const endIndex = slots.findIndex((s) => s.id === ev.end_slot);
 
-            if (dayIndex === -1 || startIndex === -1) return null;
+        {events.map((ev) => {
+          const dayIndex = days.indexOf(ev.day_of_week);
+          const startIndex = slots.findIndex((s) => s.id === ev.start_slot);
+          const endIndex = slots.findIndex((s) => s.id === ev.end_slot);
 
-            const span = Math.max(1, endIndex - startIndex + 1);
+          if (dayIndex === -1 || startIndex === -1) return null;
 
-            return (
-              <div
-                key={ev.id}
-                className="routine-event"
-                style={{
-                  gridRow: dayIndex + 2,
-                  gridColumn: `${startIndex + 2} / span ${span}`,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  pointerEvents: "auto"
-                }}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setSelectedEvent(ev);
-                  setEditModalOpen(true);
-                }}
-              >
-                {ev.title}
-              </div>
-            );
-          })}
-        </div>
+          const span = Math.max(1, endIndex - startIndex + 1);
+          const laneHeight = 8;
+          const topOffset = ev._lane * laneHeight;
+
+          return (
+            <div
+              key={ev.id}
+              className="routine-event"
+              style={{
+                gridRow: dayIndex + 2,
+                gridColumn: `${startIndex + 2} / span ${span}`,
+                alignSelf: "start",
+                marginTop: `${topOffset}vh`,
+                height: `${laneHeight}vh`,
+                pointerEvents: "auto",
+                position: "relative",
+                zIndex: 5
+              }}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                e.nativeEvent.stopImmediatePropagation();
+
+                setSelectedEvent(ev);
+                setEditModalOpen(true);
+              }}
+            >
+              {ev.title}
+            </div>
+          );
+        })}
         {days.map((day, dayIndex) => (
           <React.Fragment key={day}>
             {/* Day label */}
@@ -302,33 +350,50 @@ export default function EditRoutine({ selectedOperation, routine, onClose }) {
                   gridRow: dayIndex + 2,
                   gridColumn: slotIndex + 2,
                   position: "relative",
-                  cursor: "pointer",
-                  zIndex: 1
+                  pointerEvents: "none", // click-through
                 }}
-                onClick={() => openEventModal(slot.id, day)}
-              >
-                <button
-                  className="routine-add-btn"
-                  style={{
-                    position: "absolute",
-                    top: "2px",
-                    right: "2px",
-                    zIndex: 100
-                  }}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    openEventModal(slot.id, day);
-                  }}
-                >
-                  +
-                </button>
-              </div>
+              />
             ))}
           </React.Fragment>
         ))}
-        {/* EVENT LAYER */}
 
-        {/* Day labels + slot cells */}
+        <div
+          style={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            display: "grid",
+            gridTemplateColumns: `7vw repeat(${slots.length}, 8vw)`,
+            gridTemplateRows: gridRows,
+            width: "100%",
+            height: "100%",
+            pointerEvents: "none", // allow click-through by default
+          }}
+        >
+          {days.map((day, dayIndex) =>
+            slots.map((slot, slotIndex) => (
+              <button
+                key={`${day}-${slot.id}-btn`}
+                style={{
+                  gridRow: dayIndex + 2,
+                  gridColumn: slotIndex + 2,
+                  position: "relative",
+                  top: "2px",
+                  right: "2px",
+                  width: "20px",
+                  height: "20px",
+                  backgroundColor: "cyan",
+                  borderRadius: "5%",
+                  pointerEvents: "auto", // enable click
+                  zIndex: 100,
+                }}
+                onClick={() => openEventModal(slot.id, day)}
+              >
+                +
+              </button>
+            ))
+          )}
+        </div>
 
         <Modal
           isOpen={isEventModalOpen}
