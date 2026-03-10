@@ -10,7 +10,7 @@ import {
 } from "../utils/fetch";
 import { useAuth } from "../contexts/AuthContext";
 
-export default function BottomSidebar({ height, startDate, endDate, onEventsFetched }) {
+export default function BottomSidebar({ height, startDate, endDate, onEventsFetched, onSelectedOperation }) {
     const { userData } = useAuth();
     const currentInstituteId = userData?.institute_id;
 

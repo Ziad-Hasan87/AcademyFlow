@@ -10,6 +10,7 @@ import MainContent from "../components/MainContent";
 import CreateRoutineModal from "../components/CreateRoutine"; // ✅ import modal
 import IconSidebar from "../components/IconSidebar"; // ✅ import icon sidebar
 import Toast from "../components/Toast";
+
 import Chatbot from "../components/Chatbot";
 
 export default function AppLayout() {
@@ -25,6 +26,7 @@ export default function AppLayout() {
   const [endOfWeek, setEndOfWeek] = useState(null);
 
   const [events, setEvents] = useState([]);
+  const [slectedOperation, setSelectedOperation] = useState(null);
 
   const setWeekRange = (start, end) => {
     setStartOfWeek(start);
@@ -65,6 +67,7 @@ export default function AppLayout() {
             startDate={startOfWeek}
             endDate={endOfWeek}
             onEventsFetched={setEvents}
+            onSelectedOperation={setSelectedOperation}
           />
         </div>
 
