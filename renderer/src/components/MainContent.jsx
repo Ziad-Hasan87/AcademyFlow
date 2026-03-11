@@ -1,15 +1,26 @@
-import React from "react";
+import React, { useEffect, useMemo, useState } from "react";
+import { useAuth } from "../contexts/AuthContext";
+import { fetchSlots } from "../utils/fetch";
 
-export default function MainContent({ events }) {
-  const slots = [
-    // You can dynamically pass slots too, for now a default sample
-    { id: "1", name: "Slot 1", start: "08:00", end: "09:00" },
-    { id: "2", name: "Slot 2", start: "09:00", end: "10:00" },
-    { id: "3", name: "Slot 3", start: "10:00", end: "11:00" },
-    { id: "4", name: "Slot 4", start: "11:00", end: "12:00" },
+export default function MainContent({ events, onCreateEvent }) {
+  const { userData } = useAuth();
+  const [slots, setSlots] = useState([]);
+
+  const days = [
+    "Sunday",
+    "Monday",
+    "Tuesday",
+    "Wednesday",
+    "Thursday",
+    "Friday",
+    "Saturday",
   ];
 
-  const days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+  useEffect(() => {
+    if (userData?.institute_id) {
+      fetchSlots(userData.institute_id, setSlots);
+    }
+  }, [userData]);
 
   const formatTimeToAMPM = (time24) => {
     if (!time24) return "";
@@ -20,74 +31,119 @@ export default function MainContent({ events }) {
     return `${hour}:${minute} ${ampm}`;
   };
 
-  // Compute lanes to avoid overlap
+  // slot index lookup (fast)
+  const slotIndexMap = useMemo(() => {
+    const map = {};
+    slots.forEach((slot, i) => {
+      map[slot.id] = i;
+    });
+    return map;
+  }, [slots]);
+
+  // derive weekday from event.date
+  const eventsWithDay = useMemo(() => {
+    return events.map((ev) => {
+      if (!ev.date) return { ...ev, _day: null };
+
+      const day = new Date(ev.date).toLocaleDateString("en-US", {
+        weekday: "long",
+      });
+
+      return { ...ev, _day: day };
+    });
+  }, [events]);
+
   function computeEventLanes(events, slots, days) {
     const lanesByDay = {};
+    const positionedEvents = [];
 
     days.forEach((day) => {
       const dayEvents = events
-        .filter((e) => e.start_slot && e.start_slot !== "" && e.day === day)
-        .sort((a, b) => slots.findIndex(s => s.id === a.start_slot) - slots.findIndex(s => s.id === b.start_slot));
+        .filter((e) => e.start_slot && e._day === day)
+        .sort(
+          (a, b) =>
+            slotIndexMap[a.start_slot] - slotIndexMap[b.start_slot]
+        );
 
       const lanes = [];
 
       dayEvents.forEach((ev) => {
-        const start = slots.findIndex((s) => s.id === ev.start_slot);
-        const end = slots.findIndex((s) => s.id === ev.end_slot);
+        const start = slotIndexMap[ev.start_slot];
+        const end = slotIndexMap[ev.end_slot];
 
-        let placed = false;
+        let laneIndex = -1;
 
-        for (let lane of lanes) {
+        for (let i = 0; i < lanes.length; i++) {
+          const lane = lanes[i];
+
           const overlap = lane.some((existing) => {
-            const es = slots.findIndex((s) => s.id === existing.start_slot);
-            const ee = slots.findIndex((s) => s.id === existing.end_slot);
+            const es = slotIndexMap[existing.start_slot];
+            const ee = slotIndexMap[existing.end_slot];
             return !(end < es || start > ee);
           });
 
           if (!overlap) {
             lane.push(ev);
-            ev._lane = lanes.indexOf(lane);
-            placed = true;
+            laneIndex = i;
             break;
           }
         }
 
-        if (!placed) {
+        if (laneIndex === -1) {
           lanes.push([ev]);
-          ev._lane = lanes.length - 1;
+          laneIndex = lanes.length - 1;
         }
+
+        positionedEvents.push({
+          ...ev,
+          _lane: laneIndex,
+        });
       });
 
       lanesByDay[day] = lanes.length || 1;
     });
 
-    return lanesByDay;
+    return { lanesByDay, positionedEvents };
   }
 
-  const lanesByDay = computeEventLanes(events, slots, days);
+  const { lanesByDay, positionedEvents } = computeEventLanes(
+    eventsWithDay,
+    slots,
+    days
+  );
 
-  const gridRows = ["5vh", ...days.map(day => `${lanesByDay[day] * 8}vh`)].join(" ");
+  const gridRows = [
+    "5vh",
+    ...days.map((day) => `${lanesByDay[day] * 8}vh`),
+  ].join(" ");
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", width: "100%" }}>
+    <div
+      className="main-content"
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        width: "100%",
+        height: "100%",
+      }}
+    >
       <h1>Main Content</h1>
-
-      {events.length === 0 && <p>No events loaded</p>}
 
       <div
         className="timetable-grid"
         style={{
           display: "grid",
-          gridTemplateColumns: `7vw repeat(${slots.length}, 8vw)`,
+          gridTemplateColumns: `repeat(${slots.length + 1}, 1fr)`,
           gridTemplateRows: gridRows,
           position: "relative",
-          width: "100%",
+          width: "100%"
         }}
       >
-        {/* Top-left empty cell */}
+        {/* top-left */}
         <div className="grid-cell header-cell"></div>
 
-        {/* Slot headers */}
+        {/* slot headers */}
         {slots.map((slot) => (
           <div key={slot.id} className="grid-cell header-cell">
             <div>{slot.name}</div>
@@ -97,15 +153,16 @@ export default function MainContent({ events }) {
           </div>
         ))}
 
-        {/* Day labels and empty cells */}
+        {/* grid cells */}
         {days.map((day, dayIndex) => (
           <React.Fragment key={day}>
-            {/* Day label */}
-            <div className="grid-cell header-cell" style={{ gridRow: dayIndex + 2, gridColumn: 1 }}>
+            <div
+              className="grid-cell header-cell"
+              style={{ gridRow: dayIndex + 2, gridColumn: 1 }}
+            >
               {day}
             </div>
 
-            {/* Empty cells */}
             {slots.map((slot, slotIndex) => (
               <div
                 key={`${day}-${slot.id}`}
@@ -113,20 +170,20 @@ export default function MainContent({ events }) {
                 style={{
                   gridRow: dayIndex + 2,
                   gridColumn: slotIndex + 2,
-                  position: "relative",
+                  pointerEvents: "none",
                 }}
               />
             ))}
           </React.Fragment>
         ))}
 
-        {/* Events */}
-        {events.map((ev) => {
-          const dayIndex = days.indexOf(ev.day);
-          const startIndex = slots.findIndex((s) => s.id === ev.start_slot);
-          const endIndex = slots.findIndex((s) => s.id === ev.end_slot);
+        {/* EVENTS */}
+        {positionedEvents.map((ev) => {
+          const dayIndex = days.indexOf(ev._day);
+          const startIndex = slotIndexMap[ev.start_slot];
+          const endIndex = slotIndexMap[ev.end_slot];
 
-          if (dayIndex === -1 || startIndex === -1) return null;
+          if (dayIndex === -1 || startIndex === undefined) return null;
 
           const span = Math.max(1, endIndex - startIndex + 1);
           const laneHeight = 8;
@@ -146,15 +203,61 @@ export default function MainContent({ events }) {
                 zIndex: 5,
                 backgroundColor: "#90cdf4",
                 borderRadius: "4px",
-                padding: "2px",
+                padding: "4px",
                 fontSize: "0.8em",
                 overflow: "hidden",
+                cursor: "pointer",
               }}
+              onClick={() =>
+                console.log(`Clicked event ${ev.title} on ${ev._day} at slot ${ev.start_slot}`)
+              }
             >
               {ev.title}
             </div>
           );
         })}
+
+        {/* + BUTTON LAYER */}
+        <div
+          style={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            display: "grid",
+            gridTemplateColumns: `repeat(${slots.length + 1}, 1fr)`,
+            gridTemplateRows: gridRows,
+            width: "100%",
+            height: "100%",
+            pointerEvents: "none",
+          }}
+        >
+          {days.map((day, dayIndex) =>
+            slots.map((slot) => (
+              <button
+                key={`${day}-${slot.id}-btn`}
+                style={{
+                  gridRow: dayIndex + 2,
+                  gridColumn: slotIndexMap[slot.id] + 2,
+                  width: "20px",
+                  height: "20px",
+                  marginTop: "2px",
+                  marginLeft: "2px",
+                  borderRadius: "4px",
+                  border: "none",
+                  background: "#00e5ff",
+                  cursor: "pointer",
+                  pointerEvents: "auto",
+                  zIndex: 20,
+                }}
+                onClick={() =>
+                  console.log(`Create event for ${day} at slot ${slot.name}`)
+                }
+              >
+                +
+              </button>
+            ))
+          )}
+        </div>
       </div>
     </div>
   );

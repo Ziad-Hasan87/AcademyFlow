@@ -300,10 +300,12 @@ html, body, #root {
 
 /* Main content area */
 .main-content {
-  flex: 1; /* fills remaining horizontal space */
+  flex: 1;
   background: #f5f5f7;
   padding: 12px;
-  overflow: auto;
+
+  overflow: auto;   /* scroll here */
+  min-height: 0;    /* VERY IMPORTANT for flex scrolling */
 }
 
 /* Bottom sidebar */

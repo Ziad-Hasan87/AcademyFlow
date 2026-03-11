@@ -1,5 +1,5 @@
 import supabase from "./supabase";
-
+import { useAuth } from "../contexts/AuthContext";
 
 export async function fetchDepartments(currentInstituteId, deptQuery, setDeptResults, setLoadingDepts) {
     setLoadingDepts(true);
@@ -50,16 +50,15 @@ export async function fetchOperations(programId, operationQuery, setOperationRes
     setLoadingOperations(false);
 };
 
-export async function fetchSlots(operationId, setSlots) {
-    if (!operationId || operationId === 'null' || operationId === 'undefined') {
+export async function fetchSlots(instituteId, setSlots) {
+    if (!instituteId || instituteId === 'null' || instituteId === 'undefined') {
         setSlots([]);
         return;
     }
-
     const { data, error } = await supabase
     .from("slotinfo")
     .select("*")
-    .eq("operation_id", operationId)
+    .eq("institute_id", instituteId)
     .order("serial_no");
 
     if (error) {

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useAuth } from "../contexts/AuthContext";
 import { fetchSlots, fetchGroups, fetchSubgroups } from "../utils/fetch";
 import Modal from "./Modal";
 import CreateRoutineEvent from "./CreateRoutineEvent";
@@ -7,6 +8,9 @@ import EditRoutineEvent from "./EditRoutineEvent";
 import React from "react";
 
 export default function EditRoutine({ selectedOperation, routine, onClose }) {
+
+  const { userData } = useAuth();
+
   const [slots, setSlots] = useState([]);
   const [events, setEvents] = useState([]);
   const [isEventModalOpen, setIsEventModalOpen] = useState(false);
@@ -37,8 +41,8 @@ export default function EditRoutine({ selectedOperation, routine, onClose }) {
   // Fetch slots for the selected operation
   useEffect(() => {
     if (!selectedOperation) return;
-    fetchSlots(selectedOperation.id, setSlots);
-  }, [selectedOperation]);
+    fetchSlots(userData.institute_id, setSlots);
+  }, []);
 
   // Fetch program ID from the operation
   useEffect(() => {

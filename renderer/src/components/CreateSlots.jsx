@@ -3,7 +3,7 @@ import supabase from "../utils/supabase";
 import { showToast } from "../utils/toast";
 import { useAuth } from "../contexts/AuthContext";
 
-export default function CreateSlots({ operationId, onSuccess }) {
+export default function CreateSlots({ onSuccess }) {
   const { userData } = useAuth();
 
   const [form, setForm] = useState({
@@ -18,7 +18,7 @@ export default function CreateSlots({ operationId, onSuccess }) {
 
     const { error } = await supabase.from("slotinfo").insert([
       {
-        operation_id: operationId,
+        institute_id: userData.institute_id,
         serial_no: form.serial_no,
         name: form.name,
         start: form.start,
