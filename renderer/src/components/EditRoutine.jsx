@@ -5,11 +5,15 @@ import Modal from "./Modal";
 import CreateRoutineEvent from "./CreateRoutineEvent";
 import supabase from "../utils/supabase";
 import EditRoutineEvent from "./EditRoutineEvent";
+import GenerateRoutineEvents from "./GenerateRoutineEvents";
+import DeleteRoutineEvents from "./DeleteRoutineEvents";
 import React from "react";
 
 export default function EditRoutine({ selectedOperation, routine, onClose }) {
 
   const { userData } = useAuth();
+  const [isGenerateModalOpen, setIsGenerateModalOpen] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
 
   const [slots, setSlots] = useState([]);
   const [events, setEvents] = useState([]);
@@ -271,7 +275,22 @@ export default function EditRoutine({ selectedOperation, routine, onClose }) {
           </div>
         )}
       </div>
+      <div style={{ display: "flex", gap: "15px", marginBottom: "20px" }}>
+        <button
+          className="form-submit"
+          onClick={() => setIsGenerateModalOpen(true)}
+        >
+          Generate
+        </button>
 
+        <button
+          className="form-cancel"
+          style={{ backgroundColor: "#d9534f", color: "white" }}
+          onClick={() => setIsDeleteModalOpen(true)}
+        >
+          Delete
+        </button>
+      </div>
       {/* Timetable Grid */}
       <div
         className="timetable-grid"
@@ -439,6 +458,27 @@ export default function EditRoutine({ selectedOperation, routine, onClose }) {
           )}
         </Modal>
       </div>
+      <Modal
+        isOpen={isGenerateModalOpen}
+        onClose={() => setIsGenerateModalOpen(false)}
+        title="Generate Routine Events"
+      >
+        <GenerateRoutineEvents
+          routineId={routine.id}
+          onSuccess={() => setIsGenerateModalOpen(false)}
+        />
+      </Modal>
+
+      <Modal
+        isOpen={isDeleteModalOpen}
+        onClose={() => setIsDeleteModalOpen(false)}
+        title="Delete Generated Events"
+      >
+        <DeleteRoutineEvents
+          routineId={routine.id}
+          onSuccess={() => setIsDeleteModalOpen(false)}
+        />
+      </Modal>
     </div>
   );
 }

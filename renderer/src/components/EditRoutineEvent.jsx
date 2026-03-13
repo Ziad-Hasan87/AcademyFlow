@@ -316,8 +316,23 @@ export default function EditRoutineEvent({ event, slots = [], maxEndSlotId, onSu
           value={repeatEvery}
           onChange={(e) => setRepeatEvery(Number(e.target.value))}
         >
-          {[1,2,3,4,5].map(v=>(
+          {[1, 2, 3, 4, 5].map(v => (
             <option key={v} value={v}>{v}</option>
+          ))}
+        </select>
+      </div>
+      {/* Start Week */}
+      <div className="form-field">
+        <label>Start Week</label>
+        <select
+          className="form-select"
+          value={startWeek}
+          onChange={(e) => setStartWeek(Number(e.target.value))}
+        >
+          {[1, 2, 3, 4, 5].map((week) => (
+            <option key={week} value={week}>
+              Week {week}
+            </option>
           ))}
         </select>
       </div>
@@ -327,10 +342,10 @@ export default function EditRoutineEvent({ event, slots = [], maxEndSlotId, onSu
         <select
           className="form-select"
           value={selectedCourseId}
-          onChange={(e)=>setSelectedCourseId(e.target.value)}
+          onChange={(e) => setSelectedCourseId(e.target.value)}
         >
           <option value="">None</option>
-          {courses.map(c=>(
+          {courses.map(c => (
             <option key={c.id} value={c.id}>{c.name}</option>
           ))}
         </select>
@@ -341,7 +356,7 @@ export default function EditRoutineEvent({ event, slots = [], maxEndSlotId, onSu
         <select
           className="form-select"
           value={fromTable}
-          onChange={(e)=>setFromTable(e.target.value)}
+          onChange={(e) => setFromTable(e.target.value)}
         >
           <option value="groups">groups</option>
           <option value="subgroups">subgroups</option>
@@ -353,25 +368,25 @@ export default function EditRoutineEvent({ event, slots = [], maxEndSlotId, onSu
         <select
           className="form-select"
           value={selectedGroupId}
-          onChange={(e)=>setSelectedGroupId(e.target.value)}
+          onChange={(e) => setSelectedGroupId(e.target.value)}
         >
           <option value="">Select Group</option>
-          {groups.map(g=>(
+          {groups.map(g => (
             <option key={g.id} value={g.id}>{g.name}</option>
           ))}
         </select>
       </div>
 
-      {fromTable==="subgroups" && (
+      {fromTable === "subgroups" && (
         <div className="form-field">
           <label>Subgroup</label>
           <select
             className="form-select"
             value={selectedSubgroupId}
-            onChange={(e)=>setSelectedSubgroupId(e.target.value)}
+            onChange={(e) => setSelectedSubgroupId(e.target.value)}
           >
             <option value="">Select Subgroup</option>
-            {subgroups.map(sg=>(
+            {subgroups.map(sg => (
               <option key={sg.id} value={sg.id}>{sg.name}</option>
             ))}
           </select>
@@ -383,7 +398,7 @@ export default function EditRoutineEvent({ event, slots = [], maxEndSlotId, onSu
         <textarea
           className="form-input"
           value={description}
-          onChange={(e)=>setDescription(e.target.value)}
+          onChange={(e) => setDescription(e.target.value)}
         />
       </div>
 
@@ -392,7 +407,7 @@ export default function EditRoutineEvent({ event, slots = [], maxEndSlotId, onSu
           <input
             type="checkbox"
             checked={isReschedulable}
-            onChange={(e)=>setIsReschedulable(e.target.checked)}
+            onChange={(e) => setIsReschedulable(e.target.checked)}
           />
           Reschedulable
         </label>

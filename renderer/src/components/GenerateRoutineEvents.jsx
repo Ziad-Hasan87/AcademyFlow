@@ -120,6 +120,11 @@ export default function GenerateRoutineEvents({ routineId, onSuccess }) {
                 const dateString =
                     current.toISOString().split("T")[0];
 
+                const weekNumber =
+                    Math.floor(
+                        (current - start) / (1000 * 60 * 60 * 24 * 7)
+                    ) + 1;
+
                 const eventsForDay =
                     recurringEvents.filter(
                         (e) =>
@@ -127,6 +132,18 @@ export default function GenerateRoutineEvents({ routineId, onSuccess }) {
                     );
 
                 for (const recurring of eventsForDay) {
+
+                    const weekNumber =
+                        Math.floor(
+                            (current - start) / (1000 * 60 * 60 * 24 * 7)
+                        ) + 1;
+
+                    const n = recurring.repeat_every || 1;
+                    const m = recurring.start_week || 1;
+
+                    if (weekNumber < m) continue;
+
+                    if ((weekNumber - m) % n !== 0) continue;
 
                     const isVacation = vacations.some((vac) => {
 
@@ -178,36 +195,23 @@ export default function GenerateRoutineEvents({ routineId, onSuccess }) {
                             );
 
                         eventsToInsert.push({
-
                             title: recurring.title,
                             type: recurring.type,
-
                             start_at: startAt,
                             end_at: endAt,
-
                             start_slot: recurring.start_slot,
                             end_slot: recurring.end_slot,
-
                             description: recurring.description,
-
                             routine_id: routineId,
-
-                            is_reschedulable:
-                                recurring.is_reschedulable,
-
+                            is_reschedulable: recurring.is_reschedulable,
                             for_users: recurring.for_users,
                             from_table: recurring.from_table,
-
                             course_id: recurring.course_id,
-
-                            institute_id:
-                                recurring.institute_id,
-
-                            created_by:
-                                recurring.created_by,
-
+                            institute_id: recurring.institute_id,
+                            created_by: recurring.created_by,
                             date: dateString
                         });
+
                     }
                 }
 

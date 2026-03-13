@@ -7,7 +7,7 @@ export default function HorizontalResizer({ onDrag }) {
 
     const onMouseMove = (e) => {
       const dy = e.clientY - startY;
-      startY = e.clientY; // update startY
+      startY = e.clientY;
       onDrag(dy);
     };
 

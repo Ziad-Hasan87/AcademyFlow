@@ -24,22 +24,24 @@ export default function CreateRoutineEvent({
   const [courses, setCourses] = useState([]);
   const [selectedCourseId, setSelectedCourseId] = useState(""); // First course
   const [selectedCourseId2, setSelectedCourseId2] = useState(""); // Second optional course
-  
+
   // Course 1 fields
   const [subgroupLabel1, setSubgroupLabel1] = useState("");
   const [teachers1, setTeachers1] = useState([]);
   const [selectedTeacherIds1, setSelectedTeacherIds1] = useState([]);
   const [teacherCodenames1, setTeacherCodenames1] = useState("");
-  
+
   // Course 2 fields
   const [subgroupLabel2, setSubgroupLabel2] = useState("");
   const [teachers2, setTeachers2] = useState([]);
   const [selectedTeacherIds2, setSelectedTeacherIds2] = useState([]);
   const [teacherCodenames2, setTeacherCodenames2] = useState("");
-  
+
   const [actualDescription, setActualDescription] = useState("");
   const [endSlotId, setEndSlotId] = useState("");
   const [forUsersLabel, setForUsersLabel] = useState("");
+  const [startWeek, setStartWeek] = useState(1);
+  const [repeatEvery, setRepeatEvery] = useState(1);
 
   useEffect(() => {
     const fetchForUsersName = async () => {
@@ -190,7 +192,7 @@ export default function CreateRoutineEvent({
   // Auto-update title when courses, subgroups, or teachers change
   useEffect(() => {
     const titleParts = [];
-    
+
     if (selectedCourseId) {
       const course1 = courses.find(c => c.id === selectedCourseId);
       if (course1) {
@@ -200,7 +202,7 @@ export default function CreateRoutineEvent({
         titleParts.push(line1);
       }
     }
-    
+
     if (selectedCourseId2) {
       const course2 = courses.find(c => c.id === selectedCourseId2);
       if (course2) {
@@ -210,7 +212,7 @@ export default function CreateRoutineEvent({
         titleParts.push(line2);
       }
     }
-    
+
     setTitle(titleParts.join(" | "));
   }, [selectedCourseId, selectedCourseId2, subgroupLabel1, subgroupLabel2, teacherCodenames1, teacherCodenames2, courses]);
 
@@ -237,7 +239,7 @@ export default function CreateRoutineEvent({
       }
     }
     const eventTitle = titleParts.join(" | ");
-    
+
     // Build description with metadata for both courses
     const descriptionData = {
       course1: {
@@ -265,8 +267,8 @@ export default function CreateRoutineEvent({
       start_slot: slotId,
       end_slot: endSlotId,
       day_of_week: dayOfWeek,
-      repeat_every: 1,
-      start_week: 1,
+      repeat_every: repeatEvery,
+      start_week: startWeek,
       course_id: selectedCourseId, // Primary course
       institute_id: currentInstituteId,
       created_by: currentUserId,
@@ -335,7 +337,7 @@ export default function CreateRoutineEvent({
           className="form-input"
           value="slot"
           readOnly
-          style={{ backgroundColor: "#f0f0f0", color: "#555"}}
+          style={{ backgroundColor: "#f0f0f0", color: "#555" }}
         />
       </div>
 
@@ -347,7 +349,7 @@ export default function CreateRoutineEvent({
           className="form-input"
           value={startSlotLabel}
           readOnly
-          style={{ backgroundColor: "#f0f0f0", color: "#555"}}
+          style={{ backgroundColor: "#f0f0f0", color: "#555" }}
         />
       </div>
 
@@ -375,8 +377,38 @@ export default function CreateRoutineEvent({
           className="form-input"
           value={dayOfWeek}
           readOnly
-          style={{ backgroundColor: "#f0f0f0", color: "#555"}}
+          style={{ backgroundColor: "#f0f0f0", color: "#555" }}
         />
+      </div>
+      {/* Repeat Every */}
+      <div className="form-field">
+        <label>Repeat Every (Weeks)</label>
+        <select
+          className="form-select"
+          value={repeatEvery}
+          onChange={(e) => setRepeatEvery(Number(e.target.value))}
+        >
+          {[1, 2, 3, 4, 5].map((num) => (
+            <option key={num} value={num}>
+              {num} Week{num > 1 ? "s" : ""}
+            </option>
+          ))}
+        </select>
+      </div>
+      {/* Start Week */}
+      <div className="form-field">
+        <label>Start Week</label>
+        <select
+          className="form-select"
+          value={startWeek}
+          onChange={(e) => setStartWeek(Number(e.target.value))}
+        >
+          {[1, 2, 3, 4, 5].map((week) => (
+            <option key={week} value={week}>
+              Week {week}
+            </option>
+          ))}
+        </select>
       </div>
 
       {/* Course 1 */}
@@ -429,7 +461,7 @@ export default function CreateRoutineEvent({
                       newIds = selectedTeacherIds1.filter(id => id !== t.id);
                     }
                     setSelectedTeacherIds1(newIds);
-                    
+
                     // Update teacher codenames
                     const selectedTeachers = teachers1.filter(teacher => newIds.includes(teacher.id));
                     const codenames = selectedTeachers.map(teacher => teacher.codename).filter(Boolean);
@@ -492,7 +524,7 @@ export default function CreateRoutineEvent({
                       newIds = selectedTeacherIds2.filter(id => id !== t.id);
                     }
                     setSelectedTeacherIds2(newIds);
-                    
+
                     // Update teacher codenames
                     const selectedTeachers = teachers2.filter(teacher => newIds.includes(teacher.id));
                     const codenames = selectedTeachers.map(teacher => teacher.codename).filter(Boolean);
@@ -514,7 +546,7 @@ export default function CreateRoutineEvent({
           className="form-input"
           value={fromTable}
           readOnly
-          style={{ backgroundColor: "#f0f0f0", color: "#555"}}
+          style={{ backgroundColor: "#f0f0f0", color: "#555" }}
         />
       </div>
       {/* For Users */}
@@ -525,7 +557,7 @@ export default function CreateRoutineEvent({
           className="form-input"
           value={forUsersLabel}
           readOnly
-          style={{ backgroundColor: "#f0f0f0", color: "#555"}}
+          style={{ backgroundColor: "#f0f0f0", color: "#555" }}
         />
       </div>
 
