@@ -291,11 +291,14 @@ html, body, #root {
 }
 .sidebar-right {
   flex-shrink: 0;
-  width: 300px; /* default width, controlled by state */
+  width: 300px;
   height: 100%;
   background: #ffffff;
   border-left: 1px solid #e0e0e0;
-  overflow: auto;
+
+  display: flex;           /* ADD */
+  flex-direction: column;  /* ADD */
+  overflow: hidden;        /* CHANGE */
 }
 
 /* Main content area */
@@ -406,8 +409,14 @@ html, body, #root {
 .monthly-calendar-container {
   display: flex;
   flex-direction: column;
-  height:max-content;
-  overflow: hidden;
+
+  flex-shrink: 0;
+}
+.right-sidebar-scroll {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+  padding: 0px 10px 0px 10px;
 }
 
 .calendar-controls {

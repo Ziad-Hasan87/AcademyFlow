@@ -1,10 +1,13 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useAuth } from "../contexts/AuthContext";
 import { fetchSlots } from "../utils/fetch";
+import Modal from "./Modal";
+import CreateEvent from "./CreateEvent";
 
-export default function MainContent({ events, onCreateEvent }) {
+export default function MainContent({ events, onCreateEvent, onSelectEvent }) {
   const { userData } = useAuth();
   const [slots, setSlots] = useState([]);
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
 
   const days = [
     "Sunday",
@@ -209,7 +212,7 @@ export default function MainContent({ events, onCreateEvent }) {
                 cursor: "pointer",
               }}
               onClick={() =>
-                console.log(`Clicked event ${ev.title} on ${ev._day} at slot ${ev.start_slot}`)
+                onSelectEvent(ev)
               }
             >
               {ev.title}
@@ -250,7 +253,7 @@ export default function MainContent({ events, onCreateEvent }) {
                   zIndex: 20,
                 }}
                 onClick={() =>
-                  console.log(`Create event for ${day} at slot ${slot.name}`)
+                  setIsCreateOpen(true)
                 }
               >
                 +
@@ -259,6 +262,15 @@ export default function MainContent({ events, onCreateEvent }) {
           )}
         </div>
       </div>
+      <Modal isOpen={isCreateOpen} onClose={() => setIsCreateOpen(false)}>
+        <CreateEvent
+          routineId={null}
+          onSave={() => {
+            setIsCreateOpen(false);
+            onCreateEvent?.();
+          }}
+        />
+      </Modal>
     </div>
   );
 }

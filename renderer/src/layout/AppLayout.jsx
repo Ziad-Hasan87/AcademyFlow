@@ -27,6 +27,7 @@ export default function AppLayout() {
 
   const [events, setEvents] = useState([]);
   const [slectedOperation, setSelectedOperation] = useState(null);
+  const [selectedEvent, setSelectedEvent] = useState(null);
 
   const setWeekRange = (start, end) => {
     setStartOfWeek(start);
@@ -52,7 +53,7 @@ export default function AppLayout() {
         />
 
         <div className="middle-group">
-          <MainContent events={events} />
+          <MainContent events={events} onSelectEvent={setSelectedEvent}/>
 
           <HorizontalResizer
             onDrag={(dy) =>
@@ -81,6 +82,7 @@ export default function AppLayout() {
 
         <RightSidebar
           width={rightWidth}
+          selectedEvent={selectedEvent}
           setWeekRange={setWeekRange}
         />
       </div>
