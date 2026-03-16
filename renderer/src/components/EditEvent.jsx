@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import supabase from "../utils/supabase";
 import { useAuth } from "../contexts/AuthContext";
 
@@ -9,6 +9,7 @@ import {
     fetchGroups,
     fetchSubgroups
 } from "../utils/fetch";
+import { hasPermission } from "../utils/types";
 
 export default function EditEvent({ event, onSave }) {
 
@@ -46,6 +47,11 @@ export default function EditEvent({ event, onSave }) {
     const [selectedGroup, setSelectedGroup] = useState("");
     const [selectedSubgroup, setSelectedSubgroup] = useState("");
 
+    const [attachments, setAttachments] = useState([]);
+    const [newFiles, setNewFiles] = useState([]);
+    const [deletedAttachments, setDeletedAttachments] = useState([]);
+    const [hasAttachments, setHasAttachments] = useState(false);
+
     useEffect(() => {
 
         if (!userData?.institute_id) return;
@@ -76,8 +82,8 @@ export default function EditEvent({ event, onSave }) {
 
         setFromTable(event.from_table || "groups");
         setForUsers(event.for_users || "");
-
         setIsReschedulable(event.is_reschedulable ?? true);
+        setHasAttachments(event.has_attachments ?? false);
 
     }, [event]);
 
@@ -89,11 +95,159 @@ export default function EditEvent({ event, onSave }) {
 
     }, [instituteId]);
 
+    const enableAttachments = async () => {
+
+        const { error } = await supabase
+            .from("events")
+            .update({ has_attachments: true })
+            .eq("id", event.id);
+
+        if (error) {
+            alert("Failed to enable attachments");
+            return;
+        }
+
+        setHasAttachments(true);
+    };
+
+    const fileInputRef = useRef(null);
+
     useEffect(() => {
 
         if (!event?.routine_id) return;
 
         fetchGroups(selectedProgram, "", setGroups, () => { });
+
+    }, [event]);
+
+    useEffect(() => {
+        if (!event?.id) return;
+        loadAttachments();
+    }, [event]);
+
+    const loadAttachments = async () => {
+
+        const { data, error } = await supabase
+            .from("attachments")
+            .select("*")
+            .eq("event_id", event.id);
+
+        if (!error) setAttachments(data || []);
+    };
+
+    const handleFileSelect = (e) => {
+
+        const files = Array.from(e.target.files);
+        setNewFiles(prev => [...prev, ...files]);
+
+    };
+
+    const markAttachmentDelete = (id) => {
+
+        setDeletedAttachments(prev => [...prev, id]);
+
+    };
+
+    const downloadAttachment = async (filePath, fileName) => {
+
+        const { data, error } = await supabase
+            .storage
+            .from("attachments")
+            .download(filePath);
+
+        if (error) return;
+
+        const url = URL.createObjectURL(data);
+
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = fileName;
+        a.click();
+    };
+    useEffect(() => {
+
+        if (!event?.for_users || !event?.from_table) return;
+
+        const loadHierarchy = async () => {
+
+            if (event.from_table === "programs") {
+
+                setSelectedProgram(event.for_users);
+
+            }
+
+            if (event.from_table === "operations") {
+
+                const { data: operation } = await supabase
+                    .from("operations")
+                    .select("id, program_id")
+                    .eq("id", event.for_users)
+                    .single();
+
+                if (!operation) return;
+
+                setSelectedProgram(operation.program_id);
+                setSelectedOperation(operation.id);
+            }
+
+            if (event.from_table === "groups") {
+
+                const { data: group } = await supabase
+                    .from("groups")
+                    .select("id, program_id")
+                    .eq("id", event.for_users)
+                    .single();
+
+                if (!group) return;
+
+                setSelectedProgram(group.program_id);
+                setSelectedGroup(group.id);
+
+                // fetch operation under that program if exists
+                const { data: ops } = await supabase
+                    .from("operations")
+                    .select("id")
+                    .eq("program_id", group.program_id);
+
+                if (ops?.length) setSelectedOperation(ops[0].id);
+
+            }
+
+            if (event.from_table === "subgroups") {
+
+                const { data: subgroup } = await supabase
+                    .from("subgroups")
+                    .select("id, group_id")
+                    .eq("id", event.for_users)
+                    .single();
+
+                if (!subgroup) return;
+
+                setSelectedSubgroup(subgroup.id);
+
+                const { data: group } = await supabase
+                    .from("groups")
+                    .select("id, program_id")
+                    .eq("id", subgroup.group_id)
+                    .single();
+
+                if (!group) return;
+
+                setSelectedGroup(group.id);
+                setSelectedProgram(group.program_id);
+
+                const { data: ops } = await supabase
+                    .from("operations")
+                    .select("id")
+                    .eq("program_id", group.program_id);
+
+                if (ops?.length) setSelectedOperation(ops[0].id);
+
+            }
+
+        };
+
+        loadHierarchy();
 
     }, [event]);
 
@@ -233,9 +387,71 @@ export default function EditEvent({ event, onSave }) {
 
         } else {
 
-            alert("Event updated");
-            onSave?.();
+            // DELETE attachments marked for deletion
+            for (const id of deletedAttachments) {
 
+                const attachment = attachments.find(a => a.id === id);
+                if (!attachment) continue;
+
+                await supabase.storage
+                    .from("attachments")
+                    .remove([attachment.file_path]);
+
+                await supabase
+                    .from("attachments")
+                    .delete()
+                    .eq("id", id);
+            }
+
+            for (const file of newFiles) {
+                const file = new File(["Hello"], "test.txt", { type: "text/plain" });
+                const { data, error } = await supabase
+                    .storage
+                    .from("attachments")
+                    .upload(`test/${crypto.randomUUID()}-test.txt`, file, { upsert: true });
+                console.log(data, error);
+                if (!event?.id) {
+                    console.error("Event ID is missing");
+                    return;
+                }
+
+                const sanitize = (name) =>
+                    name
+                        .normalize("NFKD")
+                        .replace(/[\u0300-\u036f]/g, "")
+                        .replace(/[^\w.-]/g, "_");
+
+                const path = `event/${event.id}/${crypto.randomUUID()}-${sanitize(file.name)}`;
+
+                console.log("Uploading file:", file.name, "to path:", path);
+
+                const { error: uploadError } = await supabase
+                    .storage
+                    .from("attachments")
+                    .upload(path, file, { upsert: true });
+
+                if (uploadError) {
+                    console.error("Upload error for file", file.name, uploadError);
+                    continue; // skip this file, don't break the whole update
+                }
+
+                await supabase.from("attachments").insert({
+                    event_id: event.id,
+                    course_id: event.course_id,
+                    operation_id: event.operation_id,
+                    institute_id: event.institute_id,
+                    uploaded_by: userData.id,
+                    file_path: path,
+                    file_name: file.name
+                });
+            }
+
+            alert("Event updated");
+
+            setDeletedAttachments([]);
+            setNewFiles([]);
+
+            onSave?.();
         }
 
     };
@@ -535,6 +751,129 @@ export default function EditEvent({ event, onSave }) {
                 </label>
 
             </div>
+
+            {/* ATTACHMENTS */}
+            {!hasAttachments && (
+
+                <div className="form-field">
+
+                    <label>Attachments</label>
+
+                    <button
+                        type="button"
+                        className="form-submit"
+                        onClick={enableAttachments}
+                    >
+                        Allow Attachments
+                    </button>
+
+                </div>
+
+            )}
+
+            {hasAttachments && (
+
+                <div className="form-field">
+
+                    <label>Attachments</label>
+
+                    {/* Upload input for moderators */}
+                    {hasPermission(userData.role, "Teacher") && (
+
+                        <div style={{ marginBottom: "10px" }}>
+
+                            <button
+                                type="button"
+                                className="form-submit"
+                                onClick={() => fileInputRef.current.click()}
+                            >
+                                Add Attachment
+                            </button>
+
+                            <input
+                                type="file"
+                                multiple
+                                ref={fileInputRef}
+                                style={{ display: "none" }}
+                                onChange={handleFileSelect}
+                            />
+
+                        </div>
+
+                    )}
+
+                    <ul style={{ marginTop: "10px" }}>
+
+                        {attachments.map(file => {
+
+                            const isDeleted = deletedAttachments.includes(file.id);
+
+                            return (
+
+                                <li
+                                    key={file.id}
+                                    style={{
+                                        opacity: isDeleted ? 0.4 : 1,
+                                        display: "flex",
+                                        gap: "10px",
+                                        alignItems: "center"
+                                    }}
+                                >
+
+                                    <span>{file.file_name}</span>
+
+                                    <button
+                                        type="button"
+                                        onClick={() =>
+                                            downloadAttachment(file.file_path, file.file_name)
+                                        }
+                                    >
+                                        Download
+                                    </button>
+
+                                    {userData?.role === "moderator" && !isDeleted && (
+
+                                        <button
+                                            type="button"
+                                            onClick={() => markAttachmentDelete(file.id)}
+                                            style={{ background: "#d9534f", color: "white" }}
+                                        >
+                                            X
+                                        </button>
+
+                                    )}
+
+                                </li>
+
+                            );
+
+                        })}
+
+                    </ul>
+
+                    {/* show newly added files */}
+
+                    {newFiles.length > 0 && (
+
+                        <div style={{ marginTop: "10px" }}>
+
+                            <strong>New Files:</strong>
+
+                            <ul>
+
+                                {newFiles.map((f, i) => (
+                                    <li key={i}>{f.name}</li>
+                                ))}
+
+                            </ul>
+
+                        </div>
+
+                    )}
+
+                </div>
+
+            )}
 
             {/* BUTTONS */}
 

@@ -25,35 +25,9 @@ export default function RightSidebar({ width, selectedEvent, setWeekRange }) {
         }));
     };
 
-    const handleSave = async () => {
-
-        if (!editableEvent) return;
-
-        try {
-
-            setIsSaving(true);
-
-            const { id, created_at, ...updateData } = editableEvent;
-
-            const { error } = await supabase
-                .from("events")
-                .update(updateData)
-                .eq("id", id);
-
-            if (error) throw error;
-
-            alert("Event updated successfully");
-
-        } catch (err) {
-
-            console.error(err);
-            alert("Failed to update event");
-
-        } finally {
-            setIsSaving(false);
-        }
+    const handleSave = () => {
+        setEditableEvent(null);
     };
-
     const handleDateSelect = (date, startOfWeek, endOfWeek) => {
 
         if (selectedDate === date) {
