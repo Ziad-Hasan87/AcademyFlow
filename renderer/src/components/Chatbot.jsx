@@ -1,6 +1,9 @@
 import { useState, useRef, useEffect } from "react";
 import { useAuth } from "../contexts/AuthContext";
 import { sendChatMessage } from "../utils/chatbot";
+import supabase from "../utils/supabase";
+import { fetchBotId, fetchProgramChatId } from "../utils/fetch";
+import { sendTelegramNotification } from "../utils/telegramNotifications";
 
 const QUICK_PROMPTS = [
   "When is my next class?",
@@ -33,6 +36,42 @@ export default function Chatbot() {
   const [loading, setLoading] = useState(false);
   const messagesEndRef = useRef(null);
 
+  async function resolveProgramIdForUser() {
+    if (userData?.program_id) return userData.program_id;
+    if (!userData?.id) return null;
+
+    const { data, error } = await supabase
+      .from("students")
+      .select("program_id")
+      .eq("id", userData.id)
+      .single();
+
+    if (error) {
+      console.error("Error fetching user program_id:", error);
+    }
+
+    if (data?.program_id) return data.program_id;
+
+    // Fallback for non-student users: pick the first active program in this institute.
+    if (!userData?.institute_id) return null;
+
+    const { data: fallbackProgram, error: fallbackError } = await supabase
+      .from("programs")
+      .select("id")
+      .eq("institution_id", userData.institute_id)
+      .eq("is_active", true)
+      .order("created_at", { ascending: true })
+      .limit(1)
+      .maybeSingle();
+
+    if (fallbackError) {
+      console.error("Error fetching fallback program id:", fallbackError);
+      return null;
+    }
+
+    return fallbackProgram?.id || null;
+  }
+
   // Scroll to latest message
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -59,14 +98,42 @@ export default function Chatbot() {
     setLoading(true);
 
     try {
+      const instituteId = userData.institute_id;
+
+      const [botId, resolvedProgramId] = await Promise.all([
+        fetchBotId(instituteId),
+        resolveProgramIdForUser(),
+      ]);
+
+      const chatId = await fetchProgramChatId(resolvedProgramId);
+
       // Pass conversation history (exclude initial greeting, last 10 messages for context window)
       const history = messages.slice(-10).map((m) => ({
         role: m.role === "user" ? "user" : "model",
         text: m.text,
       }));
 
-      const reply = await sendChatMessage(text, history, userData.institute_id);
+      const reply = await sendChatMessage(text, history, instituteId);
       setMessages((prev) => [...prev, { role: "bot", text: reply, createdAt: new Date().toISOString() }]);
+
+      if (botId && chatId) {
+        const telegramMessage = [
+          "<b>AcademyFlow Chatbot</b>",
+          `<b>Institute:</b> ${userData.institute_name || instituteId}`,
+          `<b>User:</b> ${userData.email || "Unknown"}`,
+          `<b>Question:</b> ${text}`,
+          `<b>Reply:</b> ${reply}`,
+        ].join("\n");
+
+        const notifyResult = await sendTelegramNotification(telegramMessage, {
+          botId,
+          chatId,
+        });
+
+        if (!notifyResult?.ok) {
+          console.warn("Telegram notification failed:", notifyResult?.error || "Unknown error");
+        }
+      }
     } catch (err) {
       setMessages((prev) => [
         ...prev,

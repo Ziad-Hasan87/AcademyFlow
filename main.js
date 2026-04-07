@@ -11,7 +11,7 @@ function createWindow() {
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
-      sandbox: true,
+      sandbox: false,
       preload: path.join(__dirname, "preload.js")
     }
   });
@@ -28,8 +28,8 @@ console.log("[Main] Registering IPC handler for telegram:send-notification");
 
 ipcMain.handle("telegram:send-notification", async (_event, payload) => {
   console.log("[IPC] Received telegram:send-notification request");
-  const token = process.env.TELEGRAM_BOT_TOKEN;
-  const chatId = process.env.TELEGRAM_CHAT_ID;
+  const token = payload?.botId || process.env.TELEGRAM_BOT_TOKEN;
+  const chatId = payload?.chatId || process.env.TELEGRAM_CHAT_ID;
 
   if (!token || !chatId) {
     console.error("[IPC] Missing token or chatId in .env");

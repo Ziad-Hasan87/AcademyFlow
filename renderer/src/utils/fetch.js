@@ -1,5 +1,203 @@
 import supabase from "./supabase";
-import { useAuth } from "../contexts/AuthContext";
+
+export async function fetchProgramChatId(programId) {
+  if (!programId) return null;
+
+  const { data, error } = await supabase
+    .from("programs")
+    .select("chat_id")
+    .eq("id", programId)
+    .single();
+
+  if (error) {
+    console.error("Error fetching program chat_id:", error);
+    return null;
+  }
+
+  return data?.chat_id || null;
+}
+
+export async function fetchBotId(instituteId) {
+  if (!instituteId) return null;
+
+  const { data, error } = await supabase
+    .from("institutes")
+    .select("botid")
+    .eq("id", instituteId)
+    .single();
+
+  if (error) {
+    console.error("Error fetching institute botid:", error);
+    return null;
+  }
+
+  return data?.botid || null;
+}
+
+export async function resolveProgramIdFromEventTarget(fromTable, forUsers) {
+  if (!fromTable || !forUsers) return null;
+
+  if (fromTable === "programs") {
+    return forUsers;
+  }
+
+  if (fromTable === "operations") {
+    const { data, error } = await supabase
+      .from("operations")
+      .select("program_id")
+      .eq("id", forUsers)
+      .single();
+
+    if (error) {
+      console.error("Error resolving program_id from operation:", error);
+      return null;
+    }
+
+    return data?.program_id || null;
+  }
+
+  if (fromTable === "groups") {
+    const { data, error } = await supabase
+      .from("groups")
+      .select("program_id")
+      .eq("id", forUsers)
+      .single();
+
+    if (error) {
+      console.error("Error resolving program_id from group:", error);
+      return null;
+    }
+
+    return data?.program_id || null;
+  }
+
+  if (fromTable === "subgroups") {
+    const { data: subgroupData, error: subgroupError } = await supabase
+      .from("subgroups")
+      .select("group_id")
+      .eq("id", forUsers)
+      .single();
+
+    if (subgroupError) {
+      console.error("Error resolving group_id from subgroup:", subgroupError);
+      return null;
+    }
+
+    if (!subgroupData?.group_id) return null;
+
+    const { data: groupData, error: groupError } = await supabase
+      .from("groups")
+      .select("program_id")
+      .eq("id", subgroupData.group_id)
+      .single();
+
+    if (groupError) {
+      console.error("Error resolving program_id from subgroup's group:", groupError);
+      return null;
+    }
+
+    return groupData?.program_id || null;
+  }
+
+  return null;
+}
+
+export async function resolveSlotTimesFromIds(startSlotId, endSlotId) {
+  const slotIds = [startSlotId, endSlotId].filter(Boolean);
+
+  if (slotIds.length === 0) {
+    return { start_time: null, end_time: null };
+  }
+
+  const { data, error } = await supabase
+    .from("slotinfo")
+    .select("id, start, end")
+    .in("id", slotIds);
+
+  if (error) {
+    console.error("Error resolving slot times:", error);
+    return { start_time: null, end_time: null };
+  }
+
+  const byId = Object.fromEntries((data || []).map((slot) => [slot.id, slot]));
+
+  return {
+    start_time: byId[startSlotId]?.start || null,
+    end_time: byId[endSlotId]?.end || null,
+  };
+}
+
+export async function fetchProgramName(programId) {
+  if (!programId) return null;
+
+  const { data, error } = await supabase
+    .from("programs")
+    .select("name")
+    .eq("id", programId)
+    .single();
+
+  if (error) {
+    console.error("Error fetching program name:", error);
+    return null;
+  }
+
+  return data?.name || null;
+}
+
+export async function resolveEventTargetLabel(fromTable, forUsers) {
+  if (!fromTable || !forUsers) return null;
+
+  if (fromTable === "programs") {
+    return fetchProgramName(forUsers);
+  }
+
+  if (fromTable === "operations") {
+    const { data, error } = await supabase
+      .from("operations")
+      .select("name")
+      .eq("id", forUsers)
+      .single();
+
+    if (error) {
+      console.error("Error resolving operation label:", error);
+      return null;
+    }
+
+    return data?.name || null;
+  }
+
+  if (fromTable === "groups") {
+    const { data, error } = await supabase
+      .from("groups")
+      .select("name")
+      .eq("id", forUsers)
+      .single();
+
+    if (error) {
+      console.error("Error resolving group label:", error);
+      return null;
+    }
+
+    return data?.name || null;
+  }
+
+  if (fromTable === "subgroups") {
+    const { data, error } = await supabase
+      .from("subgroups")
+      .select("name")
+      .eq("id", forUsers)
+      .single();
+
+    if (error) {
+      console.error("Error resolving subgroup label:", error);
+      return null;
+    }
+
+    return data?.name || null;
+  }
+
+  return null;
+}
 
 export async function fetchDepartments(currentInstituteId, deptQuery, setDeptResults, setLoadingDepts) {
     setLoadingDepts(true);

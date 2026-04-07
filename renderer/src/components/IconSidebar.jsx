@@ -1,7 +1,7 @@
 import React from "react";
 import { FiUsers, FiShield, FiActivity, FiBook, FiBookOpen, FiSun, FiUser } from "react-icons/fi";
 import { GoOrganization } from "react-icons/go";
-import { FaRegCalendarTimes, FaCog, FaLayerGroup,FaRegUser,FaRegIdCard   } from "react-icons/fa";
+import { FaRegCalendarTimes, FaCog, FaLayerGroup,FaRegUser,FaRegIdCard, FaRobot } from "react-icons/fa";
 import { FaPeopleRoof } from "react-icons/fa6";
 import { BsPersonCircle } from "react-icons/bs";
 import { MdOutlineGroupWork } from "react-icons/md";
@@ -24,6 +24,7 @@ export default function IconSidebar({ onIconClick, activePage }) {
     { id: "subgroups", icon: FaPeopleRoof , name: "Subgroups", minRole: "Moderator" },
     { id: "vacations", icon: FaRegCalendarTimes, name: "Vacations", minRole: "Moderator" },
     { id: "departments", icon: GoOrganization, name: "Departments", minRole: "Admin" },
+    { id: "botinfo", icon: FaRobot, name: "Bot Info", minRole: "Admin" },
     { id: "slotinfo", icon: MdOutlineGroupWork, name: "SlotInfo", minRole: "Moderator" },
     { id: "routines", icon: FiActivity, name: "Routines", minRole: "Moderator" },
   ];
