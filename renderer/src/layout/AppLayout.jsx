@@ -27,7 +27,7 @@ export default function AppLayout() {
 
   const [events, setEvents] = useState([]);
   const [slectedOperation, setSelectedOperation] = useState(null);
-  const [selectedEvent, setSelectedEvent] = useState(null);
+  const [eventsRefreshTick, setEventsRefreshTick] = useState(0);
 
   const setWeekRange = (start, end) => {
     setStartOfWeek(start);
@@ -53,7 +53,10 @@ export default function AppLayout() {
         />
 
         <div className="middle-group">
-          <MainContent events={events} onSelectEvent={setSelectedEvent}/>
+          <MainContent
+            events={events}
+            onRefreshEvents={() => setEventsRefreshTick((tick) => tick + 1)}
+          />
 
           <HorizontalResizer
             onDrag={(dy) =>
@@ -69,6 +72,7 @@ export default function AppLayout() {
             endDate={endOfWeek}
             onEventsFetched={setEvents}
             onSelectedOperation={setSelectedOperation}
+            refreshTrigger={eventsRefreshTick}
           />
         </div>
 
@@ -82,7 +86,6 @@ export default function AppLayout() {
 
         <RightSidebar
           width={rightWidth}
-          selectedEvent={selectedEvent}
           setWeekRange={setWeekRange}
         />
       </div>

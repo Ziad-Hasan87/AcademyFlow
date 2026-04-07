@@ -10,13 +10,22 @@ import {
 } from "../utils/fetch";
 import { useAuth } from "../contexts/AuthContext";
 
-export default function BottomSidebar({ height, startDate, endDate, onEventsFetched, onSelectedOperation }) {
+const FILTER_COLORS = [
+    "AntiqueWhite",
+    "Gainsboro",
+    "Lavenderblush",
+    "deepskyblue",
+    "mediumseagreen",
+];
+
+export default function BottomSidebar({ height, startDate, endDate, onEventsFetched, onSelectedOperation, refreshTrigger }) {
     const { userData } = useAuth();
     const currentInstituteId = userData?.institute_id;
 
     const [filters, setFilters] = useState([
         {
             role: "",
+            color: "deepskyblue",
             selectedProgram: "",
             operations: [],
             selectedOperation: "",
@@ -25,6 +34,8 @@ export default function BottomSidebar({ height, startDate, endDate, onEventsFetc
             subgroups: [],
             selectedSubgroup: "",
             selectedDepartment: "",
+            teachers: [],
+            selectedTeacher: "",
         },
     ]);
 
@@ -53,6 +64,12 @@ export default function BottomSidebar({ height, startDate, endDate, onEventsFetc
             } else if (key === "selectedGroup") {
                 newFilters[index].selectedSubgroup = "";
                 newFilters[index].subgroups = [];
+            } else if (key === "selectedDepartment") {
+                newFilters[index].selectedTeacher = "";
+                newFilters[index].teachers = [];
+            } else if (key === "role") {
+                newFilters[index].selectedTeacher = "";
+                newFilters[index].teachers = [];
             }
 
             return newFilters;
@@ -90,6 +107,34 @@ export default function BottomSidebar({ height, startDate, endDate, onEventsFetc
                     });
                 }, () => {});
             }
+
+            if (
+                filter.role === "Teacher" &&
+                filter.selectedDepartment &&
+                filter.teachers.length === 0
+            ) {
+                supabase
+                    .from("staffs")
+                    .select("id, codename, users:users!staffs_id_fkey(name)")
+                    .eq("department_id", filter.selectedDepartment)
+                    .then(({ data, error }) => {
+                        if (error) {
+                            console.error("Error fetching teachers:", error);
+                            return;
+                        }
+
+                        const teacherOptions = (data || []).map((teacher) => ({
+                            id: teacher.id,
+                            label: `${teacher.users?.name || "Unknown"} - ${teacher.codename || "N/A"}`,
+                        }));
+
+                        setFilters((prev) => {
+                            const newFilters = [...prev];
+                            newFilters[index].teachers = teacherOptions;
+                            return newFilters;
+                        });
+                    });
+            }
         });
     }, [filters]);
 
@@ -98,6 +143,7 @@ export default function BottomSidebar({ height, startDate, endDate, onEventsFetc
             ...prev,
             {
                 role: "",
+                color: "deepskyblue",
                 selectedProgram: "",
                 operations: [],
                 selectedOperation: "",
@@ -106,6 +152,8 @@ export default function BottomSidebar({ height, startDate, endDate, onEventsFetc
                 subgroups: [],
                 selectedSubgroup: "",
                 selectedDepartment: "",
+                teachers: [],
+                selectedTeacher: "",
             },
         ]);
     };
@@ -116,7 +164,15 @@ export default function BottomSidebar({ height, startDate, endDate, onEventsFetc
     };
 
     const fetchEventsForFilter = async (filter) => {
-        const { role, selectedProgram, selectedOperation, selectedGroup, selectedSubgroup, selectedDepartment } = filter;
+        const {
+            role,
+            selectedProgram,
+            selectedOperation,
+            selectedGroup,
+            selectedSubgroup,
+            selectedDepartment,
+            selectedTeacher,
+        } = filter;
         let events = [];
 
         try {
@@ -156,6 +212,17 @@ export default function BottomSidebar({ height, startDate, endDate, onEventsFetc
                 }
             }
 
+            if (role === "Teacher" && selectedTeacher) {
+                console.log(`Fetching events for Teacher ID: ${selectedTeacher}`);
+                const { data, error } = await supabase.rpc("get_events_for_moderator", {
+                    moderator_uuid: selectedTeacher,
+                    start_date: startDate,
+                    end_date: endDate,
+                });
+                if (error) throw error;
+                events = data;
+            }
+
             return events || [];
         } catch (err) {
             console.error("Error fetching events for filter:", err);
@@ -167,12 +234,31 @@ export default function BottomSidebar({ height, startDate, endDate, onEventsFetc
         let allEvents = [];
         for (const filter of filters) {
             const events = await fetchEventsForFilter(filter);
-            allEvents = [...allEvents, ...events];
+            const eventsWithColor = (events || []).map((ev) => ({
+                ...ev,
+                filterColor: filter.color || "deepskyblue",
+            }));
+            allEvents = [...allEvents, ...eventsWithColor];
         }
         const uniqueEvents = Array.from(new Map(allEvents.map(ev => [ev.id, ev])).values());
         if (typeof onEventsFetched === "function") onEventsFetched(uniqueEvents);
         console.log(`Total events after union: ${uniqueEvents.length}`);
     };
+
+    useEffect(() => {
+        if (!startDate || !endDate) {
+            if (typeof onEventsFetched === "function") onEventsFetched([]);
+            return;
+        }
+
+        applyAllFilters();
+    }, [startDate, endDate]);
+
+    useEffect(() => {
+        if (!refreshTrigger) return;
+        if (!startDate || !endDate) return;
+        applyAllFilters();
+    }, [refreshTrigger]);
 
     return (
         <div className="sidebar-bottom" style={{ height: `${height}px`, overflowY: "auto", padding: "10px" }}>
@@ -224,11 +310,74 @@ export default function BottomSidebar({ height, startDate, endDate, onEventsFetc
                         </div>
                     )}
 
+                    {filter.role === "Teacher" && (
+                        <>
+                            <div className="form-field" style={{ flex: 1 }}>
+                                <select
+                                    className="form-select"
+                                    value={filter.selectedDepartment}
+                                    onChange={(e) => updateFilter(index, "selectedDepartment", e.target.value)}
+                                >
+                                    <option value="">Department</option>
+                                    {departments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+                                </select>
+                            </div>
+
+                            <div className="form-field" style={{ flex: 1 }}>
+                                <select
+                                    className="form-select"
+                                    value={filter.selectedTeacher}
+                                    onChange={(e) => updateFilter(index, "selectedTeacher", e.target.value)}
+                                    disabled={!filter.selectedDepartment}
+                                >
+                                    <option value="">Teacher</option>
+                                    {filter.teachers.map((teacher) => (
+                                        <option key={teacher.id} value={teacher.id}>
+                                            {teacher.label}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+                        </>
+                    )}
+
                     {index > 0 && (
                         <button className="form-delete" onClick={() => deleteFilterRow(index)} style={{ height: "35px" }}>
                             Delete
                         </button>
                     )}
+
+                    <div className="form-field" style={{ flex: "0 0 49px", marginBottom: 0 }}>
+                        <select
+                            className="form-select"
+                            value={filter.color}
+                            title="Filter color"
+                            onChange={(e) => updateFilter(index, "color", e.target.value)}
+                            style={{
+                                width: "49px",
+                                minWidth: "49px",
+                                maxWidth: "49px",
+                                height: "40px",
+                                padding: 0,
+                                borderRadius: "8px",
+                                color: filter.color,
+                                fontWeight: 700,
+                                fontSize: "24px",
+                                lineHeight: 1,
+                                textAlign: "center",
+                            }}
+                        >
+                            {FILTER_COLORS.map((color) => (
+                                <option
+                                    key={color}
+                                    value={color}
+                                    style={{ color }}
+                                >
+                                    ■
+                                </option>
+                            ))}
+                        </select>
+                    </div>
                 </div>
             ))}
 

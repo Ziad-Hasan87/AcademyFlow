@@ -3,11 +3,14 @@ import { useAuth } from "../contexts/AuthContext";
 import { fetchSlots } from "../utils/fetch";
 import Modal from "./Modal";
 import CreateEvent from "./CreateEvent";
+import EditEvent from "./EditEvent";
 
-export default function MainContent({ events, onCreateEvent, onSelectEvent }) {
+export default function MainContent({ events, onCreateEvent, onRefreshEvents }) {
   const { userData } = useAuth();
   const [slots, setSlots] = useState([]);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [editableEvent, setEditableEvent] = useState(null);
 
   const days = [
     "Sunday",
@@ -131,7 +134,61 @@ export default function MainContent({ events, onCreateEvent, onSelectEvent }) {
         height: "100%",
       }}
     >
-      <h1>Main Content</h1>
+      <div
+        style={{
+          position: "relative",
+          width: "100%",
+          marginBottom: "8px"
+        }}
+      >
+        <h1 style={{ textAlign: "center", margin: 0 }}>Main Content</h1>
+
+        <button
+          type="button"
+          className="form-submit"
+          title="Refresh events"
+          onClick={() => onRefreshEvents?.()}
+          style={{
+            position: "absolute",
+            right: "8px",
+            top: "50%",
+            transform: "translateY(-50%)",
+            width: "34px",
+            maxWidth: "34px",
+            minWidth: "34px",
+            height: "34px",
+            flex: "0 0 34px",
+            padding: 0,
+            borderRadius: "8px",
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center"
+          }}
+        >
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+            aria-hidden="true"
+          >
+            <path
+              d="M20 12A8 8 0 1 1 17.66 6.34"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+            />
+            <path
+              d="M20 4V10H14"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        </button>
+      </div>
 
       <div
         className="timetable-grid"
@@ -148,7 +205,7 @@ export default function MainContent({ events, onCreateEvent, onSelectEvent }) {
 
         {/* slot headers */}
         {slots.map((slot) => (
-          <div key={slot.id} className="grid-cell header-cell">
+          <div key={slot.id} className="grid-cell header-cell" style={{ backgroundColor: "#9fc69f" }}>
             <div>{slot.name}</div>
             <div style={{ fontSize: "0.75em", color: "#555" }}>
               {formatTimeToAMPM(slot.start)} - {formatTimeToAMPM(slot.end)}
@@ -161,7 +218,11 @@ export default function MainContent({ events, onCreateEvent, onSelectEvent }) {
           <React.Fragment key={day}>
             <div
               className="grid-cell header-cell"
-              style={{ gridRow: dayIndex + 2, gridColumn: 1 }}
+              style={{
+                gridRow: dayIndex + 2,
+                gridColumn: 1,
+                backgroundColor: dayIndex % 2 === 1 ? "#ffffff" : "#edffe8fb"
+              }}
             >
               {day}
             </div>
@@ -174,6 +235,7 @@ export default function MainContent({ events, onCreateEvent, onSelectEvent }) {
                   gridRow: dayIndex + 2,
                   gridColumn: slotIndex + 2,
                   pointerEvents: "none",
+                  backgroundColor: dayIndex % 2 === 1 ? "#ffffff" : "#edffe8fb"
                 }}
               />
             ))}
@@ -204,16 +266,17 @@ export default function MainContent({ events, onCreateEvent, onSelectEvent }) {
                 height: `${laneHeight}vh`,
                 position: "relative",
                 zIndex: 5,
-                backgroundColor: "#90cdf4",
+                backgroundColor: ev.filterColor || "deepskyblue",
                 borderRadius: "4px",
                 padding: "4px",
                 fontSize: "0.8em",
                 overflow: "hidden",
                 cursor: "pointer",
               }}
-              onClick={() =>
-                onSelectEvent(ev)
-              }
+                onClick={() => {
+                  setEditableEvent({ ...ev });
+                  setIsEditOpen(true);
+                }}
             >
               {ev.title}
             </div>
@@ -270,6 +333,25 @@ export default function MainContent({ events, onCreateEvent, onSelectEvent }) {
             onCreateEvent?.();
           }}
         />
+      </Modal>
+
+      <Modal
+        isOpen={isEditOpen}
+        onClose={() => {
+          setIsEditOpen(false);
+          setEditableEvent(null);
+        }}
+      >
+        {editableEvent && (
+          <EditEvent
+            event={editableEvent}
+            onSave={() => {
+              setIsEditOpen(false);
+              setEditableEvent(null);
+              onRefreshEvents?.();
+            }}
+          />
+        )}
       </Modal>
     </div>
   );

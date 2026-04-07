@@ -18,6 +18,8 @@ export default function EditEvent({ event, onSave }) {
     const [title, setTitle] = useState("");
     const [description, setDescription] = useState("");
 
+    const [date, setDate] = useState("");
+
     const [type, setType] = useState("slot");
 
     const [startSlot, setStartSlot] = useState("");
@@ -52,6 +54,26 @@ export default function EditEvent({ event, onSave }) {
     const [deletedAttachments, setDeletedAttachments] = useState([]);
     const [hasAttachments, setHasAttachments] = useState(false);
 
+    const toDateInputValue = (value) => {
+        if (!value) return "";
+        return String(value).slice(0, 10);
+    };
+
+    const toTimeInputValue = (value) => {
+        if (!value) return "";
+        if (typeof value === "string" && /^\d{2}:\d{2}$/.test(value)) return value;
+
+        const parsed = new Date(value);
+        if (Number.isNaN(parsed.getTime())) {
+            return String(value).slice(0, 5);
+        }
+
+        const hours = String(parsed.getHours()).padStart(2, "0");
+        const minutes = String(parsed.getMinutes()).padStart(2, "0");
+        return `${hours}:${minutes}`;
+    };
+
+
     useEffect(() => {
 
         if (!userData?.institute_id) return;
@@ -71,14 +93,15 @@ export default function EditEvent({ event, onSave }) {
 
         setTitle(event.title || "");
         setDescription(event.description || "");
+        setDate(toDateInputValue(event.date));
 
         setType(event.type || "slot");
 
         setStartSlot(event.start_slot || "");
         setEndSlot(event.end_slot || "");
 
-        setStartTime(event.start_at || "");
-        setEndTime(event.end_at || "");
+        setStartTime(toTimeInputValue(event.start_at));
+        setEndTime(toTimeInputValue(event.end_at));
 
         setFromTable(event.from_table || "groups");
         setForUsers(event.for_users || "");
@@ -139,6 +162,14 @@ export default function EditEvent({ event, onSave }) {
 
         const files = Array.from(e.target.files);
         setNewFiles(prev => [...prev, ...files]);
+
+        e.target.value = "";
+
+    };
+
+    const removeQueuedFile = (indexToRemove) => {
+
+        setNewFiles(prev => prev.filter((_, index) => index !== indexToRemove));
 
     };
 
@@ -316,6 +347,11 @@ export default function EditEvent({ event, onSave }) {
             return;
         }
 
+        if (!date) {
+            alert("Date required");
+            return;
+        }
+
         if (type === "slot") {
 
             if (!startSlot || !endSlot) {
@@ -361,6 +397,7 @@ export default function EditEvent({ event, onSave }) {
             title,
             description,
             type,
+            date,
 
             start_slot: type === "slot" ? startSlot : null,
             end_slot: type === "slot" ? endSlot : null,
@@ -404,12 +441,6 @@ export default function EditEvent({ event, onSave }) {
             }
 
             for (const file of newFiles) {
-                const file = new File(["Hello"], "test.txt", { type: "text/plain" });
-                const { data, error } = await supabase
-                    .storage
-                    .from("attachments")
-                    .upload(`test/${crypto.randomUUID()}-test.txt`, file, { upsert: true });
-                console.log(data, error);
                 if (!event?.id) {
                     console.error("Event ID is missing");
                     return;
@@ -428,22 +459,40 @@ export default function EditEvent({ event, onSave }) {
                 const { error: uploadError } = await supabase
                     .storage
                     .from("attachments")
-                    .upload(path, file, { upsert: true });
+                    .upload(path, file, { upsert: false });
 
                 if (uploadError) {
                     console.error("Upload error for file", file.name, uploadError);
                     continue; // skip this file, don't break the whole update
                 }
 
-                await supabase.from("attachments").insert({
-                    event_id: event.id,
-                    course_id: event.course_id,
-                    operation_id: event.operation_id,
-                    institute_id: event.institute_id,
-                    uploaded_by: userData.id,
-                    file_path: path,
-                    file_name: file.name
-                });
+                const { error: insertAttachmentError } = await supabase
+                    .from("attachments")
+                    .insert({
+                        event_id: event.id,
+                        course_id: event.course_id ?? null,
+                        operation_id: event.operation_id ?? null,
+                        institute_id: event.institute_id ?? userData?.institute_id ?? null,
+                        uploaded_by: userData?.id ?? null,
+                        file_path: path,
+                        file_name: file.name
+                    });
+
+                if (insertAttachmentError) {
+                    console.error("Attachment metadata insert failed:", {
+                        message: insertAttachmentError.message,
+                        details: insertAttachmentError.details,
+                        hint: insertAttachmentError.hint,
+                        code: insertAttachmentError.code
+                    });
+
+                    // Keep storage and DB in sync by removing the uploaded object on DB insert failure.
+                    await supabase.storage
+                        .from("attachments")
+                        .remove([path]);
+
+                    continue;
+                }
             }
 
             alert("Event updated");
@@ -495,6 +544,21 @@ export default function EditEvent({ event, onSave }) {
                     className="form-input"
                     value={title}
                     onChange={(e) => setTitle(e.target.value)}
+                />
+
+            </div>
+
+            {/* DATE */}
+
+            <div className="form-field">
+
+                <label>Date</label>
+
+                <input
+                    type="date"
+                    className="form-input"
+                    value={date}
+                    onChange={(e) => setDate(e.target.value)}
                 />
 
             </div>
@@ -753,7 +817,7 @@ export default function EditEvent({ event, onSave }) {
             </div>
 
             {/* ATTACHMENTS */}
-            {!hasAttachments && (
+            {!hasAttachments && attachments.length === 0 && (
 
                 <div className="form-field">
 
@@ -771,7 +835,7 @@ export default function EditEvent({ event, onSave }) {
 
             )}
 
-            {hasAttachments && (
+            {(hasAttachments || attachments.length > 0) && (
 
                 <div className="form-field">
 
@@ -802,11 +866,21 @@ export default function EditEvent({ event, onSave }) {
 
                     )}
 
-                    <ul style={{ marginTop: "10px" }}>
+                    <ul
+                        style={{
+                            marginTop: "10px",
+                            listStyle: "none",
+                            padding: 0,
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: "8px"
+                        }}
+                    >
 
                         {attachments.map(file => {
 
                             const isDeleted = deletedAttachments.includes(file.id);
+                            const fileLabel = file.file_name || file.file_path?.split("/").pop() || "Attachment";
 
                             return (
 
@@ -815,30 +889,91 @@ export default function EditEvent({ event, onSave }) {
                                     style={{
                                         opacity: isDeleted ? 0.4 : 1,
                                         display: "flex",
-                                        gap: "10px",
-                                        alignItems: "center"
+                                        alignItems: "center",
+                                        gap: "8px",
+                                        minWidth: 0,
+                                        background: "#f7f9fc",
+                                        border: "1px solid #d9e2ec",
+                                        borderRadius: "8px",
+                                        padding: "8px 10px"
                                     }}
                                 >
 
-                                    <span>{file.file_name}</span>
+                                    <span
+                                        title={fileLabel}
+                                        style={{
+                                            flex: 1,
+                                            minWidth: 0,
+                                            overflow: "hidden",
+                                            textOverflow: "ellipsis",
+                                            whiteSpace: "nowrap",
+                                            fontSize: "13px"
+                                        }}
+                                    >
+                                        {fileLabel}
+                                    </span>
 
                                     <button
                                         type="button"
+                                        aria-label={`Download ${fileLabel}`}
+                                        title="Download"
                                         onClick={() =>
-                                            downloadAttachment(file.file_path, file.file_name)
+                                            downloadAttachment(
+                                                file.file_path,
+                                                fileLabel
+                                            )
                                         }
+                                        style={{
+                                            width: "30px",
+                                            height: "30px",
+                                            flexShrink: 0,
+                                            border: "1px solid #c5d0dc",
+                                            borderRadius: "6px",
+                                            background: "white",
+                                            display: "inline-flex",
+                                            alignItems: "center",
+                                            justifyContent: "center",
+                                            cursor: "pointer"
+                                        }}
                                     >
-                                        Download
+                                        <svg
+                                            width="14"
+                                            height="14"
+                                            viewBox="0 0 24 24"
+                                            fill="none"
+                                            xmlns="http://www.w3.org/2000/svg"
+                                            aria-hidden="true"
+                                        >
+                                            <path
+                                                d="M12 3V15M12 15L7 10M12 15L17 10M5 20H19"
+                                                stroke="currentColor"
+                                                strokeWidth="2"
+                                                strokeLinecap="round"
+                                                strokeLinejoin="round"
+                                            />
+                                        </svg>
                                     </button>
 
-                                    {userData?.role === "moderator" && !isDeleted && (
+                                    {hasPermission(userData?.role, "Teacher") && !isDeleted && (
 
                                         <button
                                             type="button"
                                             onClick={() => markAttachmentDelete(file.id)}
-                                            style={{ background: "#d9534f", color: "white" }}
+                                            style={{
+                                                width: "30px",
+                                                height: "30px",
+                                                flexShrink: 0,
+                                                border: "1px solid #c5d0dc",
+                                                borderRadius: "6px",
+                                                background: "#d9534f",
+                                                color: "white",
+                                                display: "inline-flex",
+                                                alignItems: "center",
+                                                justifyContent: "center",
+                                                cursor: "pointer"
+                                            }}
                                         >
-                                            X
+                                            ×
                                         </button>
 
                                     )}
@@ -859,10 +994,51 @@ export default function EditEvent({ event, onSave }) {
 
                             <strong>New Files:</strong>
 
-                            <ul>
+                            <ul style={{ listStyle: "none", padding: 0, marginTop: "8px" }}>
 
-                                {newFiles.map((f, i) => (
-                                    <li key={i}>{f.name}</li>
+                                {newFiles.map((file, i) => (
+                                    <li
+                                        key={i}
+                                        style={{
+                                            display: "flex",
+                                            alignItems: "center",
+                                            gap: "8px",
+                                            padding: "8px 10px",
+                                            border: "1px solid #d9e2ec",
+                                            borderRadius: "8px",
+                                            background: "#f7f9fc",
+                                            marginBottom: "8px",
+                                            overflow: "hidden",
+                                            textOverflow: "ellipsis",
+                                            whiteSpace: "nowrap"
+                                        }}
+                                    >
+                                        <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                            {file.name}
+                                        </span>
+
+                                        <button
+                                            type="button"
+                                            title="Remove file"
+                                            aria-label={`Remove ${file.name}`}
+                                            onClick={() => removeQueuedFile(i)}
+                                            style={{
+                                                width: "30px",
+                                                height: "30px",
+                                                flexShrink: 0,
+                                                border: "1px solid #c5d0dc",
+                                                borderRadius: "6px",
+                                                background: "#d9534f",
+                                                color: "white",
+                                                display: "inline-flex",
+                                                alignItems: "center",
+                                                justifyContent: "center",
+                                                cursor: "pointer"
+                                            }}
+                                        >
+                                            ×
+                                        </button>
+                                    </li>
                                 ))}
 
                             </ul>

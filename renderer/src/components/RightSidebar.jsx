@@ -1,32 +1,47 @@
 import React, { useEffect, useState } from "react";
 import MonthlyCalendar from "./MonthlyCalendar";
-import supabase from "../utils/supabase";
-import EditEvent from "./EditEvent";
-export default function RightSidebar({ width, selectedEvent, setWeekRange }) {
-
-    const [selectedDate, setSelectedDate] = useState(null);
+export default function RightSidebar({ width, setWeekRange }) {
 
     const today = new Date();
+    const todayDateStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+    const [selectedDate, setSelectedDate] = useState(todayDateStr);
+
     const [currentYear, setCurrentYear] = useState(today.getFullYear());
     const [currentMonth, setCurrentMonth] = useState(today.getMonth());
 
-    const [editableEvent, setEditableEvent] = useState(null);
-    const [isSaving, setIsSaving] = useState(false);
+    const getWeekRange = (dateStr) => {
+
+        if (!dateStr) return { startOfWeek: null, endOfWeek: null };
+
+        const date = new Date(dateStr);
+        const day = date.getDay();
+
+        const start = new Date(date);
+        start.setDate(date.getDate() - day);
+
+        const end = new Date(start);
+        end.setDate(start.getDate() + 6);
+
+        const format = (d) =>
+            `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
+        return {
+            startOfWeek: format(start),
+            endOfWeek: format(end),
+        };
+
+    };
+
+    useEffect(() => {
+
+        const { startOfWeek, endOfWeek } = getWeekRange(todayDateStr);
+        setWeekRange(startOfWeek, endOfWeek);
+
+    }, []);
 
     const handleMonthYearChange = (year, month) => {
         setCurrentYear(year);
         setCurrentMonth(month);
-    };
-
-    const updateField = (field, value) => {
-        setEditableEvent(prev => ({
-            ...prev,
-            [field]: value
-        }));
-    };
-
-    const handleSave = () => {
-        setEditableEvent(null);
     };
     const handleDateSelect = (date, startOfWeek, endOfWeek) => {
 
@@ -40,14 +55,6 @@ export default function RightSidebar({ width, selectedEvent, setWeekRange }) {
             console.log("Week range:", startOfWeek, "to", endOfWeek);
         }
     };
-    useEffect(() => {
-        if (selectedEvent) {
-            setEditableEvent({ ...selectedEvent });
-        } else {
-            setEditableEvent(null);
-        }
-    }, [selectedEvent]);
-
     return (
         <div
             className="sidebar-right"
@@ -70,16 +77,6 @@ export default function RightSidebar({ width, selectedEvent, setWeekRange }) {
                 Selected date: {selectedDate ? selectedDate : "No date selected"}
             </div>
 
-            <div className="right-sidebar-scroll">
-                {editableEvent && (
-                    <EditEvent
-                        event={editableEvent}
-                        onChange={updateField}
-                        onSave={handleSave}
-                        isSaving={isSaving}
-                    />
-                )}
-            </div>
         </div>
     );
 }
