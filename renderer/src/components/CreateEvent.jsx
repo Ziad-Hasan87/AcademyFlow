@@ -7,8 +7,16 @@ import {
     fetchPrograms,
     fetchSlots,
     fetchGroups,
-    fetchSubgroups
+    fetchSubgroups,
+    fetchProgramChatId,
+    fetchBotId,
+    resolveProgramIdFromEventTarget,
+    resolveSlotTimesFromIds,
+    resolveEventTargetLabel,
+    fetchProgramName
 } from "../utils/fetch";
+import { sendTelegramNotification } from "../utils/telegramNotifications";
+import { generateEventNotificationFromJson } from "../utils/chatbot";
 
 export default function CreateEvent({ routineId, onSave }) {
 
@@ -45,6 +53,79 @@ export default function CreateEvent({ routineId, onSave }) {
     const [selectedOperation, setSelectedOperation] = useState("");
     const [selectedGroup, setSelectedGroup] = useState("");
     const [selectedSubgroup, setSelectedSubgroup] = useState("");
+
+    const escapeHtml = (value) =>
+        String(value ?? "")
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;");
+
+    const toTelegramHtml = (value) => {
+        const escaped = escapeHtml(value);
+        return escaped.replace(/\*\*(.+?)\*\*/g, "<b>$1</b>");
+    };
+
+    const toNotificationAttributes = async (attributes) => {
+        const next = { ...attributes };
+
+        if (next.type === "slot") {
+            const { start_time, end_time } = await resolveSlotTimesFromIds(next.start_slot, next.end_slot);
+            next.start_time = start_time;
+            next.end_time = end_time;
+        } else {
+            next.start_time = next.start_at || null;
+            next.end_time = next.end_at || null;
+        }
+
+        delete next.start_slot;
+        delete next.end_slot;
+        delete next.start_at;
+        delete next.end_at;
+
+        return next;
+    };
+
+    const notifyTelegramForCreatedEvent = async (targetFromTable, targetForUsers, newAttributes) => {
+        try {
+            const programId = await resolveProgramIdFromEventTarget(targetFromTable, targetForUsers);
+            if (!programId) return;
+
+            const [botId, chatId] = await Promise.all([
+                fetchBotId(instituteId),
+                fetchProgramChatId(programId)
+            ]);
+
+            if (!botId || !chatId) return;
+
+            const [targetLabel, programName] = await Promise.all([
+                resolveEventTargetLabel(targetFromTable, targetForUsers),
+                fetchProgramName(programId)
+            ]);
+
+            const notificationAttributes = await toNotificationAttributes({
+                ...newAttributes,
+                from_table: targetFromTable,
+                for_users: targetLabel || targetForUsers,
+                program: programName || null
+            });
+
+            const aiSummary = await generateEventNotificationFromJson({
+                action: "created",
+                newAttributes: {
+                    ...notificationAttributes
+                }
+            });
+
+            const message = `<b>AcademyFlow Notification</b>\n${toTelegramHtml(aiSummary)}`;
+
+            const notifyResult = await sendTelegramNotification(message, { botId, chatId });
+            if (!notifyResult?.ok) {
+                console.warn("Telegram notification failed:", notifyResult?.error || "Unknown error");
+            }
+        } catch (notifyError) {
+            console.error("Error sending create-event Telegram notification:", notifyError);
+        }
+    };
 
     /* ---------------- FETCH PROGRAMS ---------------- */
 
@@ -212,6 +293,8 @@ export default function CreateEvent({ routineId, onSave }) {
             alert("Failed to create event");
 
         } else {
+
+            await notifyTelegramForCreatedEvent(fromTable, forUsers, insertData);
 
             alert("Event created");
             onSave?.();

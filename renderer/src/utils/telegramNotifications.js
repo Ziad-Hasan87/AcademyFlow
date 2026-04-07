@@ -14,23 +14,49 @@ function nowLabel() {
   return new Date().toLocaleString();
 }
 
-export async function sendTelegramNotification(message) {
-  console.log("[Notifier] window.telegramNotifier exists?", !!window.telegramNotifier);
-  console.log("[Notifier] window.telegramNotifier.send exists?", !!window.telegramNotifier?.send);
-  console.log("[Notifier] window keys:", Object.keys(window).filter(k => !k.startsWith("_")));
+export async function sendTelegramNotification(message, { botId, chatId } = {}) {
+  const bridgeSend = window.telegramNotifier?.send || window.electronAPI?.sendTelegram;
+  console.log("[Notifier] Telegram bridge ready?", !!bridgeSend);
   
-  if (!window.telegramNotifier?.send) {
-    console.warn("Telegram notifier bridge is not available.");
+  if (bridgeSend) {
+    return bridgeSend({ message, botId, chatId });
+  }
+
+  if (!botId || !chatId) {
+    console.warn("Telegram notifier bridge is not available and botId/chatId fallback is missing.");
     return { ok: false, error: "Notifier bridge unavailable" };
   }
 
-  return window.telegramNotifier.send({ message });
+  try {
+    const response = await fetch(`https://api.telegram.org/bot${botId}/sendMessage`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        chat_id: chatId,
+        text: message,
+        parse_mode: "HTML",
+        disable_web_page_preview: true,
+      }),
+    });
+
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok || !result.ok) {
+      return {
+        ok: false,
+        error: result.description || `Telegram API error (${response.status})`,
+      };
+    }
+
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, error: error.message || "Failed to send Telegram message" };
+  }
 }
 
 export async function notifyRoutineEventChange({ action, eventData = {}, actor = "System" }) {
   const courseName = eventData.courseName || "Unassigned";
   const lines = [
-    "<b>AcademyFlow Notification</b>",
+    "<b>AcademyFlow Admin</b>",
     `<b>Type:</b> Routine Event ${escapeHtml(action)}`,
     `<b>Title:</b> ${escapeHtml(formatValue(eventData.title))}`,
     `<b>Course:</b> ${escapeHtml(courseName)}`,

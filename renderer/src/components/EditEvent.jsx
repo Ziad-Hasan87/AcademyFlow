@@ -7,9 +7,17 @@ import {
     fetchPrograms,
     fetchSlots,
     fetchGroups,
-    fetchSubgroups
+    fetchSubgroups,
+    fetchProgramChatId,
+    fetchBotId,
+    resolveProgramIdFromEventTarget,
+    resolveSlotTimesFromIds,
+    resolveEventTargetLabel,
+    fetchProgramName
 } from "../utils/fetch";
 import { hasPermission } from "../utils/types";
+import { sendTelegramNotification } from "../utils/telegramNotifications";
+import { generateEventNotificationFromJson } from "../utils/chatbot";
 
 export default function EditEvent({ event, onSave }) {
 
@@ -53,6 +61,94 @@ export default function EditEvent({ event, onSave }) {
     const [newFiles, setNewFiles] = useState([]);
     const [deletedAttachments, setDeletedAttachments] = useState([]);
     const [hasAttachments, setHasAttachments] = useState(false);
+
+    const escapeHtml = (value) =>
+        String(value ?? "")
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;");
+
+    const toTelegramHtml = (value) => {
+        const escaped = escapeHtml(value);
+        return escaped.replace(/\*\*(.+?)\*\*/g, "<b>$1</b>");
+    };
+
+    const toNotificationAttributes = async (attributes) => {
+        const next = { ...attributes };
+
+        if (next.type === "slot") {
+            const { start_time, end_time } = await resolveSlotTimesFromIds(next.start_slot, next.end_slot);
+            next.start_time = start_time;
+            next.end_time = end_time;
+        } else {
+            next.start_time = next.start_at || null;
+            next.end_time = next.end_at || null;
+        }
+
+        delete next.start_slot;
+        delete next.end_slot;
+        delete next.start_at;
+        delete next.end_at;
+
+        return next;
+    };
+
+    const notifyTelegramForUpdatedEvent = async (
+        targetFromTable,
+        targetForUsers,
+        oldAttributes,
+        newAttributes
+    ) => {
+        try {
+            const programId = await resolveProgramIdFromEventTarget(targetFromTable, targetForUsers);
+            if (!programId) return;
+
+            const [botId, chatId] = await Promise.all([
+                fetchBotId(instituteId),
+                fetchProgramChatId(programId)
+            ]);
+
+            if (!botId || !chatId) return;
+
+            const [oldTargetLabel, newTargetLabel, programName] = await Promise.all([
+                resolveEventTargetLabel(oldAttributes.from_table, oldAttributes.for_users),
+                resolveEventTargetLabel(targetFromTable, targetForUsers),
+                fetchProgramName(programId)
+            ]);
+
+            const normalizedOldAttributes = await toNotificationAttributes(oldAttributes);
+            const normalizedNewAttributes = await toNotificationAttributes({
+                ...newAttributes,
+                from_table: targetFromTable,
+                for_users: targetForUsers
+            });
+
+            const aiSummary = await generateEventNotificationFromJson({
+                action: "updated",
+                oldAttributes: {
+                    ...normalizedOldAttributes,
+                    from_table: oldAttributes.from_table,
+                    for_users: oldTargetLabel || oldAttributes.for_users,
+                    program: programName || null
+                },
+                newAttributes: {
+                    ...normalizedNewAttributes,
+                    from_table: targetFromTable,
+                    for_users: newTargetLabel || targetForUsers,
+                    program: programName || null
+                }
+            });
+
+            const message = `<b>AcademyFlow Notification</b>\n${toTelegramHtml(aiSummary)}`;
+
+            const notifyResult = await sendTelegramNotification(message, { botId, chatId });
+            if (!notifyResult?.ok) {
+                console.warn("Telegram notification failed:", notifyResult?.error || "Unknown error");
+            }
+        } catch (notifyError) {
+            console.error("Error sending edit-event Telegram notification:", notifyError);
+        }
+    };
 
     const toDateInputValue = (value) => {
         if (!value) return "";
@@ -412,6 +508,20 @@ export default function EditEvent({ event, onSave }) {
 
         };
 
+        const oldAttributes = {
+            title: event.title,
+            description: event.description,
+            type: event.type,
+            date: event.date,
+            start_slot: event.start_slot,
+            end_slot: event.end_slot,
+            start_at: event.start_at,
+            end_at: event.end_at,
+            from_table: event.from_table,
+            for_users: event.for_users,
+            is_reschedulable: event.is_reschedulable
+        };
+
         const { error } = await supabase
             .from("events")
             .update(updateData)
@@ -495,6 +605,13 @@ export default function EditEvent({ event, onSave }) {
                 }
             }
 
+            await notifyTelegramForUpdatedEvent(
+                fromTable,
+                forUsers,
+                oldAttributes,
+                updateData
+            );
+
             alert("Event updated");
 
             setDeletedAttachments([]);
@@ -509,6 +626,20 @@ export default function EditEvent({ event, onSave }) {
 
         if (!window.confirm("Delete event?")) return;
 
+        const deletePayload = {
+            title,
+            description,
+            type,
+            date,
+            start_slot: type === "slot" ? startSlot : null,
+            end_slot: type === "slot" ? endSlot : null,
+            start_at: type === "time" ? startTime : null,
+            end_at: type === "time" ? endTime : null,
+            from_table: fromTable,
+            for_users: forUsers,
+            is_reschedulable: isReschedulable
+        };
+
         const { error } = await supabase
             .from("events")
             .delete()
@@ -520,6 +651,40 @@ export default function EditEvent({ event, onSave }) {
             alert("Delete failed");
 
         } else {
+            try {
+                const programId = await resolveProgramIdFromEventTarget(fromTable, forUsers);
+
+                if (programId) {
+                    const [botId, chatId, targetLabel, programName] = await Promise.all([
+                        fetchBotId(instituteId),
+                        fetchProgramChatId(programId),
+                        resolveEventTargetLabel(fromTable, forUsers),
+                        fetchProgramName(programId)
+                    ]);
+
+                    if (botId && chatId) {
+                        const normalizedDeletedAttributes = await toNotificationAttributes({
+                            ...deletePayload,
+                            for_users: targetLabel || forUsers,
+                            program: programName || null
+                        });
+
+                        const aiSummary = await generateEventNotificationFromJson({
+                            action: "deleted",
+                            deletedAttributes: normalizedDeletedAttributes
+                        });
+
+                        const message = `<b>AcademyFlow Notification</b>\n${toTelegramHtml(aiSummary)}`;
+                        const notifyResult = await sendTelegramNotification(message, { botId, chatId });
+                        if (!notifyResult?.ok) {
+                            console.warn("Telegram delete notification failed:", notifyResult?.error || "Unknown error");
+                        }
+                    }
+                }
+            } catch (notifyError) {
+                console.error("Error preparing delete-event notification:", notifyError);
+            }
+
             onSave?.();
 
         }
