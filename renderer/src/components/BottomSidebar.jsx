@@ -21,6 +21,7 @@ const FILTER_COLORS = [
 export default function BottomSidebar({ height, startDate, endDate, onEventsFetched, onSelectedOperation, refreshTrigger }) {
     const { userData } = useAuth();
     const currentInstituteId = userData?.institute_id;
+    const currentUserId = userData?.id;
 
     const [filters, setFilters] = useState([
         {
@@ -41,6 +42,8 @@ export default function BottomSidebar({ height, startDate, endDate, onEventsFetc
 
     const [programs, setPrograms] = useState([]);
     const [departments, setDepartments] = useState([]);
+    const [hasInitializedFilter, setHasInitializedFilter] = useState(false);
+    const [autoApplyPending, setAutoApplyPending] = useState(false);
 
     // Load top-level dropdowns
     useEffect(() => {
@@ -137,6 +140,73 @@ export default function BottomSidebar({ height, startDate, endDate, onEventsFetc
             }
         });
     }, [filters]);
+
+    useEffect(() => {
+        const initializeCurrentUserFilter = async () => {
+            if (!currentUserId || hasInitializedFilter) return;
+
+            const { data, error } = await supabase.rpc("get_user_profile_ids", {
+                p_user_id: currentUserId,
+            });
+
+            if (error) {
+                console.error("Error fetching user profile ids:", error);
+                setHasInitializedFilter(true);
+                return;
+            }
+
+            const profile = Array.isArray(data) ? data[0] : data;
+            if (!profile) {
+                setHasInitializedFilter(true);
+                return;
+            }
+
+            if (profile.role === "Teacher") {
+                setFilters((prev) => {
+                    if (!prev.length) return prev;
+                    const newFilters = [...prev];
+                    newFilters[0] = {
+                        ...newFilters[0],
+                        role: "Teacher",
+                        selectedDepartment: profile.department_id || "",
+                        selectedTeacher: profile.user_id || "",
+                        selectedProgram: "",
+                        selectedOperation: "",
+                        selectedGroup: "",
+                        selectedSubgroup: "",
+                        operations: [],
+                        groups: [],
+                        subgroups: [],
+                        teachers: [],
+                    };
+                    return newFilters;
+                });
+                setAutoApplyPending(true);
+            } else if (profile.role === "Student") {
+                setFilters((prev) => {
+                    if (!prev.length) return prev;
+                    const newFilters = [...prev];
+                    newFilters[0] = {
+                        ...newFilters[0],
+                        role: "Student",
+                        selectedProgram: profile.program_id || "",
+                        selectedOperation: profile.operation_id || "",
+                        selectedGroup: profile.group_id || "",
+                        selectedSubgroup: profile.subgroup_id || "",
+                        selectedDepartment: "",
+                        selectedTeacher: "",
+                        teachers: [],
+                    };
+                    return newFilters;
+                });
+                setAutoApplyPending(true);
+            }
+
+            setHasInitializedFilter(true);
+        };
+
+        initializeCurrentUserFilter();
+    }, [currentUserId, hasInitializedFilter]);
 
     const addFilterRow = () => {
         setFilters((prev) => [
@@ -259,6 +329,14 @@ export default function BottomSidebar({ height, startDate, endDate, onEventsFetc
         if (!startDate || !endDate) return;
         applyAllFilters();
     }, [refreshTrigger]);
+
+    useEffect(() => {
+        if (!autoApplyPending) return;
+        if (!startDate || !endDate) return;
+
+        applyAllFilters();
+        setAutoApplyPending(false);
+    }, [autoApplyPending, filters, startDate, endDate]);
 
     return (
         <div className="sidebar-bottom" style={{ height: `${height}px`, overflowY: "auto", padding: "10px" }}>

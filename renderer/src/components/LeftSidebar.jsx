@@ -7,7 +7,6 @@ import GroupsPage from "../pages/GroupsPage";
 import SubgroupsPage from "../pages/SubgroupsPage";
 import VacationsPage from "../pages/VacationsPage";
 import DepartmentsPage from "../pages/DepartmentsPage";
-import ProfilePage from "../pages/ProfilePage";
 import SlotInfoPage from "../pages/SlotInfoPage";
 import RoutinesPage from "../pages/RoutinesPage";
 
@@ -32,8 +31,6 @@ export default function LeftSidebar({ width, onCreateClick, activePage }) {
         return <VacationsPage />;
       case "departments":
         return <DepartmentsPage />;
-      case "profile":
-        return <ProfilePage />;
       case "slotinfo":
         return <SlotInfoPage />;
       case "routines":
