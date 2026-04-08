@@ -677,3 +677,115 @@ export async function fetchKnowledge(instituteId) {
   if (error) throw error;
   return data || [];
 }
+
+function formatSlotInfo(eventObj) {
+  if (!eventObj) return "N/A";
+  if (eventObj.start_time || eventObj.end_time) {
+    return `${eventObj.start_time || "?"} to ${eventObj.end_time || "?"}`;
+  }
+  if (eventObj.start_slot || eventObj.end_slot) {
+    return `${eventObj.start_slot || "?"} to ${eventObj.end_slot || "?"}`;
+  }
+  if (eventObj.start_at || eventObj.end_at) {
+    return `${eventObj.start_at || "?"} to ${eventObj.end_at || "?"}`;
+  }
+  return "N/A";
+}
+
+function localEventNotificationFallback({ action = "created", oldAttributes, newAttributes, deletedAttributes }) {
+  if (action === "deleted") {
+    const deleted = deletedAttributes || oldAttributes || newAttributes || {};
+    const title = deleted.title || "Untitled Event";
+    const date = deleted.date || "N/A";
+    const slot = formatSlotInfo(deleted);
+    return `Event cancelled - Title: ${title}, Date: ${date}, Slot: ${slot}.`;
+  }
+
+  const current = newAttributes || oldAttributes || {};
+  const title = current.title || "Untitled Event";
+  const date = current.date || "N/A";
+  const slot = formatSlotInfo(current);
+
+  if (oldAttributes && newAttributes) {
+    const changedKeys = Object.keys(newAttributes).filter(
+      (key) => JSON.stringify(newAttributes[key]) !== JSON.stringify(oldAttributes[key])
+    );
+    const changes = changedKeys.length
+      ? changedKeys
+          .map((key) => `${key}: ${oldAttributes[key] ?? "null"} -> ${newAttributes[key] ?? "null"}`)
+          .join("; ")
+      : "No field-level change detected.";
+
+    return `Event updated - Title: ${title}, Date: ${date}, Slot: ${slot}. Changes: ${changes}`;
+  }
+
+  return `New event - Title: ${title}, Date: ${date}, Slot: ${slot}. Please check your routine.`;
+}
+
+export async function generateEventNotificationFromJson({
+  action = "created",
+  oldAttributes = null,
+  newAttributes = null,
+  deletedAttributes = null,
+}) {
+  const instruction =
+    "if there are two jsons, summarize the changes in the event and include event identity info like title, group, date, time, and description. if there is a single json, summarize the new event using the same attributes for a clear and concise student notification. include no additional texts. highlight changes for each attribute exactly in this format:\nTitle: CSE 3210 (B1) (MHO, WIS) (updated)\nGroup: B (changed from Subgroup B1)\nDate: 2026-04-07 (changed from 2026-04-08)\nTime: 11:30 AM to 1:10 PM (changed from 11:20 AM to 1:10 PM )\nDescription: Bring BYOD (updated)\nThis event has been updated.\nconvert 24h time to 12h time. use bold for changed parts and labels. if event is deleted, end with: This event has been cancelled. derive group/subgroup/program labels from from_table and for_users fields when present. Here is the JSON data:\n\n`;";
+
+  let payload;
+
+  if (action === "deleted") {
+    payload = { action: "deleted", deletedAttributes: deletedAttributes || oldAttributes || newAttributes };
+  } else if (oldAttributes && newAttributes) {
+    payload = { action: "updated", oldAttributes, newAttributes };
+  } else {
+    payload = { action: "created", newAttributes: newAttributes || oldAttributes };
+  }
+
+  if (!GROQ_API_KEY) {
+    return localEventNotificationFallback({ action, oldAttributes, newAttributes, deletedAttributes });
+  }
+
+  try {
+    const response = await fetch(GROQ_API_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${GROQ_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: "llama-3.3-70b-versatile",
+        temperature: 0.2,
+        max_tokens: 220,
+        messages: [
+          {
+            role: "system",
+            content:
+              "You write student-facing academic event notifications. Follow user instructions exactly. Output only the final notification text.",
+          },
+          {
+            role: "user",
+            content: `${instruction}\n\nJSON:\n${JSON.stringify(payload, null, 2)}`,
+          },
+        ],
+      }),
+    });
+
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      const message = err.error?.message || `Groq API error (${response.status})`;
+      if (isQuotaOrBillingError(message)) {
+        return localEventNotificationFallback({ action, oldAttributes, newAttributes, deletedAttributes });
+      }
+      throw new Error(message);
+    }
+
+    const data = await response.json();
+    const text = data.choices?.[0]?.message?.content?.trim();
+    return text || localEventNotificationFallback({ action, oldAttributes, newAttributes, deletedAttributes });
+  } catch (error) {
+    if (isQuotaOrBillingError(error?.message)) {
+      return localEventNotificationFallback({ action, oldAttributes, newAttributes, deletedAttributes });
+    }
+    return localEventNotificationFallback({ action, oldAttributes, newAttributes, deletedAttributes });
+  }
+}
