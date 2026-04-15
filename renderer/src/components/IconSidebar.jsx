@@ -59,9 +59,10 @@ export default function IconSidebar({ onIconClick, activePage }) {
               key={item.id}
               className={`icon-item ${isActive ? "active" : ""}`}
               onClick={() => onIconClick(item.id)}
-              data-tooltip={item.name}
+              title={item.name}
             >
-              <IconComponent color={isActive ? "blue" : "white"} size={20} />
+              <IconComponent color={isActive ? "#f59e0b" : "#f8fafc"} size={15} />
+              <span className="icon-item-label">{item.name}</span>
             </div>
           );
         })}
@@ -74,7 +75,10 @@ export default function IconSidebar({ onIconClick, activePage }) {
         onClick={() => onIconClick("profile")}
         title="Profile"
       >
-        <BsPersonCircle color={activePage === "profile" ? "blue" : "white"} size={20} />
+        <div className={`icon-item ${activePage === "profile" ? "active" : ""}`} style={{ width: "100%" }}>
+          <BsPersonCircle color={activePage === "profile" ? "#f59e0b" : "#f8fafc"} size={15} />
+          <span className="icon-item-label">Profile</span>
+        </div>
       </div>
     </div>
   );

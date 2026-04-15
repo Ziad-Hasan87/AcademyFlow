@@ -5,6 +5,16 @@ import Modal from "./Modal";
 import CreateEvent from "./CreateEvent";
 import EditEvent from "./EditEvent";
 
+const WEEKDAY_NAMES = [
+  "Sunday",
+  "Monday",
+  "Tuesday",
+  "Wednesday",
+  "Thursday",
+  "Friday",
+  "Saturday",
+];
+
 export default function MainContent({ events, startOfWeek, endOfWeek, onCreateEvent, onRefreshEvents }) {
   const { userData } = useAuth();
   const [slots, setSlots] = useState([]);
@@ -12,16 +22,6 @@ export default function MainContent({ events, startOfWeek, endOfWeek, onCreateEv
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [editableEvent, setEditableEvent] = useState(null);
   const [selectedCreateDate, setSelectedCreateDate] = useState("");
-
-  const weekdayNames = [
-    "Sunday",
-    "Monday",
-    "Tuesday",
-    "Wednesday",
-    "Thursday",
-    "Friday",
-    "Saturday",
-  ];
 
   useEffect(() => {
     if (userData?.institute_id) {
@@ -57,6 +57,22 @@ export default function MainContent({ events, startOfWeek, endOfWeek, onCreateEv
     return `${year}-${month}-${day}`;
   };
 
+  const getEventTextColor = (backgroundColor) => {
+    if (!backgroundColor || backgroundColor[0] !== "#" || backgroundColor.length !== 7) {
+      return "#0f172a";
+    }
+
+    const r = parseInt(backgroundColor.slice(1, 3), 16);
+    const g = parseInt(backgroundColor.slice(3, 5), 16);
+    const b = parseInt(backgroundColor.slice(5, 7), 16);
+    const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+
+    return luminance > 0.62 ? "#0f172a" : "#f8fafc";
+  };
+
+  const getRowBackground = (dayIndex) =>
+    dayIndex % 2 === 0 ? "rgba(226, 245, 239, 0.58)" : "rgba(255, 255, 255, 0.78)";
+
   const days = useMemo(() => {
     if (!startOfWeek || !endOfWeek) return [];
 
@@ -70,7 +86,7 @@ export default function MainContent({ events, startOfWeek, endOfWeek, onCreateEv
     while (current <= finalDate) {
       items.push({
         date: formatDateKey(current),
-        day: weekdayNames[current.getDay()],
+        day: WEEKDAY_NAMES[current.getDay()],
       });
       current.setDate(current.getDate() + 1);
     }
@@ -181,10 +197,16 @@ export default function MainContent({ events, startOfWeek, endOfWeek, onCreateEv
         style={{
           position: "relative",
           width: "100%",
-          marginBottom: "8px"
+          marginBottom: "10px",
+          padding: "10px 14px",
+          borderRadius: "14px",
+          background: "linear-gradient(120deg, #052e2b 0%, #0f766e 60%, #0b4a6f 100%)",
+          boxShadow: "0 14px 24px rgba(15, 23, 42, 0.24)",
         }}
       >
-        <h1 style={{ textAlign: "center", margin: 0 }}>Main Content</h1>
+        <h1 style={{ textAlign: "center", margin: 0, color: "#f8fafc", fontSize: "1.5rem", letterSpacing: "0.02em" }}>
+          Weekly Schedule
+        </h1>
 
         <button
           type="button"
@@ -205,7 +227,11 @@ export default function MainContent({ events, startOfWeek, endOfWeek, onCreateEv
             borderRadius: "8px",
             display: "inline-flex",
             alignItems: "center",
-            justifyContent: "center"
+            justifyContent: "center",
+            background: "rgba(248, 250, 252, 0.2)",
+            border: "1px solid rgba(248, 250, 252, 0.35)",
+            color: "#f8fafc",
+            boxShadow: "0 6px 14px rgba(2, 6, 23, 0.24)",
           }}
         >
           <svg
@@ -240,17 +266,45 @@ export default function MainContent({ events, startOfWeek, endOfWeek, onCreateEv
           gridTemplateColumns: `repeat(${slots.length + 1}, 1fr)`,
           gridTemplateRows: gridRows,
           position: "relative",
-          width: "100%"
+          width: "100%",
+          borderRadius: "14px",
+          overflow: "hidden",
+          border: "1px solid rgba(148, 163, 184, 0.35)",
+          boxShadow: "0 18px 34px rgba(15, 23, 42, 0.16)",
+          background: "rgba(255, 255, 255, 0.72)",
+          backdropFilter: "blur(8px)",
+          WebkitBackdropFilter: "blur(8px)",
         }}
       >
         {/* top-left */}
-        <div className="grid-cell header-cell"></div>
+        <div
+          className="grid-cell header-cell"
+          style={{
+            background: "linear-gradient(135deg, #0f766e 0%, #0b4a6f 100%)",
+            borderColor: "rgba(255, 255, 255, 0.25)",
+          }}
+        ></div>
 
         {/* slot headers */}
         {slots.map((slot) => (
-          <div key={slot.id} className="grid-cell header-cell" style={{ backgroundColor: "#9fc69f" }}>
+          <div
+            key={slot.id}
+            className="grid-cell header-cell"
+            style={{
+              background: "linear-gradient(135deg, #0f766e 0%, #0b4a6f 100%)",
+              color: "#f8fafc",
+              borderColor: "rgba(255, 255, 255, 0.24)",
+              display: "flex",
+              flexDirection: "column",
+              justifyContent: "center",
+              alignItems: "center",
+              gap: "2px",
+              fontWeight: 700,
+              letterSpacing: "0.01em",
+            }}
+          >
             <div>{slot.name}</div>
-            <div style={{ fontSize: "0.75em", color: "#555" }}>
+            <div style={{ fontSize: "0.75em", color: "rgba(248,250,252,0.88)" }}>
               {formatTimeToAMPM(slot.start)} - {formatTimeToAMPM(slot.end)}
             </div>
           </div>
@@ -264,11 +318,18 @@ export default function MainContent({ events, startOfWeek, endOfWeek, onCreateEv
               style={{
                 gridRow: dayIndex + 2,
                 gridColumn: 1,
-                backgroundColor: dayIndex % 2 === 1 ? "#ffffff" : "#edffe8fb"
+                background: "linear-gradient(180deg, rgba(226, 232, 240, 0.9) 0%, rgba(241, 245, 249, 0.9) 100%)",
+                display: "flex",
+                flexDirection: "column",
+                justifyContent: "center",
+                alignItems: "center",
+                borderColor: "rgba(148, 163, 184, 0.28)",
+                color: "#0f172a",
+                fontWeight: 700,
               }}
             >
               <div>{day.day}</div>
-              <div style={{ fontSize: "0.75em", color: "#555" }}>
+              <div style={{ fontSize: "0.75em", color: "#475569", fontWeight: 600 }}>
                 {formatDateLabel(day.date)}
               </div>
             </div>
@@ -281,7 +342,8 @@ export default function MainContent({ events, startOfWeek, endOfWeek, onCreateEv
                   gridRow: dayIndex + 2,
                   gridColumn: slotIndex + 2,
                   pointerEvents: "none",
-                  backgroundColor: dayIndex % 2 === 1 ? "#ffffff" : "#edffe8fb"
+                  background: getRowBackground(dayIndex),
+                  borderColor: "rgba(148, 163, 184, 0.2)",
                 }}
               />
             ))}
@@ -313,11 +375,16 @@ export default function MainContent({ events, startOfWeek, endOfWeek, onCreateEv
                 position: "relative",
                 zIndex: 5,
                 backgroundColor: ev.filterColor || "deepskyblue",
-                borderRadius: "4px",
-                padding: "4px",
+                color: getEventTextColor(ev.filterColor),
+                borderRadius: "8px",
+                border: "1px solid rgba(15, 23, 42, 0.16)",
+                boxShadow: "0 6px 14px rgba(15, 23, 42, 0.2)",
+                padding: "6px 8px",
                 fontSize: "0.8em",
+                fontWeight: 700,
                 overflow: "hidden",
                 cursor: "pointer",
+                transition: "transform 0.2s ease, box-shadow 0.2s ease",
               }}
                 onClick={() => {
                   setEditableEvent({ ...ev });
@@ -354,12 +421,15 @@ export default function MainContent({ events, startOfWeek, endOfWeek, onCreateEv
                   height: "20px",
                   marginTop: "2px",
                   marginLeft: "2px",
-                  borderRadius: "4px",
-                  border: "none",
-                  background: "#00e5ff",
+                  borderRadius: "6px",
+                  border: "1px solid rgba(148, 163, 184, 0.45)",
+                  background: "linear-gradient(120deg, #d1fae5 0%, #bfdbfe 100%)",
+                  color: "#0f172a",
+                  fontWeight: 700,
                   cursor: "pointer",
                   pointerEvents: "auto",
                   zIndex: 20,
+                  boxShadow: "0 4px 10px rgba(15, 23, 42, 0.12)",
                 }}
                 onClick={() => {
                   setSelectedCreateDate(day.date);

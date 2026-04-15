@@ -11,11 +11,11 @@ import {
 import { useAuth } from "../contexts/AuthContext";
 
 const FILTER_COLORS = [
-    "AntiqueWhite",
-    "Gainsboro",
-    "Lavenderblush",
-    "deepskyblue",
-    "mediumseagreen",
+    "#0EA5E9",
+    "#10B981",
+    "#F59E0B",
+    "#8B5CF6",
+    "#F43F5E",
 ];
 
 export default function BottomSidebar({ height, startDate, endDate, onEventsFetched, onSelectedOperation, refreshTrigger }) {
@@ -26,7 +26,7 @@ export default function BottomSidebar({ height, startDate, endDate, onEventsFetc
     const [filters, setFilters] = useState([
         {
             role: "",
-            color: "deepskyblue",
+            color: "#0EA5E9",
             selectedProgram: "",
             operations: [],
             selectedOperation: "",
@@ -213,7 +213,7 @@ export default function BottomSidebar({ height, startDate, endDate, onEventsFetc
             ...prev,
             {
                 role: "",
-                color: "deepskyblue",
+                color: "#0EA5E9",
                 selectedProgram: "",
                 operations: [],
                 selectedOperation: "",
