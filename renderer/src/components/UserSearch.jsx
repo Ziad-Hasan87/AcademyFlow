@@ -4,7 +4,7 @@ import { useAuth } from "../contexts/AuthContext";
 import { fetchPrograms, fetchGroups } from "../utils/fetch";
 import { ROLES } from "../utils/types";
 
-export default function UserSearch() {
+export default function UserSearch({ onUserSelect }) {
   const { userData } = useAuth();
   const currentInstituteId = userData?.institute_id;
 
@@ -323,6 +323,8 @@ export default function UserSearch() {
       boxShadow: "0 8px 16px rgba(15, 23, 42, 0.08)",
       padding: "12px",
       overflow: "hidden",
+      cursor: "pointer",
+      transition: "transform 120ms ease, box-shadow 120ms ease, border-color 120ms ease",
     },
     cardTop: {
       display: "flex",
@@ -538,7 +540,29 @@ export default function UserSearch() {
             const avatarLabel = String(displayName).trim().charAt(0).toUpperCase() || "?";
 
             return (
-              <div key={item.userId} style={ui.card}>
+              <div
+                key={item.userId}
+                style={ui.card}
+                role="button"
+                tabIndex={0}
+                onClick={() => onUserSelect?.(item.userId)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    onUserSelect?.(item.userId);
+                  }
+                }}
+                onMouseEnter={(event) => {
+                  event.currentTarget.style.transform = "translateY(-2px)";
+                  event.currentTarget.style.borderColor = "rgba(14, 116, 144, 0.45)";
+                  event.currentTarget.style.boxShadow = "0 12px 20px rgba(15, 23, 42, 0.12)";
+                }}
+                onMouseLeave={(event) => {
+                  event.currentTarget.style.transform = "translateY(0)";
+                  event.currentTarget.style.borderColor = "rgba(148, 163, 184, 0.35)";
+                  event.currentTarget.style.boxShadow = "0 8px 16px rgba(15, 23, 42, 0.08)";
+                }}
+              >
                 <div style={ui.cardTop}>
                   <div style={{ ...ui.avatar, background: badgeColor }}>{avatarLabel}</div>
                   <div style={{ minWidth: 0 }}>

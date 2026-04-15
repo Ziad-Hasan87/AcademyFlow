@@ -28,6 +28,7 @@ export default function AppLayout() {
   const [activePage, setActivePage] = useState(null); // active page state
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [selectedProfileUserId, setSelectedProfileUserId] = useState(null);
 
   const [startOfWeek, setStartOfWeek] = useState(null);
   const [endOfWeek, setEndOfWeek] = useState(null);
@@ -43,6 +44,7 @@ export default function AppLayout() {
 
   const handleIconClick = (pageId) => {
     if (pageId === "profile") {
+      setSelectedProfileUserId(userData?.id || null);
       setIsProfileOpen(true);
       return;
     }
@@ -53,6 +55,14 @@ export default function AppLayout() {
     }
 
     setActivePage(pageId);
+  };
+
+  const handleUserSelectFromSearch = (userId) => {
+    if (!userId) return;
+
+    setSelectedProfileUserId(userId);
+    setIsSearchOpen(false);
+    setIsProfileOpen(true);
   };
 
   return (
@@ -124,7 +134,7 @@ export default function AppLayout() {
         contentClassName="profile-modal-content"
         bodyClassName="profile-modal-body"
       >
-        <ProfilePage userId={userData?.id} />
+        <ProfilePage userId={selectedProfileUserId || userData?.id} />
       </Modal>
 
       <Modal
@@ -134,7 +144,7 @@ export default function AppLayout() {
         contentClassName="profile-modal-content"
         bodyClassName="profile-modal-body"
       >
-        <UserSearch />
+        <UserSearch onUserSelect={handleUserSelectFromSearch} />
       </Modal>
 
       {/* Toast Notifications */}
