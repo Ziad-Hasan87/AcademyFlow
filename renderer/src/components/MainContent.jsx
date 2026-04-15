@@ -5,14 +5,15 @@ import Modal from "./Modal";
 import CreateEvent from "./CreateEvent";
 import EditEvent from "./EditEvent";
 
-export default function MainContent({ events, onCreateEvent, onRefreshEvents }) {
+export default function MainContent({ events, startOfWeek, endOfWeek, onCreateEvent, onRefreshEvents }) {
   const { userData } = useAuth();
   const [slots, setSlots] = useState([]);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [editableEvent, setEditableEvent] = useState(null);
+  const [selectedCreateDate, setSelectedCreateDate] = useState("");
 
-  const days = [
+  const weekdayNames = [
     "Sunday",
     "Monday",
     "Tuesday",
@@ -37,6 +38,46 @@ export default function MainContent({ events, onCreateEvent, onRefreshEvents }) 
     return `${hour}:${minute} ${ampm}`;
   };
 
+  const formatDateLabel = (dateValue) => {
+    if (!dateValue) return "";
+
+    const parsedDate = new Date(dateValue);
+    if (Number.isNaN(parsedDate.getTime())) return dateValue;
+
+    return parsedDate.toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+    });
+  };
+
+  const formatDateKey = (date) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  };
+
+  const days = useMemo(() => {
+    if (!startOfWeek || !endOfWeek) return [];
+
+    const items = [];
+    const current = new Date(startOfWeek);
+    const finalDate = new Date(endOfWeek);
+
+    current.setHours(0, 0, 0, 0);
+    finalDate.setHours(0, 0, 0, 0);
+
+    while (current <= finalDate) {
+      items.push({
+        date: formatDateKey(current),
+        day: weekdayNames[current.getDay()],
+      });
+      current.setDate(current.getDate() + 1);
+    }
+
+    return items;
+  }, [startOfWeek, endOfWeek]);
+
   // slot index lookup (fast)
   const slotIndexMap = useMemo(() => {
     const map = {};
@@ -49,13 +90,15 @@ export default function MainContent({ events, onCreateEvent, onRefreshEvents }) 
   // derive weekday from event.date
   const eventsWithDay = useMemo(() => {
     return events.map((ev) => {
-      if (!ev.date) return { ...ev, _day: null };
+      if (!ev.date) return { ...ev, _day: null, _date: null };
+
+      const eventDate = String(ev.date).slice(0, 10);
 
       const day = new Date(ev.date).toLocaleDateString("en-US", {
         weekday: "long",
       });
 
-      return { ...ev, _day: day };
+      return { ...ev, _day: day, _date: eventDate };
     });
   }, [events]);
 
@@ -65,7 +108,7 @@ export default function MainContent({ events, onCreateEvent, onRefreshEvents }) 
 
     days.forEach((day) => {
       const dayEvents = events
-        .filter((e) => e.start_slot && e._day === day)
+        .filter((e) => e.start_slot && e._date === day.date)
         .sort(
           (a, b) =>
             slotIndexMap[a.start_slot] - slotIndexMap[b.start_slot]
@@ -106,7 +149,7 @@ export default function MainContent({ events, onCreateEvent, onRefreshEvents }) 
         });
       });
 
-      lanesByDay[day] = lanes.length || 1;
+      lanesByDay[day.date] = lanes.length || 1;
     });
 
     return { lanesByDay, positionedEvents };
@@ -120,7 +163,7 @@ export default function MainContent({ events, onCreateEvent, onRefreshEvents }) 
 
   const gridRows = [
     "5vh",
-    ...days.map((day) => `${lanesByDay[day] * 8}vh`),
+    ...days.map((day) => `${lanesByDay[day.date] * 8}vh`),
   ].join(" ");
 
   return (
@@ -215,7 +258,7 @@ export default function MainContent({ events, onCreateEvent, onRefreshEvents }) 
 
         {/* grid cells */}
         {days.map((day, dayIndex) => (
-          <React.Fragment key={day}>
+          <React.Fragment key={day.date}>
             <div
               className="grid-cell header-cell"
               style={{
@@ -224,12 +267,15 @@ export default function MainContent({ events, onCreateEvent, onRefreshEvents }) 
                 backgroundColor: dayIndex % 2 === 1 ? "#ffffff" : "#edffe8fb"
               }}
             >
-              {day}
+              <div>{day.day}</div>
+              <div style={{ fontSize: "0.75em", color: "#555" }}>
+                {formatDateLabel(day.date)}
+              </div>
             </div>
 
             {slots.map((slot, slotIndex) => (
               <div
-                key={`${day}-${slot.id}`}
+                key={`${day.date}-${slot.id}`}
                 className="grid-cell"
                 style={{
                   gridRow: dayIndex + 2,
@@ -244,7 +290,7 @@ export default function MainContent({ events, onCreateEvent, onRefreshEvents }) 
 
         {/* EVENTS */}
         {positionedEvents.map((ev) => {
-          const dayIndex = days.indexOf(ev._day);
+          const dayIndex = days.findIndex((day) => day.date === ev._date);
           const startIndex = slotIndexMap[ev.start_slot];
           const endIndex = slotIndexMap[ev.end_slot];
 
@@ -300,7 +346,7 @@ export default function MainContent({ events, onCreateEvent, onRefreshEvents }) 
           {days.map((day, dayIndex) =>
             slots.map((slot) => (
               <button
-                key={`${day}-${slot.id}-btn`}
+                key={`${day.date}-${slot.id}-btn`}
                 style={{
                   gridRow: dayIndex + 2,
                   gridColumn: slotIndexMap[slot.id] + 2,
@@ -315,9 +361,10 @@ export default function MainContent({ events, onCreateEvent, onRefreshEvents }) 
                   pointerEvents: "auto",
                   zIndex: 20,
                 }}
-                onClick={() =>
-                  setIsCreateOpen(true)
-                }
+                onClick={() => {
+                  setSelectedCreateDate(day.date);
+                  setIsCreateOpen(true);
+                }}
               >
                 +
               </button>
@@ -328,8 +375,10 @@ export default function MainContent({ events, onCreateEvent, onRefreshEvents }) 
       <Modal isOpen={isCreateOpen} onClose={() => setIsCreateOpen(false)}>
         <CreateEvent
           routineId={null}
+          defaultDate={selectedCreateDate}
           onSave={() => {
             setIsCreateOpen(false);
+            setSelectedCreateDate("");
             onCreateEvent?.();
           }}
         />

@@ -11,6 +11,7 @@ import CreateRoutineModal from "../components/CreateRoutine"; // ✅ import moda
 import IconSidebar from "../components/IconSidebar"; // ✅ import icon sidebar
 import Modal from "../components/Modal";
 import ProfilePage from "../pages/ProfilePage";
+import UserSearch from "../components/UserSearch";
 import Toast from "../components/Toast";
 import { useAuth } from "../contexts/AuthContext";
 
@@ -26,6 +27,7 @@ export default function AppLayout() {
   const [showCreateUser, setShowCreateUser] = useState(false); // ✅ modal state
   const [activePage, setActivePage] = useState(null); // active page state
   const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
 
   const [startOfWeek, setStartOfWeek] = useState(null);
   const [endOfWeek, setEndOfWeek] = useState(null);
@@ -45,6 +47,11 @@ export default function AppLayout() {
       return;
     }
 
+    if (pageId === "search") {
+      setIsSearchOpen(true);
+      return;
+    }
+
     setActivePage(pageId);
   };
 
@@ -54,7 +61,7 @@ export default function AppLayout() {
       <div className="main-app">
         <IconSidebar
           onIconClick={handleIconClick}
-          activePage={isProfileOpen ? "profile" : activePage}
+          activePage={isProfileOpen ? "profile" : isSearchOpen ? "search" : activePage}
         />
 
         <LeftSidebar
@@ -72,6 +79,8 @@ export default function AppLayout() {
         <div className="middle-group">
           <MainContent
             events={events}
+            startOfWeek={startOfWeek}
+            endOfWeek={endOfWeek}
             onRefreshEvents={() => setEventsRefreshTick((tick) => tick + 1)}
           />
 
@@ -116,6 +125,16 @@ export default function AppLayout() {
         bodyClassName="profile-modal-body"
       >
         <ProfilePage userId={userData?.id} />
+      </Modal>
+
+      <Modal
+        isOpen={isSearchOpen}
+        onClose={() => setIsSearchOpen(false)}
+        title="User Search"
+        contentClassName="profile-modal-content"
+        bodyClassName="profile-modal-body"
+      >
+        <UserSearch />
       </Modal>
 
       {/* Toast Notifications */}

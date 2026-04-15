@@ -1,5 +1,5 @@
 import React from "react";
-import { FiUsers, FiShield, FiActivity, FiBook, FiBookOpen, FiSun, FiUser } from "react-icons/fi";
+import { FiUsers, FiShield, FiActivity, FiBook, FiBookOpen, FiSun, FiUser, FiSearch } from "react-icons/fi";
 import { GoOrganization } from "react-icons/go";
 import { FaRegCalendarTimes, FaCog, FaLayerGroup,FaRegUser,FaRegIdCard, FaRobot } from "react-icons/fa";
 import { FaPeopleRoof } from "react-icons/fa6";
@@ -27,6 +27,7 @@ export default function IconSidebar({ onIconClick, activePage }) {
     { id: "botinfo", icon: FaRobot, name: "Bot Info", minRole: "Admin" },
     { id: "slotinfo", icon: MdOutlineGroupWork, name: "SlotInfo", minRole: "Moderator" },
     { id: "routines", icon: FiActivity, name: "Routines", minRole: "Moderator" },
+    { id: "search", icon: FiSearch, name: "Search", minRole: "Moderator" },
   ];
   
   const userRole = userData?.role;

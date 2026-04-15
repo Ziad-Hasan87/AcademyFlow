@@ -8,6 +8,7 @@ import {
     fetchSlots,
     fetchGroups,
     fetchSubgroups,
+    fetchDepartments,
     fetchProgramChatId,
     fetchBotId,
     resolveProgramIdFromEventTarget,
@@ -51,6 +52,15 @@ export default function EditEvent({ event, onSave }) {
     const [operations, setOperations] = useState([]);
     const [groups, setGroups] = useState([]);
     const [subgroups, setSubgroups] = useState([]);
+    const [departments, setDepartments] = useState([]);
+
+    const [enableModerators, setEnableModerators] = useState(true);
+    const [selectedDepartment, setSelectedDepartment] = useState("");
+    const [teachers, setTeachers] = useState([]);
+    const [teacherSearchQuery, setTeacherSearchQuery] = useState("");
+    const [selectedTeacherToAdd, setSelectedTeacherToAdd] = useState("");
+    const [selectedModerators, setSelectedModerators] = useState([]);
+    const [showTeacherDropdown, setShowTeacherDropdown] = useState(false);
 
     const [selectedProgram, setSelectedProgram] = useState("");
     const [selectedOperation, setSelectedOperation] = useState("");
@@ -169,6 +179,145 @@ export default function EditEvent({ event, onSave }) {
         return `${hours}:${minutes}`;
     };
 
+    const getTeacherLabel = (teacher) => {
+        const teacherName = teacher.users?.name || teacher.name || "Unknown";
+        const codename = teacher.codename || "N/A";
+        return `${teacherName} - ${codename}`;
+    };
+
+    const loadEventModerators = async (eventId) => {
+        if (!eventId) return;
+
+        const { data: moderatorRows, error: moderatorRowsError } = await supabase
+            .from("event_moderators")
+            .select("user_id")
+            .eq("event_id", eventId);
+
+        if (moderatorRowsError) {
+            console.error("Error fetching event moderators:", moderatorRowsError);
+            return;
+        }
+
+        const userIds = (moderatorRows || []).map((row) => row.user_id).filter(Boolean);
+
+        if (userIds.length === 0) {
+            setSelectedModerators([]);
+            setEnableModerators(true);
+            return;
+        }
+
+        const { data: staffRows, error: staffRowsError } = await supabase
+            .from("staffs")
+            .select("id, codename, users:users!staffs_id_fkey(name)")
+            .in("id", userIds);
+
+        if (staffRowsError) {
+            console.error("Error fetching moderator staff details:", staffRowsError);
+            return;
+        }
+
+        const staffById = new Map((staffRows || []).map((teacher) => [teacher.id, teacher]));
+
+        const mergedModerators = userIds.map((id) => {
+            const matched = staffById.get(id);
+            if (!matched) {
+                return {
+                    id,
+                    label: "Unknown - N/A",
+                };
+            }
+
+            return {
+                id,
+                label: getTeacherLabel(matched),
+            };
+        });
+
+        setSelectedModerators(mergedModerators);
+        setEnableModerators(true);
+    };
+
+    const syncEventModerators = async (eventId) => {
+        if (!eventId) return true;
+
+        const { error: deleteError } = await supabase
+            .from("event_moderators")
+            .delete()
+            .eq("event_id", eventId);
+
+        if (deleteError) {
+            console.error("Error clearing event moderators:", deleteError);
+            return false;
+        }
+
+        if (!enableModerators || selectedModerators.length === 0) {
+            return true;
+        }
+
+        const rows = selectedModerators.map((moderator) => ({
+            user_id: moderator.id,
+            event_id: eventId,
+        }));
+
+        const { error: insertError } = await supabase
+            .from("event_moderators")
+            .insert(rows);
+
+        if (insertError) {
+            console.error("Error saving event moderators:", insertError);
+            return false;
+        }
+
+        return true;
+    };
+
+    const addSelectedModerator = () => {
+        if (!selectedTeacherToAdd) return;
+
+        const teacherToAdd = teachers.find((teacher) => teacher.id === selectedTeacherToAdd);
+        if (!teacherToAdd) return;
+
+        setSelectedModerators((prev) => {
+            if (prev.some((moderator) => moderator.id === teacherToAdd.id)) return prev;
+            return [
+                ...prev,
+                {
+                    id: teacherToAdd.id,
+                    label: getTeacherLabel(teacherToAdd),
+                },
+            ];
+        });
+
+        setSelectedTeacherToAdd("");
+        setTeacherSearchQuery("");
+        setShowTeacherDropdown(false);
+    };
+
+    const removeSelectedModerator = (userId) => {
+        setSelectedModerators((prev) => prev.filter((moderator) => moderator.id !== userId));
+    };
+
+    const filteredTeachers = teachers.filter((teacher) => {
+        const teacherName = String(teacher.users?.name || teacher.name || "").toLowerCase();
+        const query = teacherSearchQuery.trim().toLowerCase();
+
+        if (!query) return true;
+
+        return teacherName.includes(query);
+    });
+
+    const handleTeacherSearchChange = (value) => {
+        setTeacherSearchQuery(value);
+        setSelectedTeacherToAdd("");
+        setShowTeacherDropdown(Boolean(value.trim()));
+    };
+
+    const handleTeacherOptionPick = (teacher) => {
+        setTeacherSearchQuery(getTeacherLabel(teacher));
+        setSelectedTeacherToAdd(teacher.id);
+        setShowTeacherDropdown(false);
+    };
+
 
     useEffect(() => {
 
@@ -181,6 +330,11 @@ export default function EditEvent({ event, onSave }) {
             () => { }
         );
 
+    }, [userData]);
+
+    useEffect(() => {
+        if (!userData?.institute_id) return;
+        fetchDepartments(userData.institute_id, "", setDepartments, () => { });
     }, [userData]);
 
     useEffect(() => {
@@ -242,7 +396,31 @@ export default function EditEvent({ event, onSave }) {
     useEffect(() => {
         if (!event?.id) return;
         loadAttachments();
+        loadEventModerators(event.id);
     }, [event]);
+
+    useEffect(() => {
+        if (!selectedDepartment) {
+            setTeachers([]);
+            setSelectedTeacherToAdd("");
+            setTeacherSearchQuery("");
+            setShowTeacherDropdown(false);
+            return;
+        }
+
+        supabase
+            .from("staffs")
+            .select("id, codename, users:users!staffs_id_fkey(name)")
+            .eq("department_id", selectedDepartment)
+            .then(({ data, error }) => {
+                if (error) {
+                    console.error("Error fetching teachers:", error);
+                    return;
+                }
+
+                setTeachers(data || []);
+            });
+    }, [selectedDepartment]);
 
     const loadAttachments = async () => {
 
@@ -603,6 +781,13 @@ export default function EditEvent({ event, onSave }) {
 
                     continue;
                 }
+            }
+
+            const moderatorSyncOk = await syncEventModerators(event.id);
+
+            if (!moderatorSyncOk) {
+                alert("Event updated, but moderators could not be saved");
+                return;
             }
 
             await notifyTelegramForUpdatedEvent(
@@ -979,6 +1164,132 @@ export default function EditEvent({ event, onSave }) {
 
                 </label>
 
+            </div>
+
+            <div className="form-field" style={{ border: "1px solid #d9e2ec", borderRadius: "8px", padding: "10px" }}>
+                <label style={{ display: "block", marginBottom: "8px" }}>Add Event Moderators</label>
+
+                    <select
+                        className="form-select"
+                        value={selectedDepartment}
+                        onChange={(e) => setSelectedDepartment(e.target.value)}
+                        style={{ marginBottom: "8px" }}
+                    >
+                        <option value="">Select Department</option>
+                        {departments.map((department) => (
+                            <option key={department.id} value={department.id}>
+                                {department.name}
+                            </option>
+                        ))}
+                    </select>
+
+                    <div style={{ position: "relative", marginBottom: "8px" }}>
+                        <input
+                            className="form-input"
+                            placeholder="Type teacher name (e.g. first letter)"
+                            value={teacherSearchQuery}
+                            onChange={(e) => handleTeacherSearchChange(e.target.value)}
+                            onFocus={() => setShowTeacherDropdown(Boolean(teacherSearchQuery.trim()))}
+                            disabled={!selectedDepartment}
+                            autoComplete="off"
+                        />
+
+                        {showTeacherDropdown && selectedDepartment && teacherSearchQuery.trim() && (
+                            <div
+                                style={{
+                                    position: "absolute",
+                                    top: "100%",
+                                    left: 0,
+                                    right: 0,
+                                    zIndex: 20,
+                                    background: "white",
+                                    border: "1px solid #d9e2ec",
+                                    borderRadius: "8px",
+                                    marginTop: "4px",
+                                    maxHeight: "180px",
+                                    overflowY: "auto",
+                                    boxShadow: "0 8px 16px rgba(15, 23, 42, 0.12)"
+                                }}
+                            >
+                                {filteredTeachers.length === 0 ? (
+                                    <div style={{ padding: "8px 10px", color: "#6b7280", fontSize: "13px" }}>
+                                        No teachers found
+                                    </div>
+                                ) : (
+                                    filteredTeachers.map((teacher) => (
+                                        <button
+                                            key={teacher.id}
+                                            type="button"
+                                            onClick={() => handleTeacherOptionPick(teacher)}
+                                            style={{
+                                                width: "100%",
+                                                textAlign: "left",
+                                                border: "none",
+                                                background: "white",
+                                                padding: "8px 10px",
+                                                cursor: "pointer"
+                                            }}
+                                        >
+                                            {getTeacherLabel(teacher)}
+                                        </button>
+                                    ))
+                                )}
+                            </div>
+                        )}
+                    </div>
+
+                    <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "8px" }}>
+                        <button
+                            type="button"
+                            className="form-submit"
+                            onClick={addSelectedModerator}
+                            disabled={!selectedTeacherToAdd}
+                        >
+                            Add
+                        </button>
+                    </div>
+
+                    {selectedModerators.length > 0 && (
+                        <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: "8px" }}>
+                            {selectedModerators.map((moderator) => (
+                                <li
+                                    key={moderator.id}
+                                    style={{
+                                        display: "flex",
+                                        justifyContent: "space-between",
+                                        alignItems: "center",
+                                        border: "1px solid #d9e2ec",
+                                        borderRadius: "8px",
+                                        padding: "6px 8px",
+                                        background: "#f7f9fc"
+                                    }}
+                                >
+                                    <span>{moderator.label}</span>
+                                    <button
+                                        type="button"
+                                        onClick={() => removeSelectedModerator(moderator.id)}
+                                        style={{
+                                            width: "30px",
+                                            height: "30px",
+                                            flexShrink: 0,
+                                            border: "1px solid #c5d0dc",
+                                            borderRadius: "6px",
+                                            background: "#d9534f",
+                                            color: "white",
+                                            display: "inline-flex",
+                                            alignItems: "center",
+                                            justifyContent: "center",
+                                            cursor: "pointer"
+                                        }}
+                                        title="Remove moderator"
+                                        aria-label={`Remove ${moderator.label}`}
+                                    >
+                                        ×
+                                    </button>
+                                </li>
+                            ))}
+                        </ul>
+                    )}
             </div>
 
             {/* ATTACHMENTS */}

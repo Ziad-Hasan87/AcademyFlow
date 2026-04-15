@@ -8,6 +8,8 @@ import {
     fetchSlots,
     fetchGroups,
     fetchSubgroups,
+    fetchDepartments,
+    fetchCoursesByOperation,
     fetchProgramChatId,
     fetchBotId,
     resolveProgramIdFromEventTarget,
@@ -18,7 +20,7 @@ import {
 import { sendTelegramNotification } from "../utils/telegramNotifications";
 import { generateEventNotificationFromJson } from "../utils/chatbot";
 
-export default function CreateEvent({ routineId, onSave }) {
+export default function CreateEvent({ routineId, onSave, defaultDate = "" }) {
 
     const { userData } = useAuth();
 
@@ -48,6 +50,17 @@ export default function CreateEvent({ routineId, onSave }) {
     const [operations, setOperations] = useState([]);
     const [groups, setGroups] = useState([]);
     const [subgroups, setSubgroups] = useState([]);
+    const [courses, setCourses] = useState([]);
+    const [selectedCourse, setSelectedCourse] = useState("");
+    const [departments, setDepartments] = useState([]);
+
+    const [enableModerators] = useState(true);
+    const [selectedDepartment, setSelectedDepartment] = useState("");
+    const [teachers, setTeachers] = useState([]);
+    const [teacherSearchQuery, setTeacherSearchQuery] = useState("");
+    const [selectedTeacherToAdd, setSelectedTeacherToAdd] = useState("");
+    const [selectedModerators, setSelectedModerators] = useState([]);
+    const [showTeacherDropdown, setShowTeacherDropdown] = useState(false);
 
     const [selectedProgram, setSelectedProgram] = useState("");
     const [selectedOperation, setSelectedOperation] = useState("");
@@ -83,6 +96,59 @@ export default function CreateEvent({ routineId, onSave }) {
         delete next.end_at;
 
         return next;
+    };
+
+    const getTeacherLabel = (teacher) => {
+        const teacherName = teacher.users?.name || teacher.name || "Unknown";
+        const codename = teacher.codename || "N/A";
+        return `${teacherName} - ${codename}`;
+    };
+
+    const addSelectedModerator = () => {
+        if (!selectedTeacherToAdd) return;
+
+        const teacherToAdd = teachers.find((teacher) => teacher.id === selectedTeacherToAdd);
+        if (!teacherToAdd) return;
+
+        setSelectedModerators((prev) => {
+            if (prev.some((moderator) => moderator.id === teacherToAdd.id)) return prev;
+            return [
+                ...prev,
+                {
+                    id: teacherToAdd.id,
+                    label: getTeacherLabel(teacherToAdd),
+                },
+            ];
+        });
+
+        setSelectedTeacherToAdd("");
+        setTeacherSearchQuery("");
+        setShowTeacherDropdown(false);
+    };
+
+    const removeSelectedModerator = (userId) => {
+        setSelectedModerators((prev) => prev.filter((moderator) => moderator.id !== userId));
+    };
+
+    const filteredTeachers = teachers.filter((teacher) => {
+        const teacherName = String(teacher.users?.name || teacher.name || "").toLowerCase();
+        const query = teacherSearchQuery.trim().toLowerCase();
+
+        if (!query) return true;
+
+        return teacherName.includes(query);
+    });
+
+    const handleTeacherSearchChange = (value) => {
+        setTeacherSearchQuery(value);
+        setSelectedTeacherToAdd("");
+        setShowTeacherDropdown(Boolean(value.trim()));
+    };
+
+    const handleTeacherOptionPick = (teacher) => {
+        setTeacherSearchQuery(getTeacherLabel(teacher));
+        setSelectedTeacherToAdd(teacher.id);
+        setShowTeacherDropdown(false);
     };
 
     const notifyTelegramForCreatedEvent = async (targetFromTable, targetForUsers, newAttributes) => {
@@ -142,6 +208,19 @@ export default function CreateEvent({ routineId, onSave }) {
 
     }, [instituteId]);
 
+    useEffect(() => {
+
+        if (!instituteId) return;
+
+        fetchDepartments(
+            instituteId,
+            "",
+            setDepartments,
+            () => {}
+        );
+
+    }, [instituteId]);
+
     /* ---------------- FETCH SLOTS ---------------- */
 
     useEffect(() => {
@@ -158,6 +237,13 @@ export default function CreateEvent({ routineId, onSave }) {
 
         if (!selectedProgram) {
             setOperations([]);
+            setGroups([]);
+            setSubgroups([]);
+            setCourses([]);
+            setSelectedOperation("");
+            setSelectedGroup("");
+            setSelectedSubgroup("");
+            setSelectedCourse("");
             return;
         }
 
@@ -168,21 +254,28 @@ export default function CreateEvent({ routineId, onSave }) {
             () => {}
         );
 
+        fetchGroups(
+            selectedProgram,
+            "",
+            setGroups,
+            () => {}
+        );
+
     }, [selectedProgram]);
 
-    /* ---------------- GROUPS ---------------- */
+    /* ---------------- GROUPS / COURSES ---------------- */
 
     useEffect(() => {
 
         if (!selectedOperation) {
-            setGroups([]);
+            setCourses([]);
+            setSelectedCourse("");
             return;
         }
 
-        fetchGroups(
+        fetchCoursesByOperation(
             selectedOperation,
-            "",
-            setGroups,
+            setCourses,
             () => {}
         );
 
@@ -205,6 +298,35 @@ export default function CreateEvent({ routineId, onSave }) {
         );
 
     }, [selectedGroup]);
+
+    useEffect(() => {
+        if (!selectedDepartment) {
+            setTeachers([]);
+            setSelectedTeacherToAdd("");
+            setTeacherSearchQuery("");
+            setShowTeacherDropdown(false);
+            return;
+        }
+
+        supabase
+            .from("staffs")
+            .select("id, codename, users:users!staffs_id_fkey(name)")
+            .eq("department_id", selectedDepartment)
+            .then(({ data, error }) => {
+                if (error) {
+                    console.error("Error fetching teachers:", error);
+                    return;
+                }
+
+                setTeachers(data || []);
+            });
+    }, [selectedDepartment]);
+
+    useEffect(() => {
+        if (defaultDate) {
+            setDate(defaultDate);
+        }
+    }, [defaultDate]);
 
     /* ---------------- CREATE EVENT ---------------- */
 
@@ -277,15 +399,19 @@ export default function CreateEvent({ routineId, onSave }) {
             created_by: userId,
             institute_id: instituteId,
 
+            course_id: selectedCourse || null,
+
             routine_id: routineId || null,
 
             is_reschedulable: isReschedulable
 
         };
 
-        const { error } = await supabase
+        const { data: insertedEvent, error } = await supabase
             .from("events")
-            .insert(insertData);
+            .insert(insertData)
+            .select("id")
+            .single();
 
         if (error) {
 
@@ -293,6 +419,24 @@ export default function CreateEvent({ routineId, onSave }) {
             alert("Failed to create event");
 
         } else {
+
+            if (enableModerators && selectedModerators.length > 0) {
+                const moderatorRows = selectedModerators.map((moderator) => ({
+                    user_id: moderator.id,
+                    event_id: insertedEvent?.id,
+                }));
+
+                const { error: moderatorError } = await supabase
+                    .from("event_moderators")
+                    .insert(moderatorRows);
+
+                if (moderatorError) {
+                    console.error("Failed to save event moderators:", moderatorError);
+                    alert("Event created, but moderators could not be saved");
+                    onSave?.();
+                    return;
+                }
+            }
 
             await notifyTelegramForCreatedEvent(fromTable, forUsers, insertData);
 
@@ -512,6 +656,31 @@ export default function CreateEvent({ routineId, onSave }) {
 
             )}
 
+            {/* COURSE */}
+
+            <div className="form-field">
+
+                <label>Course</label>
+
+                <select
+                    className="form-select"
+                    value={selectedCourse}
+                    onChange={(e) => setSelectedCourse(e.target.value)}
+                    disabled={!selectedOperation}
+                >
+
+                    <option value="">Select Course</option>
+
+                    {courses.map((course) => (
+                        <option key={course.id} value={course.id}>
+                            {course.name}
+                        </option>
+                    ))}
+
+                </select>
+
+            </div>
+
             {/* GROUP */}
 
             {["groups","subgroups"].includes(fromTable) && (
@@ -598,6 +767,132 @@ export default function CreateEvent({ routineId, onSave }) {
 
                 </label>
 
+            </div>
+
+            <div className="form-field" style={{ border: "1px solid #d9e2ec", borderRadius: "8px", padding: "10px" }}>
+                <label style={{ display: "block", marginBottom: "8px" }}>Add Event Moderators</label>
+
+                    <select
+                        className="form-select"
+                        value={selectedDepartment}
+                        onChange={(e) => setSelectedDepartment(e.target.value)}
+                        style={{ marginBottom: "8px" }}
+                    >
+                        <option value="">Select Department</option>
+                        {departments.map((department) => (
+                            <option key={department.id} value={department.id}>
+                                {department.name}
+                            </option>
+                        ))}
+                    </select>
+
+                    <div style={{ position: "relative", marginBottom: "8px" }}>
+                        <input
+                            className="form-input"
+                            placeholder="Type teacher name"
+                            value={teacherSearchQuery}
+                            onChange={(e) => handleTeacherSearchChange(e.target.value)}
+                            onFocus={() => setShowTeacherDropdown(Boolean(teacherSearchQuery.trim()))}
+                            disabled={!selectedDepartment}
+                            autoComplete="off"
+                        />
+
+                        {showTeacherDropdown && selectedDepartment && teacherSearchQuery.trim() && (
+                            <div
+                                style={{
+                                    position: "absolute",
+                                    top: "100%",
+                                    left: 0,
+                                    right: 0,
+                                    zIndex: 20,
+                                    background: "white",
+                                    border: "1px solid #d9e2ec",
+                                    borderRadius: "8px",
+                                    marginTop: "4px",
+                                    maxHeight: "180px",
+                                    overflowY: "auto",
+                                    boxShadow: "0 8px 16px rgba(15, 23, 42, 0.12)"
+                                }}
+                            >
+                                {filteredTeachers.length === 0 ? (
+                                    <div style={{ padding: "8px 10px", color: "#6b7280", fontSize: "13px" }}>
+                                        No teachers found
+                                    </div>
+                                ) : (
+                                    filteredTeachers.map((teacher) => (
+                                        <button
+                                            key={teacher.id}
+                                            type="button"
+                                            onClick={() => handleTeacherOptionPick(teacher)}
+                                            style={{
+                                                width: "100%",
+                                                textAlign: "left",
+                                                border: "none",
+                                                background: "white",
+                                                padding: "8px 10px",
+                                                cursor: "pointer"
+                                            }}
+                                        >
+                                            {getTeacherLabel(teacher)}
+                                        </button>
+                                    ))
+                                )}
+                            </div>
+                        )}
+                    </div>
+
+                    <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "8px" }}>
+                        <button
+                            type="button"
+                            className="form-submit"
+                            onClick={addSelectedModerator}
+                            disabled={!selectedTeacherToAdd}
+                        >
+                            Add
+                        </button>
+                    </div>
+
+                    {selectedModerators.length > 0 && (
+                        <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: "8px" }}>
+                            {selectedModerators.map((moderator) => (
+                                <li
+                                    key={moderator.id}
+                                    style={{
+                                        display: "flex",
+                                        justifyContent: "space-between",
+                                        alignItems: "center",
+                                        border: "1px solid #d9e2ec",
+                                        borderRadius: "8px",
+                                        padding: "6px 8px",
+                                        background: "#f7f9fc"
+                                    }}
+                                >
+                                    <span>{moderator.label}</span>
+                                    <button
+                                        type="button"
+                                        onClick={() => removeSelectedModerator(moderator.id)}
+                                        style={{
+                                            width: "30px",
+                                            height: "30px",
+                                            flexShrink: 0,
+                                            border: "1px solid #c5d0dc",
+                                            borderRadius: "6px",
+                                            background: "#d9534f",
+                                            color: "white",
+                                            display: "inline-flex",
+                                            alignItems: "center",
+                                            justifyContent: "center",
+                                            cursor: "pointer"
+                                        }}
+                                        title="Remove moderator"
+                                        aria-label={`Remove ${moderator.label}`}
+                                    >
+                                        ×
+                                    </button>
+                                </li>
+                            ))}
+                        </ul>
+                    )}
             </div>
 
             {/* BUTTONS */}
