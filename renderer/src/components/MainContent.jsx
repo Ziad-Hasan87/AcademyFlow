@@ -260,7 +260,7 @@ export default function MainContent({ events, startOfWeek, endOfWeek, onCreateEv
         {days.map((day, dayIndex) => (
           <React.Fragment key={day.date}>
             <div
-              className="grid-cell header-cell"
+              className="grid-cell header-cell-row"
               style={{
                 gridRow: dayIndex + 2,
                 gridColumn: 1,

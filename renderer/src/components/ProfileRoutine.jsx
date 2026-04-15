@@ -224,7 +224,7 @@ export default function ProfileRoutine({ userId, startDate, endDate }) {
         {days.map((day, dayIndex) => (
           <React.Fragment key={day}>
             <div
-              className="grid-cell header-cell"
+              className="grid-cell header-cell-row"
               style={{
                 gridRow: dayIndex + 2,
                 gridColumn: 1,
