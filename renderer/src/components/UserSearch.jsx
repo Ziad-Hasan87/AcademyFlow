@@ -282,7 +282,6 @@ export default function UserSearch({ onUserSelect }) {
       fontSize: "1.05rem",
       letterSpacing: "0.02em",
       fontWeight: 700,
-      fontFamily: "'Segoe UI Variable', 'Trebuchet MS', sans-serif",
     },
     heroSub: {
       margin: "4px 0 0 0",
@@ -317,24 +316,27 @@ export default function UserSearch({ onUserSelect }) {
       marginTop: "8px",
     },
     card: {
+      display: "flex",
+      flexDirection: "column",
       borderRadius: "14px",
       border: "1px solid rgba(148, 163, 184, 0.35)",
       background: "linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)",
       boxShadow: "0 8px 16px rgba(15, 23, 42, 0.08)",
       padding: "12px",
+      minHeight: "248px",
       overflow: "hidden",
       cursor: "pointer",
       transition: "transform 120ms ease, box-shadow 120ms ease, border-color 120ms ease",
     },
     cardTop: {
       display: "flex",
-      alignItems: "center",
-      gap: "10px",
-      marginBottom: "8px",
+      alignItems: "flex-start",
+      gap: "12px",
+      marginBottom: "6px",
     },
     avatar: {
-      width: "38px",
-      height: "38px",
+      width: "96px",
+      height: "96px",
       borderRadius: "50%",
       display: "inline-flex",
       alignItems: "center",
@@ -342,6 +344,14 @@ export default function UserSearch({ onUserSelect }) {
       fontWeight: 700,
       color: "white",
       flexShrink: 0,
+      overflow: "hidden",
+      background: "#7c3aed",
+    },
+    avatarImage: {
+      width: "100%",
+      height: "100%",
+      objectFit: "cover",
+      display: "block",
     },
     name: {
       margin: 0,
@@ -362,13 +372,14 @@ export default function UserSearch({ onUserSelect }) {
     },
     fieldList: {
       display: "grid",
-      gap: "4px",
-      marginTop: "8px",
+      gap: "2px",
+      marginTop: "4px",
     },
     fieldRow: {
+      margin: 0,
       fontSize: "0.82rem",
       color: "#334155",
-      lineHeight: 1.35,
+      lineHeight: 1.25,
       whiteSpace: "normal",
       wordBreak: "break-word",
     },
@@ -538,6 +549,7 @@ export default function UserSearch({ onUserSelect }) {
 
             const badgeColor = roleColorMap[profile?.role || item.role] || "#334155";
             const avatarLabel = String(displayName).trim().charAt(0).toUpperCase() || "?";
+            const avatarImage = profile?.image_path;
 
             return (
               <div
@@ -564,7 +576,17 @@ export default function UserSearch({ onUserSelect }) {
                 }}
               >
                 <div style={ui.cardTop}>
-                  <div style={{ ...ui.avatar, background: badgeColor }}>{avatarLabel}</div>
+                  <div style={{ ...ui.avatar, background: badgeColor }}>
+                    {avatarImage ? (
+                      <img
+                        src={avatarImage}
+                        alt={displayName}
+                        style={ui.avatarImage}
+                      />
+                    ) : (
+                      avatarLabel
+                    )}
+                  </div>
                   <div style={{ minWidth: 0 }}>
                     <h3 style={ui.name}>{displayName}</h3>
                     <span style={{ ...ui.badge, background: badgeColor }}>

@@ -414,6 +414,7 @@ export default function MainContent({ events, startOfWeek, endOfWeek, onCreateEv
             slots.map((slot) => (
               <button
                 key={`${day.date}-${slot.id}-btn`}
+                className="schedule-add-btn"
                 style={{
                   gridRow: dayIndex + 2,
                   gridColumn: slotIndexMap[slot.id] + 2,
@@ -427,7 +428,6 @@ export default function MainContent({ events, startOfWeek, endOfWeek, onCreateEv
                   color: "#0f172a",
                   fontWeight: 700,
                   cursor: "pointer",
-                  pointerEvents: "auto",
                   zIndex: 20,
                   boxShadow: "0 4px 10px rgba(15, 23, 42, 0.12)",
                 }}

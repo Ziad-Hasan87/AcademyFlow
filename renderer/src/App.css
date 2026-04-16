@@ -280,6 +280,20 @@ html, body, #root {
   background-color: #357abd;
 }
 
+.schedule-add-btn {
+  opacity: 0;
+  transform: scale(0.92);
+  pointer-events: none;
+  transition: opacity 0.16s ease, transform 0.16s ease;
+}
+
+.timetable-grid:hover .schedule-add-btn,
+.timetable-grid:focus-within .schedule-add-btn {
+  opacity: 1;
+  transform: scale(1);
+  pointer-events: auto;
+}
+
 
 .right-wrapper {
   display: flex;
