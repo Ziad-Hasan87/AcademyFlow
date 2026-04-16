@@ -17,6 +17,13 @@ import { useAuth } from "../contexts/AuthContext";
 
 import Chatbot from "../components/Chatbot";
 
+function getTodayDateString() {
+  const today = new Date();
+  return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(
+    today.getDate()
+  ).padStart(2, "0")}`;
+}
+
 export default function AppLayout() {
   const { userData } = useAuth();
   const [leftWidth, setLeftWidth] = useState(240);
@@ -29,6 +36,7 @@ export default function AppLayout() {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [selectedProfileUserId, setSelectedProfileUserId] = useState(null);
+  const [selectedCalendarDate, setSelectedCalendarDate] = useState(getTodayDateString());
 
   const [startOfWeek, setStartOfWeek] = useState(null);
   const [endOfWeek, setEndOfWeek] = useState(null);
@@ -123,6 +131,8 @@ export default function AppLayout() {
         <RightSidebar
           width={rightWidth}
           setWeekRange={setWeekRange}
+          selectedDate={selectedCalendarDate}
+          onSelectedDateChange={setSelectedCalendarDate}
         />
       </div>
 

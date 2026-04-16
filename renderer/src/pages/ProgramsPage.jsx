@@ -75,10 +75,22 @@ export default function ProgramsPage() {
 
   return (
     <div className="page-content">
-      <Modal isOpen={isCreateOpen} title="Create Program" onClose={() => { setisCreateOpen(false); fetchPrograms(); }}>
+      <Modal
+        isOpen={isCreateOpen}
+        title="Create Program"
+        onClose={() => { setisCreateOpen(false); fetchPrograms(); }}
+        contentClassName="explorer-theme-modal-content"
+        bodyClassName="explorer-theme-modal-body"
+      >
         <CreatePrograms />
       </Modal>
-      <Modal isOpen={isEditOpen} title="Edit Program" onClose={() => { setisEditOpen(false); fetchPrograms(); }}>
+      <Modal
+        isOpen={isEditOpen}
+        title="Edit Program"
+        onClose={() => { setisEditOpen(false); fetchPrograms(); }}
+        contentClassName="explorer-theme-modal-content"
+        bodyClassName="explorer-theme-modal-body"
+      >
         <EditPrograms programId={selectedProgramId} onCancel={() => setisEditOpen(false)} />
       </Modal>
       <div>

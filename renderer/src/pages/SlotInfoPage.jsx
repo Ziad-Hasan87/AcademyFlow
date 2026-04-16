@@ -33,6 +33,8 @@ export default function SlotInfoPage() {
           setIsCreateOpen(false);
           fetchSlots(userData.institute_id, setSlots);
         }}
+        contentClassName="explorer-theme-modal-content"
+        bodyClassName="explorer-theme-modal-body"
       >
         <CreateSlots
           onSuccess={() => {
@@ -49,6 +51,8 @@ export default function SlotInfoPage() {
           setIsEditOpen(false);
           fetchSlots(userData.institute_id, setSlots);
         }}
+        contentClassName="explorer-theme-modal-content"
+        bodyClassName="explorer-theme-modal-body"
       >
         <EditSlots
           slotId={selectedSlotId}

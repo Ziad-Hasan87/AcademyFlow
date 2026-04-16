@@ -1,9 +1,10 @@
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
-import { FiLogOut } from "react-icons/fi";
-import { useEffect, useState } from "react";
+import { FiCamera, FiLogOut, FiTrash2 } from "react-icons/fi";
+import { useEffect, useRef, useState } from "react";
 import supabase from "../utils/supabase";
 import ProfileRoutine from "../components/ProfileRoutine";
+import Modal from "../components/Modal";
 
 function getWeekRange(baseDate = new Date()) {
   const date = new Date(baseDate);
@@ -20,13 +21,26 @@ function getWeekRange(baseDate = new Date()) {
 
 export default function ProfilePage({ userId }) {
   const navigate = useNavigate();
-  const { logout } = useAuth();
+  const { logout, userData } = useAuth();
+  const cloudinaryCloudName = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME;
+  const cloudinaryUploadPreset = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET;
   const [profileData, setProfileData] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("schedule");
   const [dateRange, setDateRange] = useState(getWeekRange());
   const [courses, setCourses] = useState([]);
   const [isCoursesLoading, setIsCoursesLoading] = useState(false);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [isDeletingImage, setIsDeletingImage] = useState(false);
+  const [isImageModalOpen, setIsImageModalOpen] = useState(false);
+  const fileInputRef = useRef(null);
+
+  const canUploadProfileImage =
+    userData?.id !== undefined &&
+    userId !== undefined &&
+    String(userData.id) === String(userId);
+  const hasProfileImage = Boolean(profileData?.image_path);
+  const isImageActionBusy = isUploadingImage || isDeletingImage;
 
   useEffect(() => {
     const fetchUserProfile = async () => {
@@ -141,126 +155,327 @@ export default function ProfilePage({ userId }) {
     });
   };
 
+  const fileToBase64 = (file) =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const raw = String(reader.result || "");
+        const base64Data = raw.includes(",") ? raw.split(",")[1] : raw;
+        resolve(base64Data);
+      };
+      reader.onerror = () => reject(new Error("Failed to read selected file."));
+      reader.readAsDataURL(file);
+    });
+
+  const uploadImageFromWeb = async (file) => {
+    if (!cloudinaryCloudName || !cloudinaryUploadPreset) {
+      throw new Error(
+        "Missing VITE_CLOUDINARY_CLOUD_NAME or VITE_CLOUDINARY_UPLOAD_PRESET in renderer/.env"
+      );
+    }
+
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("upload_preset", cloudinaryUploadPreset);
+    formData.append("folder", "academyflow/profiles");
+
+    const response = await fetch(
+      `https://api.cloudinary.com/v1_1/${cloudinaryCloudName}/image/upload`,
+      {
+        method: "POST",
+        body: formData,
+      }
+    );
+
+    const result = await response.json();
+
+    if (!response.ok || !result?.secure_url) {
+      throw new Error(result?.error?.message || `Cloudinary upload failed (${response.status}).`);
+    }
+
+    return {
+      ok: true,
+      secureUrl: result.secure_url,
+    };
+  };
+
+  const handleUploadClick = () => {
+    if (!canUploadProfileImage || isImageActionBusy) return;
+    fileInputRef.current?.click();
+  };
+
+  const handleDeleteImage = async () => {
+    if (!canUploadProfileImage || !hasProfileImage || isImageActionBusy) return;
+
+    const isConfirmed = window.confirm("Delete profile picture?");
+    if (!isConfirmed) return;
+
+    try {
+      setIsDeletingImage(true);
+
+      const { error } = await supabase
+        .from("users")
+        .update({ image_path: null })
+        .eq("id", userId);
+
+      if (error) {
+        throw new Error(error.message || "Failed to delete profile image.");
+      }
+
+      setProfileData((prev) => ({
+        ...(prev || {}),
+        image_path: null,
+      }));
+      setIsImageModalOpen(false);
+    } catch (error) {
+      console.error("Error deleting profile image:", error);
+      alert(error?.message || "Image delete failed.");
+    } finally {
+      setIsDeletingImage(false);
+    }
+  };
+
+  const handleImageFileChange = async (event) => {
+    const selectedFile = event.target.files?.[0];
+    event.target.value = "";
+
+    if (!selectedFile) return;
+
+    if (!selectedFile.type?.startsWith("image/")) {
+      alert("Please select an image file.");
+      return;
+    }
+
+    try {
+      setIsUploadingImage(true);
+
+      let uploadResult;
+      if (window?.electronAPI?.uploadProfileImage) {
+        const base64Data = await fileToBase64(selectedFile);
+        uploadResult = await window.electronAPI.uploadProfileImage({
+          base64Data,
+          mimeType: selectedFile.type,
+          fileName: selectedFile.name,
+          currentImageUrl: profileData?.image_path || null,
+        });
+      } else {
+        uploadResult = await uploadImageFromWeb(selectedFile);
+      }
+
+      if (!uploadResult?.ok || !uploadResult?.secureUrl) {
+        throw new Error(uploadResult?.error || "Cloudinary upload failed.");
+      }
+
+      const { error: updateError } = await supabase
+        .from("users")
+        .update({ image_path: uploadResult.secureUrl })
+        .eq("id", userId);
+
+      if (updateError) {
+        throw new Error(updateError.message || "Failed to save profile image.");
+      }
+
+      setProfileData((prev) => ({
+        ...(prev || {}),
+        image_path: uploadResult.secureUrl,
+      }));
+    } catch (error) {
+      console.error("Error uploading profile image:", error);
+      alert(error?.message || "Image upload failed.");
+    } finally {
+      setIsUploadingImage(false);
+    }
+  };
+
   return (
-    <div className="profile-page-layout">
-      <section className="profile-left-panel">
-        <div className="profile-image-block">
-          {profileData?.image_path ? (
-            <img
-              src={profileData.image_path}
-              alt={profileData?.name || "Profile"}
-              className="profile-image-full"
-            />
-          ) : (
-            <div className="profile-image-fallback">{avatarLabel}</div>
-          )}
-        </div>
+    <>
+      <div className="profile-page-layout">
+        <section className="profile-left-panel">
+          <div className="profile-image-block profile-image-frame">
+            {profileData?.image_path ? (
+              <button
+                type="button"
+                className="profile-image-clickable"
+                onClick={() => setIsImageModalOpen(true)}
+                aria-label="View profile image"
+              >
+                <img
+                  src={profileData.image_path}
+                  alt={profileData?.name || "Profile"}
+                  className="profile-image-full"
+                />
+              </button>
+            ) : (
+              <div className="profile-image-fallback">{avatarLabel}</div>
+            )}
 
-        <div className="profile-container">
-          {isLoading && <p className="profile-status">Loading profile...</p>}
+            {canUploadProfileImage && (
+              <>
+                <div className="profile-image-actions">
+                  {hasProfileImage && (
+                    <button
+                      type="button"
+                      className="profile-image-delete-button"
+                      onClick={handleDeleteImage}
+                      disabled={isImageActionBusy}
+                      aria-label="Delete profile picture"
+                      title="Delete profile picture"
+                    >
+                      <FiTrash2 size={14} />
+                    </button>
+                  )}
 
-          {!isLoading && profileFields.length === 0 && (
-            <p className="profile-status">No profile information found.</p>
-          )}
-
-          {!isLoading &&
-            profileFields.map((field) => (
-              <div className="profile-field" key={field.label}>
-                <div className="profile-field-content">
-                  <label className="profile-field-label">{field.label}</label>
-                  <span className="profile-field-value">{field.value}</span>
+                  <button
+                    type="button"
+                    className="profile-image-upload-button"
+                    onClick={handleUploadClick}
+                    disabled={isImageActionBusy}
+                    aria-label={hasProfileImage ? "Update profile picture" : "Upload profile picture"}
+                    title={hasProfileImage ? "Update profile picture" : "Upload profile picture"}
+                  >
+                    <FiCamera size={14} />
+                  </button>
                 </div>
-              </div>
-            ))}
 
-          <button onClick={handleLogout} className="logout-button">
-            <FiLogOut size={20} />
-            Logout
-          </button>
-        </div>
-      </section>
-
-      <section className="profile-right-panel">
-        <div className="profile-tabs-bar" role="tablist" aria-label="Profile tabs">
-          <button
-            type="button"
-            role="tab"
-            aria-selected={activeTab === "schedule"}
-            className={`profile-tab ${activeTab === "schedule" ? "active" : ""}`}
-            onClick={() => setActiveTab("schedule")}
-          >
-            Schedule
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={activeTab === "courses"}
-            className={`profile-tab ${activeTab === "courses" ? "active" : ""}`}
-            onClick={() => setActiveTab("courses")}
-          >
-            Courses
-          </button>
-        </div>
-
-        {activeTab === "schedule" && (
-          <div className="profile-tab-panel">
-            <div className="profile-week-nav">
-              <button
-                type="button"
-                className="profile-week-arrow"
-                onClick={() => shiftWeek(-1)}
-                aria-label="Previous week"
-              >
-                {"<"}
-              </button>
-              <div className="profile-week-label">
-                {formatDateLabel(dateRange.start)} - {formatDateLabel(dateRange.end)}
-              </div>
-              <button
-                type="button"
-                className="profile-week-arrow"
-                onClick={() => shiftWeek(1)}
-                aria-label="Next week"
-              >
-                {">"}
-              </button>
-            </div>
-
-            <div className="profile-routine-wrap">
-              <ProfileRoutine
-                userId={userId}
-                startDate={dateRange.start}
-                endDate={dateRange.end}
-              />
-            </div>
-          </div>
-        )}
-
-        {activeTab === "courses" && (
-          <div className="profile-tab-panel">
-            {isCoursesLoading && (
-              <div className="profile-courses-placeholder">Loading courses...</div>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  style={{ display: "none" }}
+                  onChange={handleImageFileChange}
+                />
+              </>
             )}
 
-            {!isCoursesLoading && courses.length === 0 && (
-              <div className="profile-courses-placeholder">No courses found.</div>
-            )}
-
-            {!isCoursesLoading && courses.length > 0 && (
-              <ol className="profile-courses-list">
-                {courses.map((course) => (
-                  <li key={course.course_id} className="profile-courses-item">
-                    <span className="profile-course-name">{course.course_name}</span>
-                    {hasValue(course.course_description) && (
-                      <span className="profile-course-description"> - {course.course_description}</span>
-                    )}
-                  </li>
-                ))}
-              </ol>
+            {canUploadProfileImage && isImageActionBusy && (
+              <div className="profile-image-uploading">
+                {isUploadingImage ? "Uploading..." : "Deleting..."}
+              </div>
             )}
           </div>
+
+          <div className="profile-container">
+            {isLoading && <p className="profile-status">Loading profile...</p>}
+
+            {!isLoading && profileFields.length === 0 && (
+              <p className="profile-status">No profile information found.</p>
+            )}
+
+            {!isLoading &&
+              profileFields.map((field) => (
+                <div className="profile-field" key={field.label}>
+                  <div className="profile-field-content">
+                    <label className="profile-field-label">{field.label}</label>
+                    <span className="profile-field-value">{field.value}</span>
+                  </div>
+                </div>
+              ))}
+
+            <button onClick={handleLogout} className="logout-button">
+              <FiLogOut size={20} />
+              Logout
+            </button>
+          </div>
+        </section>
+
+        <section className="profile-right-panel">
+          <div className="profile-tabs-bar" role="tablist" aria-label="Profile tabs">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activeTab === "schedule"}
+              className={`profile-tab ${activeTab === "schedule" ? "active" : ""}`}
+              onClick={() => setActiveTab("schedule")}
+            >
+              Schedule
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activeTab === "courses"}
+              className={`profile-tab ${activeTab === "courses" ? "active" : ""}`}
+              onClick={() => setActiveTab("courses")}
+            >
+              Courses
+            </button>
+          </div>
+
+          {activeTab === "schedule" && (
+            <div className="profile-tab-panel">
+              <div className="profile-week-nav">
+                <button
+                  type="button"
+                  className="profile-week-arrow"
+                  onClick={() => shiftWeek(-1)}
+                  aria-label="Previous week"
+                >
+                  {"<"}
+                </button>
+                <div className="profile-week-label">
+                  {formatDateLabel(dateRange.start)} - {formatDateLabel(dateRange.end)}
+                </div>
+                <button
+                  type="button"
+                  className="profile-week-arrow"
+                  onClick={() => shiftWeek(1)}
+                  aria-label="Next week"
+                >
+                  {">"}
+                </button>
+              </div>
+
+              <div className="profile-routine-wrap">
+                <ProfileRoutine
+                  userId={userId}
+                  startDate={dateRange.start}
+                  endDate={dateRange.end}
+                />
+              </div>
+            </div>
+          )}
+
+          {activeTab === "courses" && (
+            <div className="profile-tab-panel">
+              {isCoursesLoading && (
+                <div className="profile-courses-placeholder">Loading courses...</div>
+              )}
+
+              {!isCoursesLoading && courses.length === 0 && (
+                <div className="profile-courses-placeholder">No courses found.</div>
+              )}
+
+              {!isCoursesLoading && courses.length > 0 && (
+                <ol className="profile-courses-list">
+                  {courses.map((course) => (
+                    <li key={course.course_id} className="profile-courses-item">
+                      <span className="profile-course-name">{course.course_name}</span>
+                      {hasValue(course.course_description) && (
+                        <span className="profile-course-description"> - {course.course_description}</span>
+                      )}
+                    </li>
+                  ))}
+                </ol>
+              )}
+            </div>
+          )}
+        </section>
+      </div>
+
+      <Modal
+        isOpen={isImageModalOpen}
+        onClose={() => setIsImageModalOpen(false)}
+        title="Profile Picture"
+        contentClassName="profile-image-preview-modal"
+        bodyClassName="profile-image-preview-body"
+      >
+        {profileData?.image_path && (
+          <img
+            src={profileData.image_path}
+            alt={profileData?.name || "Profile"}
+            className="profile-image-preview-full"
+          />
         )}
-      </section>
-    </div>
+      </Modal>
+    </>
   );
 }

@@ -75,6 +75,8 @@ export default function CoursesPage() {
           setIsCreateOpen(false);
           fetchCourses();
         }}
+        contentClassName="explorer-theme-modal-content"
+        bodyClassName="explorer-theme-modal-body"
       >
         <CreateCourses />
       </Modal>
@@ -86,6 +88,8 @@ export default function CoursesPage() {
           setIsEditOpen(false);
           fetchCourses();
         }}
+        contentClassName="explorer-theme-modal-content"
+        bodyClassName="explorer-theme-modal-body"
       >
         <EditCourses
           courseId={selectedCourseId}

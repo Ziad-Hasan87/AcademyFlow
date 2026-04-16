@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from "react";
 import MonthlyCalendar from "./MonthlyCalendar";
-export default function RightSidebar({ width, setWeekRange }) {
+import DailyEvents from "./DailyEvents";
+
+export default function RightSidebar({ width, setWeekRange, selectedDate, onSelectedDateChange }) {
 
     const today = new Date();
     const todayDateStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
-    const [selectedDate, setSelectedDate] = useState(todayDateStr);
 
     const [currentYear, setCurrentYear] = useState(today.getFullYear());
     const [currentMonth, setCurrentMonth] = useState(today.getMonth());
@@ -35,25 +36,22 @@ export default function RightSidebar({ width, setWeekRange }) {
     useEffect(() => {
 
         const { startOfWeek, endOfWeek } = getWeekRange(todayDateStr);
-        setWeekRange(startOfWeek, endOfWeek);
+        if (!selectedDate) {
+            onSelectedDateChange?.(todayDateStr);
+            setWeekRange(startOfWeek, endOfWeek);
+        }
 
-    }, []);
+    }, [selectedDate, onSelectedDateChange, setWeekRange, todayDateStr]);
 
     const handleMonthYearChange = (year, month) => {
         setCurrentYear(year);
         setCurrentMonth(month);
     };
     const handleDateSelect = (date, startOfWeek, endOfWeek) => {
-
-        if (selectedDate === date) {
-            setSelectedDate(null);
-            setWeekRange(null, null);
-        } else {
-            setSelectedDate(date);
-            setWeekRange(startOfWeek, endOfWeek);
-            console.log("Selected date:", date);
-            console.log("Week range:", startOfWeek, "to", endOfWeek);
-        }
+        onSelectedDateChange?.(date);
+        setWeekRange(startOfWeek, endOfWeek);
+        console.log("Selected date:", date);
+        console.log("Week range:", startOfWeek, "to", endOfWeek);
     };
     return (
         <div
@@ -73,9 +71,7 @@ export default function RightSidebar({ width, setWeekRange }) {
                 onMonthYearChange={handleMonthYearChange}
             />
 
-            <div style={{ padding: 8, borderTop: "1px solid #333", borderBottom: "1px solid #333", fontSize: 12 }}>
-                Selected date: {selectedDate ? selectedDate : "No date selected"}
-            </div>
+            <DailyEvents selectedDate={selectedDate} />
 
         </div>
     );

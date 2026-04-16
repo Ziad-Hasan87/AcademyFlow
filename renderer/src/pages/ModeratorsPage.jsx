@@ -76,6 +76,8 @@ export default function ModeratorsPage() {
         isOpen={isModalOpen}
         title={`Moderators — ${selectedCourse?.name ?? ""}`}
         onClose={() => setIsModalOpen(false)}
+        contentClassName="explorer-theme-modal-content"
+        bodyClassName="explorer-theme-modal-body"
       >
         <EditModerators
           courseId={selectedCourse?.id}

@@ -65,6 +65,8 @@ export default function OperationsPage() {
         isOpen={isCreateOpen}
         title="Create Operation"
         onClose={() => setIsCreateOpen(false)}
+        contentClassName="explorer-theme-modal-content"
+        bodyClassName="explorer-theme-modal-body"
       >
         <CreateOperations />
       </Modal>
@@ -74,6 +76,8 @@ export default function OperationsPage() {
         isOpen={isEditOpen}
         title="Edit Operation"
         onClose={() => setIsEditOpen(false)}
+        contentClassName="explorer-theme-modal-content"
+        bodyClassName="explorer-theme-modal-body"
       >
         <EditOperations
           operationId={selectedOperationId}

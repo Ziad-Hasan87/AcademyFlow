@@ -54,6 +54,8 @@ export default function GroupsPage() {
           setIsCreateOpen(false);
           loadGroups(selectedProgram);
         }}
+        contentClassName="explorer-theme-modal-content"
+        bodyClassName="explorer-theme-modal-body"
       >
         <CreateGroups />
       </Modal>
@@ -65,6 +67,8 @@ export default function GroupsPage() {
           setIsEditOpen(false);
           loadGroups(selectedProgram);
         }}
+        contentClassName="explorer-theme-modal-content"
+        bodyClassName="explorer-theme-modal-body"
       >
         <EditGroups
           groupId={selectedGroupId}

@@ -98,6 +98,15 @@ export default function CreateEvent({ routineId, onSave, defaultDate = "" }) {
         return next;
     };
 
+    const toTimestampWithTimeZone = (dateValue, timeValue) => {
+        if (!dateValue || !timeValue) return null;
+
+        const dateTime = new Date(`${dateValue}T${timeValue}`);
+        if (Number.isNaN(dateTime.getTime())) return null;
+
+        return dateTime.toISOString();
+    };
+
     const getTeacherLabel = (teacher) => {
         const teacherName = teacher.users?.name || teacher.name || "Unknown";
         const codename = teacher.codename || "N/A";
@@ -362,6 +371,16 @@ export default function CreateEvent({ routineId, onSave, defaultDate = "" }) {
 
         }
 
+        const startAtTimestamp =
+            type === "time" ? toTimestampWithTimeZone(date, startTime) : null;
+        const endAtTimestamp =
+            type === "time" ? toTimestampWithTimeZone(date, endTime) : null;
+
+        if (type === "time" && (!startAtTimestamp || !endAtTimestamp)) {
+            alert("Invalid time format");
+            return;
+        }
+
         let forUsers = null;
 
         if (fromTable === "programs") {
@@ -390,8 +409,8 @@ export default function CreateEvent({ routineId, onSave, defaultDate = "" }) {
             start_slot: type === "slot" ? startSlot : null,
             end_slot: type === "slot" ? endSlot : null,
 
-            start_at: type === "time" ? startTime : null,
-            end_at: type === "time" ? endTime : null,
+            start_at: startAtTimestamp,
+            end_at: endAtTimestamp,
 
             from_table: fromTable,
             for_users: forUsers,

@@ -64,6 +64,8 @@ export default function SubgroupsPage() {
           setIsCreateOpen(false);
           fetchSubgroups(selectedGroup || null, "", setSubgroups, setLoadingSubgroups);
         }}
+        contentClassName="explorer-theme-modal-content"
+        bodyClassName="explorer-theme-modal-body"
       >
         <CreateSubgroups />
       </Modal>
@@ -75,6 +77,8 @@ export default function SubgroupsPage() {
           setIsEditOpen(false);
           fetchSubgroups(selectedGroup || null, "", setSubgroups, setLoadingSubgroups);
         }}
+        contentClassName="explorer-theme-modal-content"
+        bodyClassName="explorer-theme-modal-body"
       >
         <EditSubgroups
           subgroupId={selectedSubgroupId}

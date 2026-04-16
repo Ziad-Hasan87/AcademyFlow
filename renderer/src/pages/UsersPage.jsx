@@ -177,6 +177,8 @@ export default function UsersPage() {
         isOpen={isCreateOpen}
         title="Create User"
         onClose={() => setIsCreateOpen(false)}
+        contentClassName="explorer-theme-modal-content"
+        bodyClassName="explorer-theme-modal-body"
       >
         <CreateUser />
       </Modal>
@@ -188,6 +190,8 @@ export default function UsersPage() {
           setIsEditOpen(false);
           refreshUsers();
         }}
+        contentClassName="explorer-theme-modal-content"
+        bodyClassName="explorer-theme-modal-body"
       >
         <EditUser
           userId={selectedUserId}

@@ -44,6 +44,8 @@ export default function DepartmentsPage() {
         isOpen={isOpen}
         title="Create Department"
         onClose={() => setIsOpen(false)}
+        contentClassName="explorer-theme-modal-content"
+        bodyClassName="explorer-theme-modal-body"
       >
         <CreateDepartments
           onCreated={() => {

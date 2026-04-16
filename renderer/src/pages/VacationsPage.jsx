@@ -177,6 +177,8 @@ export default function VacationsPage() {
           setIsCreateOpen(false);
           fetchVacations();
         }}
+        contentClassName="explorer-theme-modal-content"
+        bodyClassName="explorer-theme-modal-body"
       >
         <CreateVacations onSuccess={fetchVacations} />
       </Modal>
@@ -188,6 +190,8 @@ export default function VacationsPage() {
           setIsEditOpen(false);
           fetchVacations();
         }}
+        contentClassName="explorer-theme-modal-content"
+        bodyClassName="explorer-theme-modal-body"
       >
         <EditVacations
           vacationId={selectedVacationId}

@@ -1,5 +1,6 @@
 const { app, BrowserWindow, ipcMain } = require("electron");
 const path = require("path");
+const crypto = require("crypto");
 require("dotenv").config();
 
 let mainWindow;
@@ -66,6 +67,91 @@ ipcMain.handle("telegram:send-notification", async (_event, payload) => {
     return { ok: true };
   } catch (error) {
     return { ok: false, error: error.message || "Unknown error" };
+  }
+});
+
+function extractCloudNameFromUrl(url) {
+  if (!url || typeof url !== "string") return null;
+
+  const match = url.match(/res\.cloudinary\.com\/([^/]+)/i);
+  return match?.[1] || null;
+}
+
+ipcMain.handle("cloudinary:upload-profile-image", async (_event, payload) => {
+  const apiKey = process.env.CLOUDINARY_API_KEY;
+  const apiSecret = process.env.CLOUDINARY_API_SECRET;
+  const cloudName =
+    process.env.CLOUDINARY_CLOUD_NAME ||
+    extractCloudNameFromUrl(payload?.currentImageUrl) ||
+    payload?.cloudName ||
+    null;
+
+  if (!apiKey || !apiSecret) {
+    return {
+      ok: false,
+      error: "Missing CLOUDINARY_API_KEY or CLOUDINARY_API_SECRET in root .env",
+    };
+  }
+
+  if (!cloudName) {
+    return {
+      ok: false,
+      error:
+        "Missing Cloudinary cloud name. Set CLOUDINARY_CLOUD_NAME in root .env.",
+    };
+  }
+
+  const base64Data = payload?.base64Data;
+  const mimeType = payload?.mimeType;
+
+  if (!base64Data || !mimeType) {
+    return {
+      ok: false,
+      error: "Invalid payload: base64Data and mimeType are required.",
+    };
+  }
+
+  const timestamp = Math.floor(Date.now() / 1000);
+  const folder = "academyflow/profiles";
+
+  const signatureBase = `folder=${folder}&timestamp=${timestamp}${apiSecret}`;
+  const signature = crypto.createHash("sha1").update(signatureBase).digest("hex");
+
+  const formData = new URLSearchParams();
+  formData.append("file", `data:${mimeType};base64,${base64Data}`);
+  formData.append("api_key", apiKey);
+  formData.append("timestamp", String(timestamp));
+  formData.append("folder", folder);
+  formData.append("signature", signature);
+
+  try {
+    const response = await fetch(
+      `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`,
+      {
+        method: "POST",
+        body: formData,
+      }
+    );
+
+    const result = await response.json();
+
+    if (!response.ok || !result?.secure_url) {
+      return {
+        ok: false,
+        error: result?.error?.message || `Cloudinary upload failed (${response.status})`,
+      };
+    }
+
+    return {
+      ok: true,
+      secureUrl: result.secure_url,
+      publicId: result.public_id,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error?.message || "Cloudinary upload failed",
+    };
   }
 });
 
