@@ -6,6 +6,18 @@ import supabase from "../utils/supabase";
 import ProfileRoutine from "../components/ProfileRoutine";
 import Modal from "../components/Modal";
 
+const withCloudinaryMaxWidth = (imageUrl, width) => {
+  if (!imageUrl) return imageUrl;
+
+  const marker = "/image/upload/";
+  const [baseUrl, query = ""] = String(imageUrl).split("?");
+
+  if (!baseUrl.includes(marker)) return imageUrl;
+
+  const transformedUrl = baseUrl.replace(marker, `${marker}c_limit,w_${width}/`);
+  return query ? `${transformedUrl}?${query}` : transformedUrl;
+};
+
 function getWeekRange(baseDate = new Date()) {
   const date = new Date(baseDate);
   date.setHours(0, 0, 0, 0);
@@ -41,6 +53,8 @@ export default function ProfilePage({ userId }) {
     String(userData.id) === String(userId);
   const hasProfileImage = Boolean(profileData?.image_path);
   const isImageActionBusy = isUploadingImage || isDeletingImage;
+  const fullSizeProfileImageUrl = profileData?.image_path || "";
+  const profileImageUrl600 = withCloudinaryMaxWidth(fullSizeProfileImageUrl, 600);
 
   useEffect(() => {
     const fetchUserProfile = async () => {
@@ -300,7 +314,7 @@ export default function ProfilePage({ userId }) {
                 aria-label="View profile image"
               >
                 <img
-                  src={profileData.image_path}
+                  src={profileImageUrl600}
                   alt={profileData?.name || "Profile"}
                   className="profile-image-full"
                 />
@@ -470,7 +484,7 @@ export default function ProfilePage({ userId }) {
       >
         {profileData?.image_path && (
           <img
-            src={profileData.image_path}
+            src={fullSizeProfileImageUrl}
             alt={profileData?.name || "Profile"}
             className="profile-image-preview-full"
           />

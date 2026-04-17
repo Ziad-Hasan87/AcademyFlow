@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import supabase from "../utils/supabase";
 import { useAuth } from "../contexts/AuthContext";
 
@@ -20,9 +20,11 @@ import {
 import { sendTelegramNotification } from "../utils/telegramNotifications";
 import { generateEventNotificationFromJson } from "../utils/chatbot";
 
-export default function CreateEvent({ routineId, onSave, defaultDate = "" }) {
+export default function CreateEvent({ routineId, onSave, defaultDate = "", defaultStartSlot = "" }) {
 
     const { userData } = useAuth();
+    const cloudinaryCloudName = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME;
+    const cloudinaryUploadPreset = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET;
 
     const instituteId = userData?.institute_id;
     const userId = userData?.id;
@@ -66,6 +68,10 @@ export default function CreateEvent({ routineId, onSave, defaultDate = "" }) {
     const [selectedOperation, setSelectedOperation] = useState("");
     const [selectedGroup, setSelectedGroup] = useState("");
     const [selectedSubgroup, setSelectedSubgroup] = useState("");
+    const [eventImageUrl, setEventImageUrl] = useState("");
+    const [isUploadingImage, setIsUploadingImage] = useState(false);
+    const [isDeletingImage, setIsDeletingImage] = useState(false);
+    const imageFileInputRef = useRef(null);
 
     const escapeHtml = (value) =>
         String(value ?? "")
@@ -105,6 +111,102 @@ export default function CreateEvent({ routineId, onSave, defaultDate = "" }) {
         if (Number.isNaN(dateTime.getTime())) return null;
 
         return dateTime.toISOString();
+    };
+
+    const fileToBase64 = (file) =>
+        new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => {
+                const raw = String(reader.result || "");
+                const base64Data = raw.includes(",") ? raw.split(",")[1] : raw;
+                resolve(base64Data);
+            };
+            reader.onerror = () => reject(new Error("Failed to read selected file."));
+            reader.readAsDataURL(file);
+        });
+
+    const uploadImageFromWeb = async (file) => {
+        if (!cloudinaryCloudName || !cloudinaryUploadPreset) {
+            throw new Error(
+                "Missing VITE_CLOUDINARY_CLOUD_NAME or VITE_CLOUDINARY_UPLOAD_PRESET in renderer/.env"
+            );
+        }
+
+        const formData = new FormData();
+        formData.append("file", file);
+        formData.append("upload_preset", cloudinaryUploadPreset);
+        formData.append("folder", "academyflow/events");
+
+        const response = await fetch(
+            `https://api.cloudinary.com/v1_1/${cloudinaryCloudName}/image/upload`,
+            {
+                method: "POST",
+                body: formData,
+            }
+        );
+
+        const result = await response.json();
+
+        if (!response.ok || !result?.secure_url) {
+            throw new Error(result?.error?.message || `Cloudinary upload failed (${response.status}).`);
+        }
+
+        return {
+            ok: true,
+            secureUrl: result.secure_url,
+        };
+    };
+
+    const handleUploadImageClick = () => {
+        if (isUploadingImage || isDeletingImage) return;
+        imageFileInputRef.current?.click();
+    };
+
+    const handleDeleteImage = () => {
+        if (!eventImageUrl || isUploadingImage || isDeletingImage) return;
+        setIsDeletingImage(true);
+        setEventImageUrl("");
+        setIsDeletingImage(false);
+    };
+
+    const handleImageFileChange = async (e) => {
+        const selectedFile = e.target.files?.[0];
+        e.target.value = "";
+
+        if (!selectedFile) return;
+
+        if (!selectedFile.type?.startsWith("image/")) {
+            alert("Please select an image file.");
+            return;
+        }
+
+        try {
+            setIsUploadingImage(true);
+
+            let uploadResult;
+            if (window?.electronAPI?.uploadProfileImage) {
+                const base64Data = await fileToBase64(selectedFile);
+                uploadResult = await window.electronAPI.uploadProfileImage({
+                    base64Data,
+                    mimeType: selectedFile.type,
+                    fileName: selectedFile.name,
+                    currentImageUrl: eventImageUrl || null,
+                });
+            } else {
+                uploadResult = await uploadImageFromWeb(selectedFile);
+            }
+
+            if (!uploadResult?.ok || !uploadResult?.secureUrl) {
+                throw new Error(uploadResult?.error || "Cloudinary upload failed.");
+            }
+
+            setEventImageUrl(uploadResult.secureUrl);
+        } catch (error) {
+            console.error("Error uploading event image:", error);
+            alert(error?.message || "Image upload failed.");
+        } finally {
+            setIsUploadingImage(false);
+        }
     };
 
     const getTeacherLabel = (teacher) => {
@@ -337,6 +439,10 @@ export default function CreateEvent({ routineId, onSave, defaultDate = "" }) {
         }
     }, [defaultDate]);
 
+    useEffect(() => {
+        setStartSlot(defaultStartSlot || "");
+    }, [defaultStartSlot]);
+
     /* ---------------- CREATE EVENT ---------------- */
 
     const handleCreate = async (e) => {
@@ -439,6 +545,18 @@ export default function CreateEvent({ routineId, onSave, defaultDate = "" }) {
 
         } else {
 
+            if (eventImageUrl && insertedEvent?.id) {
+                const { error: imageError } = await supabase
+                    .from("events")
+                    .update({ image_path: eventImageUrl })
+                    .eq("id", insertedEvent.id);
+
+                if (imageError) {
+                    console.error("Failed to save event image:", imageError);
+                    alert("Event created, but image could not be saved.");
+                }
+            }
+
             if (enableModerators && selectedModerators.length > 0) {
                 const moderatorRows = selectedModerators.map((moderator) => ({
                     user_id: moderator.id,
@@ -470,7 +588,77 @@ export default function CreateEvent({ routineId, onSave, defaultDate = "" }) {
 
         <form className="form" onSubmit={handleCreate}>
 
-            <h3>Create Event</h3>
+            <h2 className="form-title">Create Event</h2>
+
+            {type === "time" && (
+                <div className="form-group-box">
+                    <h4 className="form-section-title">Event Image</h4>
+
+                    {eventImageUrl ? (
+                        <img
+                            src={eventImageUrl}
+                            alt="Event"
+                            style={{
+                                width: "100%",
+                                maxHeight: "220px",
+                                objectFit: "cover",
+                                borderRadius: "10px",
+                                border: "1px solid #d9e2ec",
+                            }}
+                        />
+                    ) : (
+                        <div
+                            style={{
+                                width: "100%",
+                                minHeight: "120px",
+                                borderRadius: "10px",
+                                border: "1px dashed #cbd5e1",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                color: "#64748b",
+                                fontSize: "13px",
+                            }}
+                        >
+                            No image selected
+                        </div>
+                    )}
+
+                    <div className="moderator-actions-row" style={{ justifyContent: "space-between" }}>
+                        <button
+                            type="button"
+                            className="form-submit"
+                            onClick={handleUploadImageClick}
+                            disabled={isUploadingImage || isDeletingImage}
+                        >
+                            {eventImageUrl ? "Replace Image" : "Upload Image"}
+                        </button>
+
+                        <button
+                            type="button"
+                            className="form-cancel"
+                            onClick={handleDeleteImage}
+                            disabled={!eventImageUrl || isUploadingImage || isDeletingImage}
+                        >
+                            Delete Image
+                        </button>
+                    </div>
+
+                    {(isUploadingImage || isDeletingImage) && (
+                        <div className="autocomplete-loading">
+                            {isUploadingImage ? "Uploading image..." : "Deleting image..."}
+                        </div>
+                    )}
+
+                    <input
+                        ref={imageFileInputRef}
+                        type="file"
+                        accept="image/*"
+                        style={{ display: "none" }}
+                        onChange={handleImageFileChange}
+                    />
+                </div>
+            )}
 
             {/* TITLE */}
 
@@ -788,14 +976,15 @@ export default function CreateEvent({ routineId, onSave, defaultDate = "" }) {
 
             </div>
 
-            <div className="form-field" style={{ border: "1px solid #d9e2ec", borderRadius: "8px", padding: "10px" }}>
-                <label style={{ display: "block", marginBottom: "8px" }}>Add Event Moderators</label>
+            <div className="form-group-box">
+                <h4 className="form-section-title">Add Event Moderators</h4>
 
+                <div className="form-field">
+                    <label>Department</label>
                     <select
                         className="form-select"
                         value={selectedDepartment}
                         onChange={(e) => setSelectedDepartment(e.target.value)}
-                        style={{ marginBottom: "8px" }}
                     >
                         <option value="">Select Department</option>
                         {departments.map((department) => (
@@ -804,114 +993,71 @@ export default function CreateEvent({ routineId, onSave, defaultDate = "" }) {
                             </option>
                         ))}
                     </select>
+                </div>
 
-                    <div style={{ position: "relative", marginBottom: "8px" }}>
-                        <input
-                            className="form-input"
-                            placeholder="Type teacher name"
-                            value={teacherSearchQuery}
-                            onChange={(e) => handleTeacherSearchChange(e.target.value)}
-                            onFocus={() => setShowTeacherDropdown(Boolean(teacherSearchQuery.trim()))}
-                            disabled={!selectedDepartment}
-                            autoComplete="off"
-                        />
+                <div className="form-field autocomplete-container">
+                    <label>Teacher</label>
+                    <input
+                        className="form-input"
+                        placeholder="Type teacher name"
+                        value={teacherSearchQuery}
+                        onChange={(e) => handleTeacherSearchChange(e.target.value)}
+                        onFocus={() => setShowTeacherDropdown(Boolean(teacherSearchQuery.trim()))}
+                        disabled={!selectedDepartment}
+                        autoComplete="off"
+                    />
 
-                        {showTeacherDropdown && selectedDepartment && teacherSearchQuery.trim() && (
-                            <div
-                                style={{
-                                    position: "absolute",
-                                    top: "100%",
-                                    left: 0,
-                                    right: 0,
-                                    zIndex: 20,
-                                    background: "white",
-                                    border: "1px solid #d9e2ec",
-                                    borderRadius: "8px",
-                                    marginTop: "4px",
-                                    maxHeight: "180px",
-                                    overflowY: "auto",
-                                    boxShadow: "0 8px 16px rgba(15, 23, 42, 0.12)"
-                                }}
-                            >
-                                {filteredTeachers.length === 0 ? (
-                                    <div style={{ padding: "8px 10px", color: "#6b7280", fontSize: "13px" }}>
-                                        No teachers found
-                                    </div>
-                                ) : (
-                                    filteredTeachers.map((teacher) => (
-                                        <button
-                                            key={teacher.id}
-                                            type="button"
-                                            onClick={() => handleTeacherOptionPick(teacher)}
-                                            style={{
-                                                width: "100%",
-                                                textAlign: "left",
-                                                border: "none",
-                                                background: "white",
-                                                padding: "8px 10px",
-                                                cursor: "pointer"
-                                            }}
-                                        >
-                                            {getTeacherLabel(teacher)}
-                                        </button>
-                                    ))
-                                )}
-                            </div>
-                        )}
-                    </div>
-
-                    <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "8px" }}>
-                        <button
-                            type="button"
-                            className="form-submit"
-                            onClick={addSelectedModerator}
-                            disabled={!selectedTeacherToAdd}
-                        >
-                            Add
-                        </button>
-                    </div>
-
-                    {selectedModerators.length > 0 && (
-                        <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: "8px" }}>
-                            {selectedModerators.map((moderator) => (
-                                <li
-                                    key={moderator.id}
-                                    style={{
-                                        display: "flex",
-                                        justifyContent: "space-between",
-                                        alignItems: "center",
-                                        border: "1px solid #d9e2ec",
-                                        borderRadius: "8px",
-                                        padding: "6px 8px",
-                                        background: "#f7f9fc"
-                                    }}
-                                >
-                                    <span>{moderator.label}</span>
-                                    <button
-                                        type="button"
-                                        onClick={() => removeSelectedModerator(moderator.id)}
-                                        style={{
-                                            width: "30px",
-                                            height: "30px",
-                                            flexShrink: 0,
-                                            border: "1px solid #c5d0dc",
-                                            borderRadius: "6px",
-                                            background: "#d9534f",
-                                            color: "white",
-                                            display: "inline-flex",
-                                            alignItems: "center",
-                                            justifyContent: "center",
-                                            cursor: "pointer"
+                    {showTeacherDropdown && selectedDepartment && teacherSearchQuery.trim() && (
+                        <div className="autocomplete-list">
+                            {filteredTeachers.length === 0 ? (
+                                <div className="autocomplete-item moderator-empty-item">No teachers found</div>
+                            ) : (
+                                filteredTeachers.map((teacher) => (
+                                    <div
+                                        key={teacher.id}
+                                        className="autocomplete-item"
+                                        onMouseDown={(e) => {
+                                            e.preventDefault();
+                                            handleTeacherOptionPick(teacher);
                                         }}
-                                        title="Remove moderator"
-                                        aria-label={`Remove ${moderator.label}`}
                                     >
-                                        ×
-                                    </button>
-                                </li>
-                            ))}
-                        </ul>
+                                        {getTeacherLabel(teacher)}
+                                    </div>
+                                ))
+                            )}
+                        </div>
                     )}
+                </div>
+
+                <div className="moderator-actions-row">
+                    <button
+                        type="button"
+                        className="form-submit"
+                        onClick={addSelectedModerator}
+                        disabled={!selectedTeacherToAdd}
+                    >
+                        Add
+                    </button>
+                </div>
+
+                {selectedModerators.length > 0 && (
+                    <ul className="moderator-list">
+                        {selectedModerators.map((moderator) => (
+                            <li key={moderator.id} className="moderator-item">
+                                <span className="moderator-name">{moderator.label}</span>
+                                <button
+                                    type="button"
+                                    className="moderator-remove-btn"
+                                    onClick={() => removeSelectedModerator(moderator.id)}
+                                    title="Remove moderator"
+                                    aria-label={`Remove ${moderator.label}`}
+                                >
+                                    ×
+                                </button>
+                            </li>
+                        ))}
+                    </ul>
+                )}
             </div>
 
             {/* BUTTONS */}

@@ -4,6 +4,18 @@ import { useAuth } from "../contexts/AuthContext";
 import { fetchPrograms, fetchGroups } from "../utils/fetch";
 import { ROLES } from "../utils/types";
 
+const withCloudinaryMaxWidth = (imageUrl, width) => {
+  if (!imageUrl) return imageUrl;
+
+  const marker = "/image/upload/";
+  const [baseUrl, query = ""] = String(imageUrl).split("?");
+
+  if (!baseUrl.includes(marker)) return imageUrl;
+
+  const transformedUrl = baseUrl.replace(marker, `${marker}c_limit,w_${width}/`);
+  return query ? `${transformedUrl}?${query}` : transformedUrl;
+};
+
 export default function UserSearch({ onUserSelect }) {
   const { userData } = useAuth();
   const currentInstituteId = userData?.institute_id;
@@ -549,7 +561,7 @@ export default function UserSearch({ onUserSelect }) {
 
             const badgeColor = roleColorMap[profile?.role || item.role] || "#334155";
             const avatarLabel = String(displayName).trim().charAt(0).toUpperCase() || "?";
-            const avatarImage = profile?.image_path;
+            const avatarImage = withCloudinaryMaxWidth(profile?.image_path, 300);
 
             return (
               <div

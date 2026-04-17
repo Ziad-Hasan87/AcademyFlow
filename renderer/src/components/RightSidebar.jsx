@@ -34,13 +34,14 @@ export default function RightSidebar({ width, setWeekRange, selectedDate, onSele
     };
 
     useEffect(() => {
+        const effectiveDate = selectedDate || todayDateStr;
+        const { startOfWeek, endOfWeek } = getWeekRange(effectiveDate);
 
-        const { startOfWeek, endOfWeek } = getWeekRange(todayDateStr);
         if (!selectedDate) {
             onSelectedDateChange?.(todayDateStr);
-            setWeekRange(startOfWeek, endOfWeek);
         }
 
+        setWeekRange(startOfWeek, endOfWeek);
     }, [selectedDate, onSelectedDateChange, setWeekRange, todayDateStr]);
 
     const handleMonthYearChange = (year, month) => {

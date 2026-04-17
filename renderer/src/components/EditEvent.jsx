@@ -23,6 +23,8 @@ import { generateEventNotificationFromJson } from "../utils/chatbot";
 export default function EditEvent({ event, onSave }) {
 
     const { userData } = useAuth();
+    const cloudinaryCloudName = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME;
+    const cloudinaryUploadPreset = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET;
 
     const [title, setTitle] = useState("");
     const [description, setDescription] = useState("");
@@ -71,6 +73,10 @@ export default function EditEvent({ event, onSave }) {
     const [newFiles, setNewFiles] = useState([]);
     const [deletedAttachments, setDeletedAttachments] = useState([]);
     const [hasAttachments, setHasAttachments] = useState(false);
+    const [eventImageUrl, setEventImageUrl] = useState("");
+    const [isUploadingImage, setIsUploadingImage] = useState(false);
+    const [isDeletingImage, setIsDeletingImage] = useState(false);
+    const imageFileInputRef = useRef(null);
 
     const escapeHtml = (value) =>
         String(value ?? "")
@@ -177,6 +183,140 @@ export default function EditEvent({ event, onSave }) {
         const hours = String(parsed.getHours()).padStart(2, "0");
         const minutes = String(parsed.getMinutes()).padStart(2, "0");
         return `${hours}:${minutes}`;
+    };
+
+    const toIsoTimestampValue = (dateValue, timeValue) => {
+        if (!dateValue || !timeValue) return null;
+
+        const normalizedTime = /^\d{2}:\d{2}$/.test(timeValue)
+            ? `${timeValue}:00`
+            : String(timeValue);
+
+        const parsed = new Date(`${dateValue}T${normalizedTime}`);
+        if (Number.isNaN(parsed.getTime())) return null;
+
+        return parsed.toISOString();
+    };
+
+    const fileToBase64 = (file) =>
+        new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => {
+                const raw = String(reader.result || "");
+                const base64Data = raw.includes(",") ? raw.split(",")[1] : raw;
+                resolve(base64Data);
+            };
+            reader.onerror = () => reject(new Error("Failed to read selected file."));
+            reader.readAsDataURL(file);
+        });
+
+    const uploadImageFromWeb = async (file) => {
+        if (!cloudinaryCloudName || !cloudinaryUploadPreset) {
+            throw new Error(
+                "Missing VITE_CLOUDINARY_CLOUD_NAME or VITE_CLOUDINARY_UPLOAD_PRESET in renderer/.env"
+            );
+        }
+
+        const formData = new FormData();
+        formData.append("file", file);
+        formData.append("upload_preset", cloudinaryUploadPreset);
+        formData.append("folder", "academyflow/events");
+
+        const response = await fetch(
+            `https://api.cloudinary.com/v1_1/${cloudinaryCloudName}/image/upload`,
+            {
+                method: "POST",
+                body: formData,
+            }
+        );
+
+        const result = await response.json();
+
+        if (!response.ok || !result?.secure_url) {
+            throw new Error(result?.error?.message || `Cloudinary upload failed (${response.status}).`);
+        }
+
+        return {
+            ok: true,
+            secureUrl: result.secure_url,
+        };
+    };
+
+    const persistEventImage = async (nextImageUrl) => {
+        if (!event?.id) return;
+
+        const { error } = await supabase
+            .from("events")
+            .update({ image_path: nextImageUrl })
+            .eq("id", event.id);
+
+        if (error) {
+            throw new Error(error.message || "Failed to save event image.");
+        }
+    };
+
+    const handleUploadImageClick = () => {
+        if (isUploadingImage || isDeletingImage) return;
+        imageFileInputRef.current?.click();
+    };
+
+    const handleDeleteImage = async () => {
+        if (!eventImageUrl || isUploadingImage || isDeletingImage) return;
+
+        const confirmed = window.confirm("Delete event image?");
+        if (!confirmed) return;
+
+        try {
+            setIsDeletingImage(true);
+            await persistEventImage(null);
+            setEventImageUrl("");
+        } catch (error) {
+            console.error("Error deleting event image:", error);
+            alert(error?.message || "Image delete failed.");
+        } finally {
+            setIsDeletingImage(false);
+        }
+    };
+
+    const handleImageFileChange = async (e) => {
+        const selectedFile = e.target.files?.[0];
+        e.target.value = "";
+
+        if (!selectedFile) return;
+
+        if (!selectedFile.type?.startsWith("image/")) {
+            alert("Please select an image file.");
+            return;
+        }
+
+        try {
+            setIsUploadingImage(true);
+
+            let uploadResult;
+            if (window?.electronAPI?.uploadProfileImage) {
+                const base64Data = await fileToBase64(selectedFile);
+                uploadResult = await window.electronAPI.uploadProfileImage({
+                    base64Data,
+                    mimeType: selectedFile.type,
+                    fileName: selectedFile.name,
+                    currentImageUrl: eventImageUrl || event?.image_path || null,
+                });
+            } else {
+                uploadResult = await uploadImageFromWeb(selectedFile);
+            }
+
+            if (!uploadResult?.ok || !uploadResult?.secureUrl) {
+                throw new Error(uploadResult?.error || "Cloudinary upload failed.");
+            }
+
+            await persistEventImage(uploadResult.secureUrl);
+            setEventImageUrl(uploadResult.secureUrl);
+        } catch (error) {
+            console.error("Error uploading event image:", error);
+            alert(error?.message || "Image upload failed.");
+        } finally {
+            setIsUploadingImage(false);
+        }
     };
 
     const getTeacherLabel = (teacher) => {
@@ -345,18 +485,19 @@ export default function EditEvent({ event, onSave }) {
         setDescription(event.description || "");
         setDate(toDateInputValue(event.date));
 
-        setType(event.type || "slot");
+        setType(event.type || event.event_type || "slot");
 
-        setStartSlot(event.start_slot || "");
-        setEndSlot(event.end_slot || "");
+        setStartSlot(event.start_slot || event.start_slot_id || "");
+        setEndSlot(event.end_slot || event.end_slot_id || "");
 
-        setStartTime(toTimeInputValue(event.start_at));
-        setEndTime(toTimeInputValue(event.end_at));
+        setStartTime(toTimeInputValue(event.start_at || event.start_time));
+        setEndTime(toTimeInputValue(event.end_at || event.end_time));
 
         setFromTable(event.from_table || "groups");
         setForUsers(event.for_users || "");
         setIsReschedulable(event.is_reschedulable ?? true);
         setHasAttachments(event.has_attachments ?? false);
+        setEventImageUrl(event.image_path || "");
 
     }, [event]);
 
@@ -648,22 +789,41 @@ export default function EditEvent({ event, onSave }) {
 
         }
 
-        let forUsers = null;
+        const startAtValue = type === "time" ? toIsoTimestampValue(date, startTime) : null;
+        const endAtValue = type === "time" ? toIsoTimestampValue(date, endTime) : null;
 
-        if (fromTable === "programs") {
-            forUsers = selectedProgram;
+        if (type === "time" && (!startAtValue || !endAtValue)) {
+            alert("Invalid start or end time format");
+            return;
         }
 
-        if (fromTable === "operations") {
-            forUsers = selectedOperation;
+        const effectiveFromTable = fromTable || event?.from_table || "groups";
+
+        let targetForUsers = null;
+
+        if (effectiveFromTable === "programs") {
+            targetForUsers = selectedProgram;
         }
 
-        if (fromTable === "groups") {
-            forUsers = selectedGroup;
+        if (effectiveFromTable === "operations") {
+            targetForUsers = selectedOperation;
         }
 
-        if (fromTable === "subgroups") {
-            forUsers = selectedSubgroup;
+        if (effectiveFromTable === "groups") {
+            targetForUsers = selectedGroup;
+        }
+
+        if (effectiveFromTable === "subgroups") {
+            targetForUsers = selectedSubgroup;
+        }
+
+        if (!targetForUsers) {
+            targetForUsers = forUsers || event?.for_users || null;
+        }
+
+        if (!targetForUsers) {
+            alert("Please select a Program/Operation/Group/Subgroup before updating.");
+            return;
         }
 
         const updateData = {
@@ -676,11 +836,11 @@ export default function EditEvent({ event, onSave }) {
             start_slot: type === "slot" ? startSlot : null,
             end_slot: type === "slot" ? endSlot : null,
 
-            start_at: type === "time" ? startTime : null,
-            end_at: type === "time" ? endTime : null,
+            start_at: startAtValue,
+            end_at: endAtValue,
 
-            from_table: fromTable,
-            for_users: forUsers,
+            from_table: effectiveFromTable,
+            for_users: targetForUsers,
 
             is_reschedulable: isReschedulable
 
@@ -689,14 +849,14 @@ export default function EditEvent({ event, onSave }) {
         const oldAttributes = {
             title: event.title,
             description: event.description,
-            type: event.type,
+            type: event.type || event.event_type,
             date: event.date,
             start_slot: event.start_slot,
             end_slot: event.end_slot,
-            start_at: event.start_at,
-            end_at: event.end_at,
-            from_table: event.from_table,
-            for_users: event.for_users,
+            start_at: event.start_at || event.start_time,
+            end_at: event.end_at || event.end_time,
+            from_table: event.from_table || effectiveFromTable,
+            for_users: event.for_users || targetForUsers,
             is_reschedulable: event.is_reschedulable
         };
 
@@ -711,6 +871,18 @@ export default function EditEvent({ event, onSave }) {
             alert("Update failed");
 
         } else {
+
+            if ((event?.image_path || "") !== (eventImageUrl || "")) {
+                const { error: imageSyncError } = await supabase
+                    .from("events")
+                    .update({ image_path: eventImageUrl || null })
+                    .eq("id", event.id);
+
+                if (imageSyncError) {
+                    console.error("Failed to sync event image:", imageSyncError);
+                    alert("Event updated, but image could not be saved.");
+                }
+            }
 
             // DELETE attachments marked for deletion
             for (const id of deletedAttachments) {
@@ -791,8 +963,8 @@ export default function EditEvent({ event, onSave }) {
             }
 
             await notifyTelegramForUpdatedEvent(
-                fromTable,
-                forUsers,
+                effectiveFromTable,
+                targetForUsers,
                 oldAttributes,
                 updateData
             );
@@ -882,7 +1054,77 @@ export default function EditEvent({ event, onSave }) {
 
         <form className="form" onSubmit={handleUpdate}>
 
-            <h3>Edit Event</h3>
+            <h2 className="form-title">Edit Event</h2>
+
+            {type === "time" && (
+                <div className="form-group-box">
+                    <h4 className="form-section-title">Event Image</h4>
+
+                    {eventImageUrl ? (
+                        <img
+                            src={eventImageUrl}
+                            alt="Event"
+                            style={{
+                                width: "100%",
+                                maxHeight: "220px",
+                                objectFit: "cover",
+                                borderRadius: "10px",
+                                border: "1px solid #d9e2ec",
+                            }}
+                        />
+                    ) : (
+                        <div
+                            style={{
+                                width: "100%",
+                                minHeight: "120px",
+                                borderRadius: "10px",
+                                border: "1px dashed #cbd5e1",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                color: "#64748b",
+                                fontSize: "13px",
+                            }}
+                        >
+                            No image selected
+                        </div>
+                    )}
+
+                    <div className="moderator-actions-row" style={{ justifyContent: "space-between" }}>
+                        <button
+                            type="button"
+                            className="form-submit"
+                            onClick={handleUploadImageClick}
+                            disabled={isUploadingImage || isDeletingImage}
+                        >
+                            {eventImageUrl ? "Replace Image" : "Upload Image"}
+                        </button>
+
+                        <button
+                            type="button"
+                            className="form-cancel"
+                            onClick={handleDeleteImage}
+                            disabled={!eventImageUrl || isUploadingImage || isDeletingImage}
+                        >
+                            Delete Image
+                        </button>
+                    </div>
+
+                    {(isUploadingImage || isDeletingImage) && (
+                        <div className="autocomplete-loading">
+                            {isUploadingImage ? "Uploading image..." : "Deleting image..."}
+                        </div>
+                    )}
+
+                    <input
+                        ref={imageFileInputRef}
+                        type="file"
+                        accept="image/*"
+                        style={{ display: "none" }}
+                        onChange={handleImageFileChange}
+                    />
+                </div>
+            )}
 
             {/* TITLE */}
 
@@ -1166,14 +1408,15 @@ export default function EditEvent({ event, onSave }) {
 
             </div>
 
-            <div className="form-field" style={{ border: "1px solid #d9e2ec", borderRadius: "8px", padding: "10px" }}>
-                <label style={{ display: "block", marginBottom: "8px" }}>Add Event Moderators</label>
+            <div className="form-group-box">
+                <h4 className="form-section-title">Add Event Moderators</h4>
 
+                <div className="form-field">
+                    <label>Department</label>
                     <select
                         className="form-select"
                         value={selectedDepartment}
                         onChange={(e) => setSelectedDepartment(e.target.value)}
-                        style={{ marginBottom: "8px" }}
                     >
                         <option value="">Select Department</option>
                         {departments.map((department) => (
@@ -1182,114 +1425,71 @@ export default function EditEvent({ event, onSave }) {
                             </option>
                         ))}
                     </select>
+                </div>
 
-                    <div style={{ position: "relative", marginBottom: "8px" }}>
-                        <input
-                            className="form-input"
-                            placeholder="Type teacher name (e.g. first letter)"
-                            value={teacherSearchQuery}
-                            onChange={(e) => handleTeacherSearchChange(e.target.value)}
-                            onFocus={() => setShowTeacherDropdown(Boolean(teacherSearchQuery.trim()))}
-                            disabled={!selectedDepartment}
-                            autoComplete="off"
-                        />
+                <div className="form-field autocomplete-container">
+                    <label>Teacher</label>
+                    <input
+                        className="form-input"
+                        placeholder="Type teacher name (e.g. first letter)"
+                        value={teacherSearchQuery}
+                        onChange={(e) => handleTeacherSearchChange(e.target.value)}
+                        onFocus={() => setShowTeacherDropdown(Boolean(teacherSearchQuery.trim()))}
+                        disabled={!selectedDepartment}
+                        autoComplete="off"
+                    />
 
-                        {showTeacherDropdown && selectedDepartment && teacherSearchQuery.trim() && (
-                            <div
-                                style={{
-                                    position: "absolute",
-                                    top: "100%",
-                                    left: 0,
-                                    right: 0,
-                                    zIndex: 20,
-                                    background: "white",
-                                    border: "1px solid #d9e2ec",
-                                    borderRadius: "8px",
-                                    marginTop: "4px",
-                                    maxHeight: "180px",
-                                    overflowY: "auto",
-                                    boxShadow: "0 8px 16px rgba(15, 23, 42, 0.12)"
-                                }}
-                            >
-                                {filteredTeachers.length === 0 ? (
-                                    <div style={{ padding: "8px 10px", color: "#6b7280", fontSize: "13px" }}>
-                                        No teachers found
-                                    </div>
-                                ) : (
-                                    filteredTeachers.map((teacher) => (
-                                        <button
-                                            key={teacher.id}
-                                            type="button"
-                                            onClick={() => handleTeacherOptionPick(teacher)}
-                                            style={{
-                                                width: "100%",
-                                                textAlign: "left",
-                                                border: "none",
-                                                background: "white",
-                                                padding: "8px 10px",
-                                                cursor: "pointer"
-                                            }}
-                                        >
-                                            {getTeacherLabel(teacher)}
-                                        </button>
-                                    ))
-                                )}
-                            </div>
-                        )}
-                    </div>
-
-                    <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "8px" }}>
-                        <button
-                            type="button"
-                            className="form-submit"
-                            onClick={addSelectedModerator}
-                            disabled={!selectedTeacherToAdd}
-                        >
-                            Add
-                        </button>
-                    </div>
-
-                    {selectedModerators.length > 0 && (
-                        <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: "8px" }}>
-                            {selectedModerators.map((moderator) => (
-                                <li
-                                    key={moderator.id}
-                                    style={{
-                                        display: "flex",
-                                        justifyContent: "space-between",
-                                        alignItems: "center",
-                                        border: "1px solid #d9e2ec",
-                                        borderRadius: "8px",
-                                        padding: "6px 8px",
-                                        background: "#f7f9fc"
-                                    }}
-                                >
-                                    <span>{moderator.label}</span>
-                                    <button
-                                        type="button"
-                                        onClick={() => removeSelectedModerator(moderator.id)}
-                                        style={{
-                                            width: "30px",
-                                            height: "30px",
-                                            flexShrink: 0,
-                                            border: "1px solid #c5d0dc",
-                                            borderRadius: "6px",
-                                            background: "#d9534f",
-                                            color: "white",
-                                            display: "inline-flex",
-                                            alignItems: "center",
-                                            justifyContent: "center",
-                                            cursor: "pointer"
+                    {showTeacherDropdown && selectedDepartment && teacherSearchQuery.trim() && (
+                        <div className="autocomplete-list">
+                            {filteredTeachers.length === 0 ? (
+                                <div className="autocomplete-item moderator-empty-item">No teachers found</div>
+                            ) : (
+                                filteredTeachers.map((teacher) => (
+                                    <div
+                                        key={teacher.id}
+                                        className="autocomplete-item"
+                                        onMouseDown={(e) => {
+                                            e.preventDefault();
+                                            handleTeacherOptionPick(teacher);
                                         }}
-                                        title="Remove moderator"
-                                        aria-label={`Remove ${moderator.label}`}
                                     >
-                                        ×
-                                    </button>
-                                </li>
-                            ))}
-                        </ul>
+                                        {getTeacherLabel(teacher)}
+                                    </div>
+                                ))
+                            )}
+                        </div>
                     )}
+                </div>
+
+                <div className="moderator-actions-row">
+                    <button
+                        type="button"
+                        className="form-submit"
+                        onClick={addSelectedModerator}
+                        disabled={!selectedTeacherToAdd}
+                    >
+                        Add
+                    </button>
+                </div>
+
+                {selectedModerators.length > 0 && (
+                    <ul className="moderator-list">
+                        {selectedModerators.map((moderator) => (
+                            <li key={moderator.id} className="moderator-item">
+                                <span className="moderator-name">{moderator.label}</span>
+                                <button
+                                    type="button"
+                                    className="moderator-remove-btn"
+                                    onClick={() => removeSelectedModerator(moderator.id)}
+                                    title="Remove moderator"
+                                    aria-label={`Remove ${moderator.label}`}
+                                >
+                                    ×
+                                </button>
+                            </li>
+                        ))}
+                    </ul>
+                )}
             </div>
 
             {/* ATTACHMENTS */}

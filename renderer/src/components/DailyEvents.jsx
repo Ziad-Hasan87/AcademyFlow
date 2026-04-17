@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "../contexts/AuthContext";
 import supabase from "../utils/supabase";
+import Modal from "./Modal";
+import EditEvent from "./EditEvent";
 
 function formatDateLabel(dateStr) {
   if (!dateStr) return "No date selected";
@@ -28,9 +30,30 @@ function formatEventTime(value) {
   });
 }
 
+function getEventType(event) {
+  return String(event?.type ?? event?.event_type ?? "")
+    .trim()
+    .toLowerCase();
+}
+
+function getStartTimeValue(event) {
+  return event?.start_at ?? event?.start_time ?? null;
+}
+
+function getEndTimeValue(event) {
+  return event?.end_at ?? event?.end_time ?? null;
+}
+
+function isTimeEvent(event) {
+  const normalizedType = getEventType(event);
+  if (normalizedType === "time") return true;
+
+  return Boolean(getStartTimeValue(event) || getEndTimeValue(event));
+}
+
 function getEventTimeRange(event) {
-  const startAt = formatEventTime(event?.start_at);
-  const endAt = formatEventTime(event?.end_at);
+  const startAt = formatEventTime(getStartTimeValue(event));
+  const endAt = formatEventTime(getEndTimeValue(event));
 
   if (startAt && endAt) return `${startAt} - ${endAt}`;
   if (startAt) return startAt;
@@ -42,10 +65,49 @@ function getEventTimeRange(event) {
   return "Time not set";
 }
 
+function getEventImageUrl(event) {
+  return event?.image_url || event?.image_path || "";
+}
+
 export default function DailyEvents({ selectedDate }) {
   const { userData } = useAuth();
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [editableEvent, setEditableEvent] = useState(null);
+  const [refreshTick, setRefreshTick] = useState(0);
+  const [openingEventId, setOpeningEventId] = useState(null);
+
+  const getEventId = (event) => event?.id ?? event?.event_id ?? null;
+
+  const handleOpenEditEvent = async (event) => {
+    const eventId = getEventId(event);
+    if (!eventId) {
+      alert("Unable to open this event for editing.");
+      return;
+    }
+
+    try {
+      setOpeningEventId(eventId);
+
+      const { data, error } = await supabase
+        .from("events")
+        .select("*")
+        .eq("id", eventId)
+        .single();
+
+      if (error) {
+        console.error("Error loading event details:", error);
+        alert("Could not load full event details.");
+        return;
+      }
+
+      setEditableEvent(data || event);
+      setIsEditOpen(true);
+    } finally {
+      setOpeningEventId(null);
+    }
+  };
 
   useEffect(() => {
     const fetchDailyTimeEvents = async () => {
@@ -69,11 +131,12 @@ export default function DailyEvents({ selectedDate }) {
         return;
       }
 
-      const onlyTimeEvents = (Array.isArray(data) ? data : [])
-        .filter((event) => String(event?.type || "").toLowerCase() === "time")
+      const rawEvents = Array.isArray(data) ? data : [];
+      const onlyTimeEvents = rawEvents
+        .filter((event) => isTimeEvent(event))
         .sort((a, b) => {
-          const aTime = new Date(a?.start_at || `${selectedDate}T00:00:00`).getTime();
-          const bTime = new Date(b?.start_at || `${selectedDate}T00:00:00`).getTime();
+          const aTime = new Date(getStartTimeValue(a) || `${selectedDate}T00:00:00`).getTime();
+          const bTime = new Date(getStartTimeValue(b) || `${selectedDate}T00:00:00`).getTime();
           return aTime - bTime;
         });
 
@@ -82,7 +145,7 @@ export default function DailyEvents({ selectedDate }) {
     };
 
     fetchDailyTimeEvents();
-  }, [selectedDate, userData?.id]);
+  }, [selectedDate, userData?.id, refreshTick]);
 
   return (
     <section className="daily-events-container">
@@ -106,9 +169,51 @@ export default function DailyEvents({ selectedDate }) {
       {selectedDate && !loading && events.length > 0 && (
         <div className="daily-events-list">
           {events.map((event) => (
-            <article key={event.id} className="daily-event-item">
+            <article
+              key={getEventId(event) || `${event?.title || "event"}-${event?.date || ""}`}
+              className="daily-event-item"
+              role="button"
+              tabIndex={0}
+              onClick={() => {
+                handleOpenEditEvent(event);
+              }}
+              onKeyDown={(keyboardEvent) => {
+                if (keyboardEvent.key === "Enter" || keyboardEvent.key === " ") {
+                  keyboardEvent.preventDefault();
+                  handleOpenEditEvent(event);
+                }
+              }}
+              style={{ cursor: "pointer" }}
+            >
+              {getEventImageUrl(event) ? (
+                <div
+                  style={{
+                    width: "100%",
+                    aspectRatio: "16 / 9",
+                    borderRadius: "10px",
+                    overflow: "hidden",
+                    marginBottom: "8px",
+                    background: "#e2e8f0",
+                  }}
+                >
+                  <img
+                    src={getEventImageUrl(event)}
+                    alt={event?.title || "Event image"}
+                    style={{
+                      width: "100%",
+                      height: "100%",
+                      objectFit: "cover",
+                      display: "block",
+                    }}
+                  />
+                </div>
+              ) : null}
+
               <div className="daily-event-time">{getEventTimeRange(event)}</div>
               <div className="daily-event-title">{event?.title || "Untitled event"}</div>
+              {openingEventId === getEventId(event) && (
+                <p className="daily-event-description">Opening editor...</p>
+              )}
               {event?.description ? (
                 <p className="daily-event-description">{event.description}</p>
               ) : null}
@@ -116,6 +221,28 @@ export default function DailyEvents({ selectedDate }) {
           ))}
         </div>
       )}
+
+      <Modal
+        isOpen={isEditOpen}
+        title="Edit Event"
+        onClose={() => {
+          setIsEditOpen(false);
+          setEditableEvent(null);
+        }}
+        contentClassName="explorer-theme-modal-content"
+        bodyClassName="explorer-theme-modal-body"
+      >
+        {editableEvent && (
+          <EditEvent
+            event={editableEvent}
+            onSave={() => {
+              setIsEditOpen(false);
+              setEditableEvent(null);
+              setRefreshTick((tick) => tick + 1);
+            }}
+          />
+        )}
+      </Modal>
     </section>
   );
 }

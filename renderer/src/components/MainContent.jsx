@@ -22,6 +22,8 @@ export default function MainContent({ events, startOfWeek, endOfWeek, onCreateEv
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [editableEvent, setEditableEvent] = useState(null);
   const [selectedCreateDate, setSelectedCreateDate] = useState("");
+  const [selectedCreateStartSlotId, setSelectedCreateStartSlotId] = useState("");
+  const [hoveredCellKey, setHoveredCellKey] = useState(null);
 
   useEffect(() => {
     if (userData?.institute_id) {
@@ -72,6 +74,8 @@ export default function MainContent({ events, startOfWeek, endOfWeek, onCreateEv
 
   const getRowBackground = (dayIndex) =>
     dayIndex % 2 === 0 ? "rgba(226, 245, 239, 0.58)" : "rgba(255, 255, 255, 0.78)";
+
+  const getCellKey = (dayDate, slotId) => `${dayDate}-${slotId}`;
 
   const days = useMemo(() => {
     if (!startOfWeek || !endOfWeek) return [];
@@ -181,6 +185,22 @@ export default function MainContent({ events, startOfWeek, endOfWeek, onCreateEv
     "5vh",
     ...days.map((day) => `${lanesByDay[day.date] * 8}vh`),
   ].join(" ");
+
+  const resolveSlotIdFromEventPointer = (pointerEvent, startIndex, span) => {
+    if (!pointerEvent?.currentTarget || span <= 0) return null;
+
+    const rect = pointerEvent.currentTarget.getBoundingClientRect();
+    if (!rect.width) return slots[startIndex]?.id || null;
+
+    const relativeX = pointerEvent.clientX - rect.left;
+    const slotWidth = rect.width / span;
+    const offset = Math.min(
+      span - 1,
+      Math.max(0, Math.floor(relativeX / slotWidth))
+    );
+
+    return slots[startIndex + offset]?.id || slots[startIndex]?.id || null;
+  };
 
   return (
     <div
@@ -341,10 +361,12 @@ export default function MainContent({ events, startOfWeek, endOfWeek, onCreateEv
                 style={{
                   gridRow: dayIndex + 2,
                   gridColumn: slotIndex + 2,
-                  pointerEvents: "none",
+                  pointerEvents: "auto",
                   background: getRowBackground(dayIndex),
                   borderColor: "rgba(148, 163, 184, 0.2)",
                 }}
+                onMouseEnter={() => setHoveredCellKey(getCellKey(day.date, slot.id))}
+                onMouseLeave={() => setHoveredCellKey(null)}
               />
             ))}
           </React.Fragment>
@@ -386,10 +408,17 @@ export default function MainContent({ events, startOfWeek, endOfWeek, onCreateEv
                 cursor: "pointer",
                 transition: "transform 0.2s ease, box-shadow 0.2s ease",
               }}
-                onClick={() => {
-                  setEditableEvent({ ...ev });
-                  setIsEditOpen(true);
-                }}
+              onMouseMove={(event) => {
+                const slotId = resolveSlotIdFromEventPointer(event, startIndex, span);
+                if (slotId) {
+                  setHoveredCellKey(getCellKey(ev._date, slotId));
+                }
+              }}
+              onMouseLeave={() => setHoveredCellKey(null)}
+              onClick={() => {
+                setEditableEvent({ ...ev });
+                setIsEditOpen(true);
+              }}
             >
               {ev.title}
             </div>
@@ -402,6 +431,7 @@ export default function MainContent({ events, startOfWeek, endOfWeek, onCreateEv
             position: "absolute",
             top: 0,
             left: 0,
+            zIndex: 30,
             display: "grid",
             gridTemplateColumns: `repeat(${slots.length + 1}, 1fr)`,
             gridTemplateRows: gridRows,
@@ -430,9 +460,14 @@ export default function MainContent({ events, startOfWeek, endOfWeek, onCreateEv
                   cursor: "pointer",
                   zIndex: 20,
                   boxShadow: "0 4px 10px rgba(15, 23, 42, 0.12)",
+                  opacity: hoveredCellKey === getCellKey(day.date, slot.id) ? 1 : 0,
+                  pointerEvents: hoveredCellKey === getCellKey(day.date, slot.id) ? "auto" : "none",
                 }}
+                onMouseEnter={() => setHoveredCellKey(getCellKey(day.date, slot.id))}
+                onMouseLeave={() => setHoveredCellKey(null)}
                 onClick={() => {
                   setSelectedCreateDate(day.date);
+                  setSelectedCreateStartSlotId(slot.id);
                   setIsCreateOpen(true);
                 }}
               >
@@ -442,13 +477,21 @@ export default function MainContent({ events, startOfWeek, endOfWeek, onCreateEv
           )}
         </div>
       </div>
-      <Modal isOpen={isCreateOpen} onClose={() => setIsCreateOpen(false)}>
+      <Modal
+        isOpen={isCreateOpen}
+        title="Create Event"
+        onClose={() => setIsCreateOpen(false)}
+        contentClassName="explorer-theme-modal-content"
+        bodyClassName="explorer-theme-modal-body"
+      >
         <CreateEvent
           routineId={null}
           defaultDate={selectedCreateDate}
+          defaultStartSlot={selectedCreateStartSlotId}
           onSave={() => {
             setIsCreateOpen(false);
             setSelectedCreateDate("");
+            setSelectedCreateStartSlotId("");
             onCreateEvent?.();
           }}
         />
@@ -456,10 +499,13 @@ export default function MainContent({ events, startOfWeek, endOfWeek, onCreateEv
 
       <Modal
         isOpen={isEditOpen}
+        title="Edit Event"
         onClose={() => {
           setIsEditOpen(false);
           setEditableEvent(null);
         }}
+        contentClassName="explorer-theme-modal-content"
+        bodyClassName="explorer-theme-modal-body"
       >
         {editableEvent && (
           <EditEvent

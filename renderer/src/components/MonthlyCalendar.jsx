@@ -1,5 +1,23 @@
 import React, { useRef, useState, useEffect } from "react";
 
+const formatDateKey = (date) =>
+  `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(
+    date.getDate()
+  ).padStart(2, "0")}`;
+
+const getWeekRangeForDate = (date) => {
+  const start = new Date(date);
+  start.setDate(date.getDate() - date.getDay());
+
+  const end = new Date(start);
+  end.setDate(start.getDate() + 6);
+
+  return {
+    startOfWeek: formatDateKey(start),
+    endOfWeek: formatDateKey(end),
+  };
+};
+
 function SingleMonthCalendar({ year, month, onSelectDate, selectedDate }) {
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const firstDay = new Date(year, month, 1).getDay();
@@ -165,6 +183,16 @@ export default function MonthlyCalendar({
       isScrolling.current = false;
     }, 300);
   };
+
+  useEffect(() => {
+    if (selectedDate) return;
+
+    const todayDate = new Date();
+    const todayDateKey = formatDateKey(todayDate);
+    const { startOfWeek, endOfWeek } = getWeekRangeForDate(todayDate);
+
+    onSelectDate?.(todayDateKey, startOfWeek, endOfWeek);
+  }, [selectedDate, onSelectDate]);
 
   useEffect(() => {
     const container = scrollContainerRef.current;
