@@ -211,6 +211,8 @@ export default function MainContent({ events, startOfWeek, endOfWeek, onCreateEv
         alignItems: "center",
         width: "100%",
         height: "100%",
+        minHeight: 0,
+        overflow: "hidden",
       }}
     >
       <div
@@ -280,201 +282,212 @@ export default function MainContent({ events, startOfWeek, endOfWeek, onCreateEv
       </div>
 
       <div
-        className="timetable-grid"
         style={{
-          display: "grid",
-          gridTemplateColumns: `repeat(${slots.length + 1}, 1fr)`,
-          gridTemplateRows: gridRows,
-          position: "relative",
           width: "100%",
-          borderRadius: "14px",
-          overflow: "hidden",
-          border: "1px solid rgba(148, 163, 184, 0.35)",
-          boxShadow: "0 18px 34px rgba(15, 23, 42, 0.16)",
-          background: "rgba(255, 255, 255, 0.72)",
-          backdropFilter: "blur(8px)",
-          WebkitBackdropFilter: "blur(8px)",
+          flex: 1,
+          minHeight: 0,
+          overflowY: "auto",
+          overflowX: "auto",
+          paddingBottom: "8px",
         }}
       >
-        {/* top-left */}
         <div
-          className="grid-cell header-cell"
+          className="timetable-grid"
           style={{
-            background: "linear-gradient(135deg, #0f766e 0%, #0b4a6f 100%)",
-            borderColor: "rgba(255, 255, 255, 0.25)",
+            display: "grid",
+            gridTemplateColumns: `repeat(${slots.length + 1}, 1fr)`,
+            gridTemplateRows: gridRows,
+            position: "relative",
+            width: "100%",
+            borderRadius: "14px",
+            overflow: "hidden",
+            border: "1px solid rgba(148, 163, 184, 0.35)",
+            boxShadow: "0 18px 34px rgba(15, 23, 42, 0.16)",
+            background: "rgba(255, 255, 255, 0.72)",
+            backdropFilter: "blur(8px)",
+            WebkitBackdropFilter: "blur(8px)",
           }}
-        ></div>
-
-        {/* slot headers */}
-        {slots.map((slot) => (
+        >
+          {/* top-left */}
           <div
-            key={slot.id}
             className="grid-cell header-cell"
             style={{
               background: "linear-gradient(135deg, #0f766e 0%, #0b4a6f 100%)",
-              color: "#f8fafc",
-              borderColor: "rgba(255, 255, 255, 0.24)",
-              display: "flex",
-              flexDirection: "column",
-              justifyContent: "center",
-              alignItems: "center",
-              gap: "2px",
-              fontWeight: 700,
-              letterSpacing: "0.01em",
+              borderColor: "rgba(255, 255, 255, 0.25)",
             }}
-          >
-            <div>{slot.name}</div>
-            <div style={{ fontSize: "0.75em", color: "rgba(248,250,252,0.88)" }}>
-              {formatTimeToAMPM(slot.start)} - {formatTimeToAMPM(slot.end)}
-            </div>
-          </div>
-        ))}
+          ></div>
 
-        {/* grid cells */}
-        {days.map((day, dayIndex) => (
-          <React.Fragment key={day.date}>
+          {/* slot headers */}
+          {slots.map((slot) => (
             <div
-              className="grid-cell header-cell-row"
+              key={slot.id}
+              className="grid-cell header-cell"
               style={{
-                gridRow: dayIndex + 2,
-                gridColumn: 1,
-                background: "linear-gradient(180deg, rgba(226, 232, 240, 0.9) 0%, rgba(241, 245, 249, 0.9) 100%)",
+                background: "linear-gradient(135deg, #0f766e 0%, #0b4a6f 100%)",
+                color: "#f8fafc",
+                borderColor: "rgba(255, 255, 255, 0.24)",
                 display: "flex",
                 flexDirection: "column",
                 justifyContent: "center",
                 alignItems: "center",
-                borderColor: "rgba(148, 163, 184, 0.28)",
-                color: "#0f172a",
+                gap: "2px",
                 fontWeight: 700,
+                letterSpacing: "0.01em",
               }}
             >
-              <div>{day.day}</div>
-              <div style={{ fontSize: "0.75em", color: "#475569", fontWeight: 600 }}>
-                {formatDateLabel(day.date)}
+              <div>{slot.name}</div>
+              <div style={{ fontSize: "0.75em", color: "rgba(248,250,252,0.88)" }}>
+                {formatTimeToAMPM(slot.start)} - {formatTimeToAMPM(slot.end)}
               </div>
             </div>
+          ))}
 
-            {slots.map((slot, slotIndex) => (
+          {/* grid cells */}
+          {days.map((day, dayIndex) => (
+            <React.Fragment key={day.date}>
               <div
-                key={`${day.date}-${slot.id}`}
-                className="grid-cell"
+                className="grid-cell header-cell-row"
                 style={{
                   gridRow: dayIndex + 2,
-                  gridColumn: slotIndex + 2,
-                  pointerEvents: "auto",
-                  background: getRowBackground(dayIndex),
-                  borderColor: "rgba(148, 163, 184, 0.2)",
-                }}
-                onMouseEnter={() => setHoveredCellKey(getCellKey(day.date, slot.id))}
-                onMouseLeave={() => setHoveredCellKey(null)}
-              />
-            ))}
-          </React.Fragment>
-        ))}
-
-        {/* EVENTS */}
-        {positionedEvents.map((ev) => {
-          const dayIndex = days.findIndex((day) => day.date === ev._date);
-          const startIndex = slotIndexMap[ev.start_slot];
-          const endIndex = slotIndexMap[ev.end_slot];
-
-          if (dayIndex === -1 || startIndex === undefined) return null;
-
-          const span = Math.max(1, endIndex - startIndex + 1);
-          const laneHeight = 8;
-          const topOffset = ev._lane * laneHeight;
-
-          return (
-            <div
-              key={ev.id}
-              className="routine-event"
-              style={{
-                gridRow: dayIndex + 2,
-                gridColumn: `${startIndex + 2} / span ${span}`,
-                alignSelf: "start",
-                marginTop: `${topOffset}vh`,
-                height: `${laneHeight}vh`,
-                position: "relative",
-                zIndex: 5,
-                backgroundColor: ev.filterColor || "deepskyblue",
-                color: getEventTextColor(ev.filterColor),
-                borderRadius: "8px",
-                border: "1px solid rgba(15, 23, 42, 0.16)",
-                boxShadow: "0 6px 14px rgba(15, 23, 42, 0.2)",
-                padding: "6px 8px",
-                fontSize: "0.8em",
-                fontWeight: 700,
-                overflow: "hidden",
-                cursor: "pointer",
-                transition: "transform 0.2s ease, box-shadow 0.2s ease",
-              }}
-              onMouseMove={(event) => {
-                const slotId = resolveSlotIdFromEventPointer(event, startIndex, span);
-                if (slotId) {
-                  setHoveredCellKey(getCellKey(ev._date, slotId));
-                }
-              }}
-              onMouseLeave={() => setHoveredCellKey(null)}
-              onClick={() => {
-                setEditableEvent({ ...ev });
-                setIsEditOpen(true);
-              }}
-            >
-              {ev.title}
-            </div>
-          );
-        })}
-
-        {/* + BUTTON LAYER */}
-        <div
-          style={{
-            position: "absolute",
-            top: 0,
-            left: 0,
-            zIndex: 30,
-            display: "grid",
-            gridTemplateColumns: `repeat(${slots.length + 1}, 1fr)`,
-            gridTemplateRows: gridRows,
-            width: "100%",
-            height: "100%",
-            pointerEvents: "none",
-          }}
-        >
-          {days.map((day, dayIndex) =>
-            slots.map((slot) => (
-              <button
-                key={`${day.date}-${slot.id}-btn`}
-                className="schedule-add-btn"
-                style={{
-                  gridRow: dayIndex + 2,
-                  gridColumn: slotIndexMap[slot.id] + 2,
-                  width: "20px",
-                  height: "20px",
-                  marginTop: "2px",
-                  marginLeft: "2px",
-                  borderRadius: "6px",
-                  border: "1px solid rgba(148, 163, 184, 0.45)",
-                  background: "linear-gradient(120deg, #d1fae5 0%, #bfdbfe 100%)",
+                  gridColumn: 1,
+                  background: "linear-gradient(180deg, rgba(226, 232, 240, 0.9) 0%, rgba(241, 245, 249, 0.9) 100%)",
+                  display: "flex",
+                  flexDirection: "column",
+                  justifyContent: "center",
+                  alignItems: "center",
+                  borderColor: "rgba(148, 163, 184, 0.28)",
                   color: "#0f172a",
                   fontWeight: 700,
-                  cursor: "pointer",
-                  zIndex: 20,
-                  boxShadow: "0 4px 10px rgba(15, 23, 42, 0.12)",
-                  opacity: hoveredCellKey === getCellKey(day.date, slot.id) ? 1 : 0,
-                  pointerEvents: hoveredCellKey === getCellKey(day.date, slot.id) ? "auto" : "none",
-                }}
-                onMouseEnter={() => setHoveredCellKey(getCellKey(day.date, slot.id))}
-                onMouseLeave={() => setHoveredCellKey(null)}
-                onClick={() => {
-                  setSelectedCreateDate(day.date);
-                  setSelectedCreateStartSlotId(slot.id);
-                  setIsCreateOpen(true);
                 }}
               >
-                +
-              </button>
-            ))
-          )}
+                <div>{day.day}</div>
+                <div style={{ fontSize: "0.75em", color: "#475569", fontWeight: 600 }}>
+                  {formatDateLabel(day.date)}
+                </div>
+              </div>
+
+              {slots.map((slot, slotIndex) => (
+                <div
+                  key={`${day.date}-${slot.id}`}
+                  className="grid-cell"
+                  style={{
+                    gridRow: dayIndex + 2,
+                    gridColumn: slotIndex + 2,
+                    pointerEvents: "auto",
+                    background: getRowBackground(dayIndex),
+                    borderColor: "rgba(148, 163, 184, 0.2)",
+                  }}
+                  onMouseEnter={() => setHoveredCellKey(getCellKey(day.date, slot.id))}
+                  onMouseLeave={() => setHoveredCellKey(null)}
+                />
+              ))}
+            </React.Fragment>
+          ))}
+
+          {/* EVENTS */}
+          {positionedEvents.map((ev) => {
+            const dayIndex = days.findIndex((day) => day.date === ev._date);
+            const startIndex = slotIndexMap[ev.start_slot];
+            const endIndex = slotIndexMap[ev.end_slot];
+
+            if (dayIndex === -1 || startIndex === undefined) return null;
+
+            const span = Math.max(1, endIndex - startIndex + 1);
+            const laneHeight = 8;
+            const topOffset = ev._lane * laneHeight;
+
+            return (
+              <div
+                key={ev.id}
+                className="routine-event"
+                style={{
+                  gridRow: dayIndex + 2,
+                  gridColumn: `${startIndex + 2} / span ${span}`,
+                  alignSelf: "start",
+                  marginTop: `${topOffset}vh`,
+                  height: `${laneHeight}vh`,
+                  position: "relative",
+                  zIndex: 5,
+                  backgroundColor: ev.filterColor || "deepskyblue",
+                  color: getEventTextColor(ev.filterColor),
+                  borderRadius: "8px",
+                  border: "1px solid rgba(15, 23, 42, 0.16)",
+                  boxShadow: "0 6px 14px rgba(15, 23, 42, 0.2)",
+                  padding: "6px 8px",
+                  fontSize: "0.8em",
+                  fontWeight: 700,
+                  overflow: "hidden",
+                  cursor: "pointer",
+                  transition: "transform 0.2s ease, box-shadow 0.2s ease",
+                }}
+                onMouseMove={(event) => {
+                  const slotId = resolveSlotIdFromEventPointer(event, startIndex, span);
+                  if (slotId) {
+                    setHoveredCellKey(getCellKey(ev._date, slotId));
+                  }
+                }}
+                onMouseLeave={() => setHoveredCellKey(null)}
+                onClick={() => {
+                  setEditableEvent({ ...ev });
+                  setIsEditOpen(true);
+                }}
+              >
+                {ev.title}
+              </div>
+            );
+          })}
+
+          {/* + BUTTON LAYER */}
+          <div
+            style={{
+              position: "absolute",
+              top: 0,
+              left: 0,
+              zIndex: 30,
+              display: "grid",
+              gridTemplateColumns: `repeat(${slots.length + 1}, 1fr)`,
+              gridTemplateRows: gridRows,
+              width: "100%",
+              height: "100%",
+              pointerEvents: "none",
+            }}
+          >
+            {days.map((day, dayIndex) =>
+              slots.map((slot) => (
+                <button
+                  key={`${day.date}-${slot.id}-btn`}
+                  className="schedule-add-btn"
+                  style={{
+                    gridRow: dayIndex + 2,
+                    gridColumn: slotIndexMap[slot.id] + 2,
+                    width: "20px",
+                    height: "20px",
+                    marginTop: "2px",
+                    marginLeft: "2px",
+                    borderRadius: "6px",
+                    border: "1px solid rgba(148, 163, 184, 0.45)",
+                    background: "linear-gradient(120deg, #d1fae5 0%, #bfdbfe 100%)",
+                    color: "#0f172a",
+                    fontWeight: 700,
+                    cursor: "pointer",
+                    zIndex: 20,
+                    boxShadow: "0 4px 10px rgba(15, 23, 42, 0.12)",
+                    opacity: hoveredCellKey === getCellKey(day.date, slot.id) ? 1 : 0,
+                    pointerEvents: hoveredCellKey === getCellKey(day.date, slot.id) ? "auto" : "none",
+                  }}
+                  onMouseEnter={() => setHoveredCellKey(getCellKey(day.date, slot.id))}
+                  onMouseLeave={() => setHoveredCellKey(null)}
+                  onClick={() => {
+                    setSelectedCreateDate(day.date);
+                    setSelectedCreateStartSlotId(slot.id);
+                    setIsCreateOpen(true);
+                  }}
+                >
+                  +
+                </button>
+              ))
+            )}
+          </div>
         </div>
       </div>
       <Modal
