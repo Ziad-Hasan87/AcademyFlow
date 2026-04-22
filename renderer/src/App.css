@@ -744,6 +744,291 @@ html, body, #root {
   min-height: 0;
   overflow: hidden;
 }
+
+.materials-modal-content {
+  width: min(1100px, 92vw);
+  height: min(760px, 90vh);
+  max-width: 92vw;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  padding: 16px;
+}
+
+.materials-modal-body {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  padding: 0;
+}
+
+.materials-finder-shell {
+  width: 100%;
+  height: 100%;
+}
+
+.materials-finder-window {
+  width: 100%;
+  height: 100%;
+  border: 1px solid #cfd6e2;
+  border-radius: 12px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  background: #eef2f8;
+  box-shadow: 0 14px 28px rgba(15, 23, 42, 0.14);
+}
+
+.materials-finder-titlebar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  height: 38px;
+  background: linear-gradient(180deg, #f8f9fb 0%, #ebeef3 100%);
+  border-bottom: 1px solid #cfd6e2;
+}
+
+.materials-finder-dots {
+  position: absolute;
+  left: 12px;
+  display: inline-flex;
+  gap: 7px;
+}
+
+.materials-finder-dots .dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+}
+
+.materials-finder-dots .dot.red {
+  background: #ff5f57;
+}
+
+.materials-finder-dots .dot.yellow {
+  background: #ffbd2e;
+}
+
+.materials-finder-dots .dot.green {
+  background: #28c840;
+}
+
+.materials-finder-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #334155;
+  letter-spacing: 0.02em;
+}
+
+.materials-finder-toolbar {
+  height: 42px;
+  padding: 0 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border-bottom: 1px solid #d8dee8;
+  background: #f8fafc;
+}
+
+.materials-finder-breadcrumbs {
+  min-width: 0;
+  font-size: 12px;
+  color: #475569;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  overflow: hidden;
+}
+
+.materials-finder-refresh {
+  border: 1px solid #c5cedc;
+  background: linear-gradient(180deg, #ffffff 0%, #f2f4f8 100%);
+  color: #1f2937;
+  border-radius: 7px;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 6px 12px;
+  cursor: pointer;
+}
+
+.materials-finder-refresh:hover {
+  background: linear-gradient(180deg, #ffffff 0%, #eceff5 100%);
+}
+
+.materials-finder-status-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  font-size: 11px;
+  color: #64748b;
+  border-bottom: 1px solid #d8dee8;
+  background: #f8fafc;
+}
+
+.materials-finder-content {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(240px, 300px) 1fr;
+}
+
+.materials-finder-sidebar {
+  border-right: 1px solid #d8dee8;
+  background: linear-gradient(180deg, #f5f8fd 0%, #f2f5fa 100%);
+  overflow: auto;
+  padding: 8px 0;
+}
+
+.materials-tree-root,
+.materials-tree-children {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.materials-tree-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 30px;
+  border-radius: 7px;
+  margin: 2px 6px;
+}
+
+.materials-tree-row.selected {
+  background: linear-gradient(180deg, #e2ecff 0%, #cfddf7 100%);
+  box-shadow: inset 0 0 0 1px rgba(59, 130, 246, 0.25);
+}
+
+.materials-tree-toggle,
+.materials-tree-toggle-placeholder {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+
+.materials-tree-toggle {
+  border: 1px solid #c2cbda;
+  border-radius: 4px;
+  background: #ffffff;
+  color: #475569;
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+}
+
+.materials-tree-toggle-placeholder {
+  display: inline-block;
+}
+
+.materials-tree-label {
+  border: none;
+  background: transparent;
+  color: #1f2937;
+  font-size: 13px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  cursor: pointer;
+  padding: 0;
+}
+
+.materials-tree-label span {
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  overflow: hidden;
+}
+
+.materials-finder-main {
+  background: #ffffff;
+  overflow: auto;
+  min-height: 0;
+}
+
+.materials-finder-placeholder,
+.materials-finder-error,
+.materials-finder-empty {
+  margin: 14px;
+  padding: 12px;
+  border-radius: 8px;
+  font-size: 13px;
+}
+
+.materials-finder-placeholder,
+.materials-finder-empty {
+  border: 1px dashed #cbd5e1;
+  color: #64748b;
+  background: #f8fafc;
+}
+
+.materials-finder-error {
+  border: 1px solid #fecaca;
+  color: #991b1b;
+  background: #fff1f2;
+}
+
+.materials-files-table-wrap {
+  padding: 10px;
+}
+
+.materials-files-table {
+  width: 100%;
+  border-collapse: collapse;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.materials-files-table thead th {
+  text-align: left;
+  padding: 10px 12px;
+  font-size: 12px;
+  letter-spacing: 0.02em;
+  color: #475569;
+  background: #f8fafc;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.materials-files-table tbody td {
+  padding: 10px 12px;
+  border-bottom: 1px solid #edf2f7;
+  font-size: 13px;
+  color: #1f2937;
+}
+
+.materials-file-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: min(560px, 70vw);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  overflow: hidden;
+}
+
+.materials-file-download {
+  border: 1px solid #c7d0de;
+  border-radius: 7px;
+  background: linear-gradient(180deg, #ffffff 0%, #f3f5f9 100%);
+  color: #0f172a;
+  font-size: 12px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  cursor: pointer;
+}
+
+.materials-file-download:hover {
+  background: linear-gradient(180deg, #ffffff 0%, #eaedf3 100%);
+}
 /* ===========================
    Lists (Departments, etc.)
    =========================== */
@@ -1606,6 +1891,27 @@ html, body, #root {
 
   .profile-info-grid {
     grid-template-columns: 1fr;
+  }
+
+  .materials-modal-content {
+    width: 95vw;
+    max-width: 95vw;
+    height: 92vh;
+    max-height: 92vh;
+  }
+
+  .materials-finder-content {
+    grid-template-columns: 1fr;
+    grid-template-rows: 42% 58%;
+  }
+
+  .materials-finder-sidebar {
+    border-right: none;
+    border-bottom: 1px solid #d8dee8;
+  }
+
+  .materials-file-name {
+    max-width: 50vw;
   }
 }
 

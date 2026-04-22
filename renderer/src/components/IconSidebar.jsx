@@ -20,6 +20,7 @@ export default function IconSidebar({ onIconClick, activePage }) {
     { id: "operations", icon: FaCog, name: "Operations" , minRole: "Moderator" },
     { id: "programs", icon: FiBook, name: "Programs", minRole: "Admin" },
     { id: "courses", icon: FiBookOpen, name: "Courses" , minRole: "Moderator"},
+    { id: "materials", icon: FaLayerGroup, name: "Materials", minRole: "Student" },
     { id: "groups", icon: GrGroup, name: "Groups", minRole: "Moderator" },
     { id: "subgroups", icon: FaPeopleRoof , name: "Subgroups", minRole: "Moderator" },
     { id: "vacations", icon: FaRegCalendarTimes, name: "Vacations", minRole: "Moderator" },

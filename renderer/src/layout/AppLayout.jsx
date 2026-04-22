@@ -11,6 +11,7 @@ import CreateRoutineModal from "../components/CreateRoutine"; // ✅ import moda
 import IconSidebar from "../components/IconSidebar"; // ✅ import icon sidebar
 import Modal from "../components/Modal";
 import ProfilePage from "../pages/ProfilePage";
+import MaterialsPage from "../pages/MaterialsPage";
 import UserSearch from "../components/UserSearch";
 import Toast from "../components/Toast";
 import { useAuth } from "../contexts/AuthContext";
@@ -35,6 +36,7 @@ export default function AppLayout() {
   const [activePage, setActivePage] = useState(null); // active page state
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [isMaterialsOpen, setIsMaterialsOpen] = useState(false);
   const [selectedProfileUserId, setSelectedProfileUserId] = useState(null);
   const [selectedCalendarDate, setSelectedCalendarDate] = useState(getTodayDateString());
 
@@ -62,6 +64,11 @@ export default function AppLayout() {
       return;
     }
 
+    if (pageId === "materials") {
+      setIsMaterialsOpen(true);
+      return;
+    }
+
     setActivePage(pageId);
   };
 
@@ -79,7 +86,15 @@ export default function AppLayout() {
       <div className="main-app">
         <IconSidebar
           onIconClick={handleIconClick}
-          activePage={isProfileOpen ? "profile" : isSearchOpen ? "search" : activePage}
+          activePage={
+            isProfileOpen
+              ? "profile"
+              : isSearchOpen
+                ? "search"
+                : isMaterialsOpen
+                  ? "materials"
+                  : activePage
+          }
         />
 
         <LeftSidebar
@@ -155,6 +170,16 @@ export default function AppLayout() {
         bodyClassName="profile-modal-body"
       >
         <UserSearch onUserSelect={handleUserSelectFromSearch} />
+      </Modal>
+
+      <Modal
+        isOpen={isMaterialsOpen}
+        onClose={() => setIsMaterialsOpen(false)}
+        title="Materials"
+        contentClassName="materials-modal-content"
+        bodyClassName="materials-modal-body"
+      >
+        <MaterialsPage />
       </Modal>
 
       {/* Toast Notifications */}
