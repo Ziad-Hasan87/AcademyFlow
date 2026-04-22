@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import supabase from "../utils/supabase";
 import { useAuth } from "../contexts/AuthContext";
 import { notifyRoutineEventChange } from "../utils/telegramNotifications";
@@ -19,6 +19,7 @@ export default function CreateRoutineEvent({
   const currentInstituteId = userData?.institute_id;
 
   const [title, setTitle] = useState("");
+  const [isTitleCustomized, setIsTitleCustomized] = useState(false);
   const [description, setDescription] = useState("");
   const [isReschedulable, setIsReschedulable] = useState(true);
   const [courses, setCourses] = useState([]);
@@ -189,12 +190,11 @@ export default function CreateRoutineEvent({
     fetchCourses();
   }, [operationId]);
 
-  // Auto-update title when courses, subgroups, or teachers change
-  useEffect(() => {
+  const buildAutoTitle = useCallback(() => {
     const titleParts = [];
 
     if (selectedCourseId) {
-      const course1 = courses.find(c => c.id === selectedCourseId);
+      const course1 = courses.find((c) => c.id === selectedCourseId);
       if (course1) {
         let line1 = course1.name;
         if (subgroupLabel1) line1 += ` (${subgroupLabel1})`;
@@ -204,7 +204,7 @@ export default function CreateRoutineEvent({
     }
 
     if (selectedCourseId2) {
-      const course2 = courses.find(c => c.id === selectedCourseId2);
+      const course2 = courses.find((c) => c.id === selectedCourseId2);
       if (course2) {
         let line2 = course2.name;
         if (subgroupLabel2) line2 += ` (${subgroupLabel2})`;
@@ -213,32 +213,33 @@ export default function CreateRoutineEvent({
       }
     }
 
-    setTitle(titleParts.join(" | "));
-  }, [selectedCourseId, selectedCourseId2, subgroupLabel1, subgroupLabel2, teacherCodenames1, teacherCodenames2, courses]);
+    return titleParts.join(" | ");
+  }, [
+    selectedCourseId,
+    selectedCourseId2,
+    subgroupLabel1,
+    subgroupLabel2,
+    teacherCodenames1,
+    teacherCodenames2,
+    courses,
+  ]);
+
+  // Auto-update title when courses, subgroups, or teachers change
+  useEffect(() => {
+    if (!isTitleCustomized) {
+      setTitle(buildAutoTitle());
+    }
+  }, [
+    isTitleCustomized,
+    buildAutoTitle,
+  ]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!selectedCourseId) return alert("Please select at least one course");
 
-    // Build title with both courses on separate lines
-    const titleParts = [];
-    const course1 = courses.find(c => c.id === selectedCourseId);
-    if (course1) {
-      let line1 = course1.name;
-      if (subgroupLabel1) line1 += ` (${subgroupLabel1})`;
-      if (teacherCodenames1) line1 += ` (${teacherCodenames1})`;
-      titleParts.push(line1);
-    }
-    if (selectedCourseId2) {
-      const course2 = courses.find(c => c.id === selectedCourseId2);
-      if (course2) {
-        let line2 = course2.name;
-        if (subgroupLabel2) line2 += ` (${subgroupLabel2})`;
-        if (teacherCodenames2) line2 += ` (${teacherCodenames2})`;
-        titleParts.push(line2);
-      }
-    }
-    const eventTitle = titleParts.join(" | ");
+    const autoTitle = buildAutoTitle();
+    const eventTitle = title.trim() || autoTitle;
 
     // Build description with metadata for both courses
     const descriptionData = {
@@ -324,8 +325,11 @@ export default function CreateRoutineEvent({
           type="text"
           className="form-input"
           value={title}
-          readOnly
-          style={{ backgroundColor: "#f0f0f0", color: "#555" }}
+          onChange={(e) => {
+            const nextValue = e.target.value;
+            setTitle(nextValue);
+            setIsTitleCustomized(nextValue.trim().length > 0);
+          }}
         />
       </div>
 

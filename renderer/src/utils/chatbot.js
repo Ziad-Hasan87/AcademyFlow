@@ -1,298 +1,172 @@
 import supabase from "./supabase";
+import { RPC_CHATBOT_CONTEXT } from "./query";
 
 const GROQ_API_KEY = import.meta.env.VITE_GROQ_API_KEY;
 const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
+const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
-// ─── Fetch all context data from Supabase for the chatbot ───
+function toSqlLiteral(value) {
+  if (value === null || value === undefined) return "NULL";
+  if (typeof value === "boolean") return value ? "TRUE" : "FALSE";
+  if (typeof value === "number") return Number.isFinite(value) ? String(value) : "NULL";
 
-async function fetchChatbotContext(instituteId) {
-  const results = {};
-
-  // Fetch departments
-  const { data: departments } = await supabase
-    .from("departments")
-    .select("id, name, code")
-    .eq("institute_id", instituteId);
-  results.departments = departments || [];
-
-  // Fetch programs
-  const { data: programs } = await supabase
-    .from("programs")
-    .select("id, name, departments(name)")
-    .eq("institution_id", instituteId)
-    .eq("is_active", true);
-  results.programs = programs || [];
-
-  // Fetch active operations
-  const programIds = results.programs.map((p) => p.id);
-  if (programIds.length > 0) {
-    const { data: operations } = await supabase
-      .from("operations")
-      .select("id, name, status, program_id, programs(name)")
-      .in("program_id", programIds)
-      .eq("status", "active");
-    results.operations = operations || [];
-  } else {
-    results.operations = [];
+  if (typeof value === "string") {
+    const escaped = value.replace(/'/g, "''");
+    return `'${escaped}'`;
   }
 
-  // Fetch routines
-  if (programIds.length > 0) {
-    const { data: routines } = await supabase
-      .from("routine")
-      .select(`
-        id, name, created_at,
-        operation:operation_id (id, name, program_id)
-      `)
-      .order("created_at", { ascending: false });
-    results.routines = routines || [];
-  } else {
-    results.routines = [];
-  }
-
-  // Fetch recurring events (class schedule)
-  const routineIds = results.routines.map((r) => r.id);
-  if (routineIds.length > 0) {
-    const { data: events } = await supabase
-      .from("recurring_events")
-      .select(`
-        id, title, type, start_at, end_at, expire_at,
-        start_slot, end_slot, day_of_week, repeat_every,
-        start_week, course_id, description, is_reschedulable,
-        for_users, from_table, routine_id
-      `)
-      .in("routine_id", routineIds)
-      .order("day_of_week");
-    results.events = events || [];
-  } else {
-    results.events = [];
-  }
-
-  // Fetch courses
-  const operationIds = results.operations.map((o) => o.id);
-  if (operationIds.length > 0) {
-    const { data: courses } = await supabase
-      .from("courses")
-      .select("id, name, operation_id")
-      .in("operation_id", operationIds);
-    results.courses = courses || [];
-  } else {
-    results.courses = [];
-  }
-
-  // Fetch teachers
-  const { data: teachers } = await supabase
-    .from("users")
-    .select("id, name, role")
-    .eq("institute_id", instituteId)
-    .eq("role", "Teacher");
-  results.teachers = teachers || [];
-
-  // Fetch course-teacher assignments
-  const courseIds = results.courses.map((c) => c.id);
-  if (courseIds.length > 0) {
-    const { data: moderators } = await supabase
-      .from("course_moderators")
-      .select("course_id, user_id, users(id, name, role)")
-      .in("course_id", courseIds);
-    results.courseModerators = moderators || [];
-  } else {
-    results.courseModerators = [];
-  }
-
-  // Fetch groups
-  if (programIds.length > 0) {
-    const { data: groups } = await supabase
-      .from("groups")
-      .select("id, name, program_id, programs(name)")
-      .in("program_id", programIds);
-    results.groups = groups || [];
-  } else {
-    results.groups = [];
-  }
-
-  // Fetch slots
-  if (operationIds.length > 0) {
-    const { data: slots } = await supabase
-      .from("slotinfo")
-      .select("*")
-      .in("operation_id", operationIds)
-      .order("serial_no");
-    results.slots = slots || [];
-  } else {
-    results.slots = [];
-  }
-
-  // Fetch subgroups
-  const groupIds = results.groups.map((g) => g.id);
-  if (groupIds.length > 0) {
-    const { data: subgroups } = await supabase
-      .from("subgroups")
-      .select("id, name, group_id, groups(name)")
-      .in("group_id", groupIds);
-    results.subgroups = subgroups || [];
-  } else {
-    results.subgroups = [];
-  }
-
-  // Fetch vacations
-  const { data: vacations } = await supabase
-    .from("vacations")
-    .select("id, start_day, end_day, description, from_table, for_users")
-    .eq("institute_id", instituteId)
-    .order("start_day", { ascending: true });
-  results.vacations = vacations || [];
-
-  // Fetch custom knowledge base (extra data you add manually)
-  const { data: knowledgeBase } = await supabase
-    .from("chatbot_knowledge")
-    .select("id, title, content, category, created_at")
-    .eq("institute_id", instituteId)
-    .order("created_at", { ascending: false });
-  results.knowledgeBase = knowledgeBase || [];
-
-  return results;
+  const asJson = JSON.stringify(value).replace(/'/g, "''");
+  return `'${asJson}'::jsonb`;
 }
 
-// ─── Build the system prompt with fetched data ───
+function buildRpcSqlCall(functionName, rpcParams = {}) {
+  const entries = Object.entries(rpcParams);
 
-function buildSystemPrompt(context) {
-  const today = new Date().toLocaleDateString("en-US", {
-    weekday: "long",
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-  });
+  if (!entries.length) {
+    return `select * from public.${functionName}();`;
+  }
 
-  const dayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+  const paramsBlock = entries
+    .map(([key, value]) => `  ${key} => ${toSqlLiteral(value)}`)
+    .join(",\n");
 
-  // Helper function to get slot time info
-  const getSlotTime = (slotId) => {
-    if (!slotId) return null;
-    const slot = context.slots.find((s) => s.id === slotId);
-    return slot ? `${slot.start || "?"}–${slot.end || "?"}` : null;
+  return `select *\nfrom public.${functionName}(\n${paramsBlock}\n);`;
+}
+
+async function callRpcWithQueryLog(functionName, rpcParams = {}) {
+  const sqlCall = buildRpcSqlCall(functionName, rpcParams);
+  console.log(`[Chatbot RPC] Executing:\n${sqlCall}`);
+
+  const result = await supabase.rpc(functionName, rpcParams);
+  const rowCount = Array.isArray(result?.data) ? result.data.length : result?.data ? 1 : 0;
+
+  if (result?.error) {
+    console.warn(`[Chatbot RPC] ${functionName} failed:`, result.error?.message || result.error);
+  } else {
+    console.log(`[Chatbot RPC] ${functionName} rows: ${rowCount}`);
+  }
+
+  return result;
+}
+
+function normalizeArray(value) {
+  return Array.isArray(value) ? value : [];
+}
+
+function uniqueIds(values) {
+  return [...new Set(values.filter(Boolean))];
+}
+
+function mapById(items) {
+  return new Map(normalizeArray(items).map((item) => [item.id, item]));
+}
+
+function hasOwn(obj, key) {
+  return Object.prototype.hasOwnProperty.call(obj || {}, key);
+}
+
+function normalizeUuidParam(value) {
+  if (value === null || value === undefined) return null;
+  const text = String(value).trim();
+  return text || null;
+}
+
+function normalizeDateParam(value) {
+  if (value === null || value === undefined) return null;
+  const text = String(value).trim();
+  return /^\d{4}-\d{2}-\d{2}$/.test(text) ? text : null;
+}
+
+function normalizeTextParam(value) {
+  if (value === null || value === undefined) return null;
+  const text = String(value).trim();
+  return text || null;
+}
+
+function detectNeedsUserContext(userMessage, conversationHistory) {
+  const current = String(userMessage || "").toLowerCase();
+  const history = normalizeArray(conversationHistory)
+    .slice(-4)
+    .map((message) => String(message?.text || "").toLowerCase())
+    .join(" ");
+  const corpus = `${current} ${history}`;
+
+  return /\b(my|mine|me|for\s+me|myself|our\s+class|my\s+class|my\s+schedule)\b/.test(corpus);
+}
+
+function sanitizeAdvancedRpcParams(rawParams = {}, scopeFilters = null) {
+  const params = rawParams && typeof rawParams === "object" ? rawParams : {};
+  void scopeFilters;
+
+  return {
+    p_start_date: hasOwn(params, "p_start_date") ? normalizeDateParam(params.p_start_date) : null,
+    p_end_date: hasOwn(params, "p_end_date") ? normalizeDateParam(params.p_end_date) : null,
+    p_program_id: hasOwn(params, "p_program_id") ? normalizeUuidParam(params.p_program_id) : null,
+    p_group_id: hasOwn(params, "p_group_id") ? normalizeUuidParam(params.p_group_id) : null,
+    p_subgroup_id: hasOwn(params, "p_subgroup_id") ? normalizeUuidParam(params.p_subgroup_id) : null,
+    p_operation_id: hasOwn(params, "p_operation_id") ? normalizeUuidParam(params.p_operation_id) : null,
+    p_teacher_name: hasOwn(params, "p_teacher_name") ? normalizeTextParam(params.p_teacher_name) : null,
+    p_group_name: hasOwn(params, "p_group_name") ? normalizeTextParam(params.p_group_name) : null,
+    p_subgroup_name: hasOwn(params, "p_subgroup_name") ? normalizeTextParam(params.p_subgroup_name) : null,
+    p_program_name: hasOwn(params, "p_program_name") ? normalizeTextParam(params.p_program_name) : null,
+    p_operation_name: hasOwn(params, "p_operation_name") ? normalizeTextParam(params.p_operation_name) : null,
   };
+}
 
-  // Separate class events from vacation/holiday events
-  const classEvents = context.events.filter((e) => {
-    const type = String(e.type || "").toLowerCase();
-    return !type.includes("vacation") && !type.includes("holiday");
-  });
+function extractJsonObjectCandidate(value) {
+  if (!value) return null;
+  const text = String(value).trim();
+  if (!text) return null;
 
-  const holidayEvents = context.events.filter((e) => {
-    const type = String(e.type || "").toLowerCase();
-    return type.includes("vacation") || type.includes("holiday");
-  });
+  const fenceMatch = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+  const candidate = (fenceMatch?.[1] || text).trim();
 
-  // Format class events into readable schedule
-  const scheduleLines = classEvents.map((e) => {
-    const course = context.courses.find((c) => c.id === e.course_id);
-    const moderators = context.courseModerators
-      .filter((m) => m.course_id === e.course_id)
-      .map((m) => m.users?.name)
-      .filter(Boolean);
-    const dayName = dayNames[e.day_of_week] || `Day ${e.day_of_week}`;
-    
-    // Get actual slot times instead of IDs
-    const startSlotTime = getSlotTime(e.start_slot);
-    const endSlotTime = getSlotTime(e.end_slot);
-    const slotDisplay = startSlotTime && endSlotTime && e.start_slot === e.end_slot 
-      ? startSlotTime 
-      : startSlotTime && endSlotTime 
-        ? `${startSlotTime} to ${endSlotTime}`
-        : `Slot IDs: ${e.start_slot || "?"} to ${e.end_slot || "?"}`;
-    
-    return `- ${e.title || course?.name || "Untitled"} on ${dayName}, Time: ${slotDisplay}, Teachers: ${moderators.join(", ") || "Not assigned"}${e.description ? `, Note: ${e.description}` : ""}`;
-  });
+  try {
+    return JSON.parse(candidate);
+  } catch {
+    const start = candidate.indexOf("{");
+    const end = candidate.lastIndexOf("}");
+    if (start === -1 || end === -1 || end <= start) return null;
 
-  // Format holiday/vacation events
-  const holidayLines = holidayEvents.map((e) => {
-    const dayName = dayNames[e.day_of_week] || `Day ${e.day_of_week}`;
-    return `- ${e.title || "Holiday"} on ${dayName}${e.description ? `: ${e.description}` : ""}${e.start_at ? ` (Start: ${e.start_at})` : ""}${e.end_at ? ` (End: ${e.end_at})` : ""}`;
-  });
+    const slice = candidate.slice(start, end + 1);
+    try {
+      return JSON.parse(slice);
+    } catch {
+      return null;
+    }
+  }
+}
 
-  // Format vacations from vacations table
-  const vacationLines = (context.vacations || []).map((v) => {
-    const fromTableMap = {
-      all: "All",
-      programs: `Program ID: ${v.for_users}`,
-      departments: `Department ID: ${v.for_users}`,
-      operations: `Operation ID: ${v.for_users}`,
-    };
-    const targetInfo = fromTableMap[v.from_table] || v.from_table;
-    return `- ${v.start_day} to ${v.end_day} (${targetInfo})${v.description ? `: ${v.description}` : ""}`;
-  });
+function canonicalText(value) {
+  return String(value || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+}
 
-  // Format teacher list
-  const teacherLines = context.teachers.map((t) => `- ${t.name} (${t.role})`);
+function looksLikeMatch(query, target) {
+  const q = canonicalText(query);
+  const t = canonicalText(target);
+  if (!q || !t) return false;
+  return q.includes(t) || t.includes(q);
+}
 
-  // Format courses with their teachers
-  const courseLines = context.courses.map((c) => {
-    const mods = context.courseModerators
-      .filter((m) => m.course_id === c.id)
-      .map((m) => m.users?.name)
-      .filter(Boolean);
-    return `- ${c.name}: Teachers: ${mods.join(", ") || "Not assigned"}`;
-  });
+function isQuotaOrBillingError(message) {
+  const text = String(message || "").toLowerCase();
+  return (
+    text.includes("quota") ||
+    text.includes("rate") ||
+    text.includes("billing") ||
+    text.includes("exceeded") ||
+    text.includes("429") ||
+    text.includes("403")
+  );
+}
 
-  // Format groups
-  const groupLines = context.groups.map((g) => `- ${g.name} (Program: ${g.programs?.name || "N/A"})`);
+function isVacationLikeEvent(event) {
+  const blob = `${event?.type || ""} ${event?.title || ""} ${event?.description || ""}`.toLowerCase();
+  return blob.includes("vacation") || blob.includes("holiday") || blob.includes("break");
+}
 
-  // Format subgroups
-  const subgroupLines = (context.subgroups || []).map((sg) => `- ${sg.name} (Group: ${sg.groups?.name || "N/A"})`);
-
-  // Format slots
-  const slotLines = context.slots.map((s) => `- Slot ${s.serial_no}: ${s.start || "?"} - ${s.end || "?"}`);
-
-  // Format custom knowledge base
-  const kbLines = context.knowledgeBase.map((kb) => `- [${kb.category || "General"}] ${kb.title}: ${kb.content}`);
-
-  return `You are AcademyFlow Assistant, a helpful AI chatbot for an academic institution management system.
-Today's date is ${today}.
-
-You answer questions about class schedules, routines, vacations, teachers, courses, and general academic information.
-Be concise, friendly, and accurate. If you don't know something, say so honestly.
-Only answer questions related to the academic data provided below. For unrelated questions, politely redirect.
-Always prioritize explicit database facts over assumptions.
-When answering course schedule questions, include day, time, audience (group/subgroup/all), and teacher if available.
-Avoid showing raw UUIDs if a readable label or time exists.
-
-=== DEPARTMENTS ===
-${context.departments.map((d) => `- ${d.name} (${d.code})`).join("\n") || "No departments found."}
-
-=== PROGRAMS ===
-${context.programs.map((p) => `- ${p.name} (Dept: ${p.departments?.name || "N/A"})`).join("\n") || "No programs found."}
-
-=== ACTIVE OPERATIONS (Semesters/Terms) ===
-${context.operations.map((o) => `- ${o.name} (Program: ${o.programs?.name || "N/A"})`).join("\n") || "No active operations."}
-
-=== CLASS SCHEDULE / RECURRING EVENTS ===
-${scheduleLines.join("\n") || "No scheduled classes."}
-
-=== VACATIONS & HOLIDAYS (from recurring events) ===
-${holidayLines.join("\n") || "No holiday events in recurring schedule."}
-
-=== VACATIONS (from vacations table) ===
-${vacationLines.join("\n") || "No vacations scheduled."}
-
-=== TIME SLOTS ===
-${slotLines.join("\n") || "No slot info available."}
-
-=== COURSES & TEACHERS ===
-${courseLines.join("\n") || "No courses found."}
-
-=== ALL TEACHERS ===
-${teacherLines.join("\n") || "No teachers found."}
-
-=== GROUPS ===
-${groupLines.join("\n") || "No groups found."}
-
-=== SUBGROUPS ===
-${subgroupLines.join("\n") || "No subgroups found."}
-
-=== ADDITIONAL KNOWLEDGE BASE ===
-${kbLines.join("\n") || "No additional information."}
-`;
+function isClassLikeEvent(event) {
+  return !isVacationLikeEvent(event);
 }
 
 function parseTimeString(value) {
@@ -311,276 +185,777 @@ function parseTimeString(value) {
   return { hours: Number(match[1]), minutes: Number(match[2]) };
 }
 
-function findNextClassEvent(context) {
+function formatTimeValue(value) {
+  if (!value) return "";
+
+  if (typeof value === "string" && value.includes("T")) {
+    const parsed = new Date(value);
+    if (!Number.isNaN(parsed.getTime())) {
+      return parsed.toLocaleTimeString("en-US", {
+        hour: "numeric",
+        minute: "2-digit",
+      });
+    }
+  }
+
+  const time = parseTimeString(value);
+  if (!time) return String(value);
+
+  const temp = new Date();
+  temp.setHours(time.hours, time.minutes, 0, 0);
+  return temp.toLocaleTimeString("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+function toDateLabel(dateValue) {
+  if (!dateValue) return "";
+  const parsed = new Date(dateValue);
+  if (Number.isNaN(parsed.getTime())) return String(dateValue);
+
+  return parsed.toLocaleDateString("en-US", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
+function computeNextOccurrence(dayOfWeek, time, referenceDate = new Date()) {
+  if (typeof dayOfWeek !== "number" || !time) return null;
+
+  const target = new Date(referenceDate);
+  const currentDow = target.getDay();
+  let addDays = (dayOfWeek - currentDow + 7) % 7;
+
+  target.setDate(target.getDate() + addDays);
+  target.setHours(time.hours, time.minutes, 0, 0);
+
+  if (target.getTime() <= referenceDate.getTime()) {
+    target.setDate(target.getDate() + 7);
+  }
+
+  return target;
+}
+
+function getEventStartDateTime(event, slotById, referenceDate = new Date()) {
+  if (event?.start_at) {
+    const parsed = new Date(event.start_at);
+    if (!Number.isNaN(parsed.getTime())) return parsed;
+  }
+
+  if (event?.date) {
+    const datePart = String(event.date).slice(0, 10);
+    const slot = slotById.get(event.start_slot);
+    const time = parseTimeString(event.start_time) || parseTimeString(slot?.start);
+    if (time) {
+      const parsed = new Date(`${datePart}T${String(time.hours).padStart(2, "0")}:${String(time.minutes).padStart(2, "0")}:00`);
+      if (!Number.isNaN(parsed.getTime())) return parsed;
+    }
+
+    const parsedDate = new Date(`${datePart}T00:00:00`);
+    if (!Number.isNaN(parsedDate.getTime())) return parsedDate;
+  }
+
+  const slot = slotById.get(event?.start_slot);
+  const recurringTime = parseTimeString(event?.start_time) || parseTimeString(slot?.start);
+  return computeNextOccurrence(event?.day_of_week, recurringTime, referenceDate);
+}
+
+function getEventTimeLabel(event, slotById) {
+  const startAt = formatTimeValue(event?.start_at || event?.start_time);
+  const endAt = formatTimeValue(event?.end_at || event?.end_time);
+  if (startAt && endAt) return `${startAt} - ${endAt}`;
+  if (startAt) return startAt;
+
+  const startSlot = slotById.get(event?.start_slot);
+  const endSlot = slotById.get(event?.end_slot);
+
+  if (startSlot && endSlot) {
+    return `${formatTimeValue(startSlot.start)} - ${formatTimeValue(endSlot.end)}`;
+  }
+
+  if (startSlot) {
+    return `${formatTimeValue(startSlot.start)} - ${formatTimeValue(startSlot.end)}`;
+  }
+
+  return "Time not specified";
+}
+
+function getEventDateLabel(event, slotById) {
+  const startDate = getEventStartDateTime(event, slotById);
+  if (startDate) return toDateLabel(startDate);
+  if (typeof event?.day_of_week === "number") return DAY_NAMES[event.day_of_week] || `Day ${event.day_of_week}`;
+  return "Date not specified";
+}
+
+function resolveAudienceLabel(event, lookups) {
+  const fromTable = String(event?.from_table || "").toLowerCase();
+  const targetId = event?.for_users;
+
+  if (!fromTable) return "All";
+  if (fromTable === "groups") return lookups.groupById.get(targetId)?.name || "Group";
+  if (fromTable === "subgroups") return lookups.subgroupById.get(targetId)?.name || "Subgroup";
+  if (fromTable === "programs") return lookups.programById.get(targetId)?.name || "Program";
+  if (fromTable === "operations") return lookups.operationById.get(targetId)?.name || "Operation";
+  if (fromTable === "departments") return lookups.departmentById.get(targetId)?.name || "Department";
+
+  return fromTable;
+}
+
+function getTeacherNamesForEvent(event, context) {
+  const fromEventModerators = normalizeArray(context.eventModerators)
+    .filter((moderator) => moderator.event_id === event.id)
+    .map((moderator) => moderator.users?.name)
+    .filter(Boolean);
+
+  if (fromEventModerators.length > 0) {
+    return [...new Set(fromEventModerators)];
+  }
+
+  const fromCourseModerators = normalizeArray(context.courseModerators)
+    .filter((moderator) => moderator.course_id === event.course_id)
+    .map((moderator) => moderator.users?.name)
+    .filter(Boolean);
+
+  return [...new Set(fromCourseModerators)];
+}
+
+function getCourseLabel(event, context) {
+  const course = mapById(context.courses).get(event.course_id);
+  return course?.name || event?.title || "Untitled";
+}
+
+function dedupeEventsById(events) {
+  const byId = new Map();
+  for (const event of normalizeArray(events)) {
+    const key = event?.id || `${event?.title || "untitled"}-${event?.date || "no-date"}`;
+    if (!byId.has(key)) {
+      byId.set(key, event);
+    }
+  }
+  return [...byId.values()];
+}
+
+function sortEventsByStart(events, slotById) {
+  return [...normalizeArray(events)].sort((a, b) => {
+    const aStart = getEventStartDateTime(a, slotById);
+    const bStart = getEventStartDateTime(b, slotById);
+
+    if (aStart && bStart) return aStart.getTime() - bStart.getTime();
+    if (aStart) return -1;
+    if (bStart) return 1;
+
+    return String(a.title || "").localeCompare(String(b.title || ""));
+  });
+}
+
+function formatEventLine(event, context, slotById) {
+  const lookups = {
+    groupById: mapById(context.groups),
+    subgroupById: mapById(context.subgroups),
+    programById: mapById(context.programs),
+    operationById: mapById(context.operations),
+    departmentById: mapById(context.departments),
+  };
+
+  const title = event?.title || getCourseLabel(event, context);
+  const dateText = getEventDateLabel(event, slotById);
+  const timeText = getEventTimeLabel(event, slotById);
+  const audienceText = resolveAudienceLabel(event, lookups);
+  const teacherNames = getTeacherNamesForEvent(event, context);
+
+  return `${title} | ${dateText} | ${timeText} | For: ${audienceText}${teacherNames.length ? ` | Teacher: ${teacherNames.join(", ")}` : ""}`;
+}
+
+async function safeSelect(fetcher, label) {
+  try {
+    const { data, error } = await fetcher();
+    if (error) {
+      console.warn(`Chatbot lookup failed (${label}):`, error?.message || error);
+      return [];
+    }
+    return normalizeArray(data);
+  } catch (error) {
+    console.warn(`Chatbot lookup threw (${label}):`, error?.message || error);
+    return [];
+  }
+}
+
+async function fetchEventsViaAdvancedRpc({ userId, searchText = null, scopeFilters = null, rpcOverrides = null, includeUserContext = true }) {
+  void searchText;
+  void scopeFilters;
+
+  const defaultParams = {
+    p_user_id: includeUserContext ? (userId || null) : null,
+    p_start_date: null,
+    p_end_date: null,
+    p_group_id: null,
+    p_subgroup_id: null,
+    p_program_id: null,
+    p_operation_id: null,
+    p_teacher_name: null,
+    p_group_name: null,
+    p_subgroup_name: null,
+    p_program_name: null,
+    p_operation_name: null,
+  };
+
+  const plannedParams = sanitizeAdvancedRpcParams(rpcOverrides || {}, scopeFilters);
+  const rpcParams = {
+    ...defaultParams,
+    ...plannedParams,
+    p_user_id: includeUserContext ? (userId || null) : null,
+  };
+
+  const { data, error } = await callRpcWithQueryLog("get_events_advanced", rpcParams);
+
+  if (error) throw error;
+  return normalizeArray(data);
+}
+
+async function fetchUserProfileViaRpc(userId) {
+  if (!userId) return null;
+
+  try {
+    const rpcParams = {
+      p_user_id: userId,
+    };
+
+    const { data, error } = await callRpcWithQueryLog("get_user_profile", rpcParams);
+
+    if (error) {
+      console.warn("Chatbot user profile RPC failed:", error?.message || error);
+      return null;
+    }
+
+    const profile = normalizeArray(data)[0] || null;
+    console.log("[Chatbot RPC] get_user_profile loaded:", profile ? {
+      id: profile.id,
+      role: profile.role,
+      name: profile.name,
+      department_name: profile.department_name,
+      program_name: profile.program_name,
+      group_name: profile.group_name,
+      subgroup_name: profile.subgroup_name,
+      codename: profile.codename,
+    } : "No profile row");
+
+    return profile;
+  } catch (error) {
+    console.warn("Chatbot user profile RPC threw:", error?.message || error);
+    return null;
+  }
+}
+
+async function fetchUserScopeFilters(userId) {
+  if (!userId) return null;
+
+  try {
+    const { data, error } = await supabase
+      .from("students")
+      .select("program_id, group_id, subgroup_id, operation_id")
+      .eq("id", userId)
+      .maybeSingle();
+
+    if (error) {
+      console.warn("Chatbot user scope lookup failed:", error?.message || error);
+      return null;
+    }
+
+    if (!data) {
+      return null;
+    }
+
+    return {
+      programId: data.program_id || null,
+      groupId: data.group_id || null,
+      subgroupId: data.subgroup_id || null,
+      operationId: data.operation_id || null,
+    };
+  } catch (error) {
+    console.warn("Chatbot user scope lookup threw:", error?.message || error);
+    return null;
+  }
+}
+
+async function planAdvancedRpcParamsWithGroq({
+  userMessage,
+  conversationHistory,
+  userProfile,
+  userScopeFilters,
+  includeUserContext,
+}) {
+  if (!GROQ_API_KEY) return null;
+
+  const conversationLines = normalizeArray(conversationHistory)
+    .slice(-8)
+    .map((message) => `- ${message.role || "unknown"}: ${String(message.text || "").trim()}`)
+    .join("\n") || "- No prior conversation";
+
+  const plannerMessages = [
+    {
+      role: "system",
+      content:
+        "You are an RPC planner for AcademyFlow. Return ONLY valid JSON with one object field named rpc_params. " +
+        "Do not include explanations, markdown, or extra keys. " +
+        "Allowed rpc_params keys: p_start_date, p_end_date, p_group_id, p_subgroup_id, p_program_id, p_operation_id, p_teacher_name, p_group_name, p_subgroup_name, p_program_name, p_operation_name. " +
+        "Dates must be YYYY-MM-DD or null. IDs must be UUID strings or null. Name keys must be plain text or null. " +
+        "ONLY include parameters required by user intent. Do not include extra filters.",
+    },
+    {
+      role: "user",
+      content: [
+        "Create rpc_params for get_events_advanced based on the query and context.",
+        "",
+        "Current user profile:",
+        formatUserProfileForPrompt(userProfile),
+        "",
+        "Available user scope IDs (prefer these for 'my' context):",
+        `- program_id: ${userScopeFilters?.programId || "null"}`,
+        `- group_id: ${userScopeFilters?.groupId || "null"}`,
+        `- subgroup_id: ${userScopeFilters?.subgroupId || "null"}`,
+        `- operation_id: ${userScopeFilters?.operationId || "null"}`,
+        `- include_user_context: ${includeUserContext ? "true" : "false"}`,
+        "",
+        "Conversation context:",
+        conversationLines,
+        "",
+        `Current user query: ${userMessage}`,
+        "",
+        "Respond only in this exact JSON shape:",
+        '{"rpc_params":{"p_start_date":null,"p_end_date":null,"p_group_id":null,"p_subgroup_id":null,"p_program_id":null,"p_operation_id":null,"p_teacher_name":null,"p_group_name":null,"p_subgroup_name":null,"p_program_name":null,"p_operation_name":null}}',
+      ].join("\n"),
+    },
+  ];
+
+  try {
+    const response = await fetch(GROQ_API_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${GROQ_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: "llama-3.3-70b-versatile",
+        messages: plannerMessages,
+        temperature: 0,
+        max_tokens: 300,
+      }),
+    });
+
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      const message = err.error?.message || `Groq planner error (${response.status})`;
+      throw new Error(message);
+    }
+
+    const data = await response.json();
+    const content = data.choices?.[0]?.message?.content;
+    const parsed = extractJsonObjectCandidate(content);
+    const rawParams = parsed?.rpc_params || parsed?.rpcParams || parsed?.params || parsed;
+
+    if (!rawParams || typeof rawParams !== "object") {
+      console.warn("[Chatbot Planner] Unable to parse rpc_params from Groq response.", content);
+      return null;
+    }
+
+    const sanitizedParams = sanitizeAdvancedRpcParams(rawParams, userScopeFilters);
+    console.log("[Chatbot Planner] Planned get_events_advanced params:", sanitizedParams);
+    return sanitizedParams;
+  } catch (error) {
+    console.warn("[Chatbot Planner] Planning failed:", error?.message || error);
+    return null;
+  }
+}
+
+function formatUserProfileForPrompt(userProfile) {
+  if (!userProfile) {
+    return "- User profile is not available.";
+  }
+
+  const lines = [
+    `- Name: ${userProfile.name || "Unknown"}`,
+    `- Role: ${userProfile.role || "Unknown"}`,
+  ];
+
+  if (userProfile.department_name) {
+    lines.push(`- Department: ${userProfile.department_name}`);
+  }
+
+  if (userProfile.program_name) {
+    lines.push(`- Program: ${userProfile.program_name}`);
+  }
+
+  if (userProfile.group_name) {
+    lines.push(`- Group: ${userProfile.group_name}`);
+  }
+
+  if (userProfile.subgroup_name) {
+    lines.push(`- Subgroup: ${userProfile.subgroup_name}`);
+  }
+
+  if (userProfile.codename) {
+    lines.push(`- Teacher codename: ${userProfile.codename}`);
+  }
+
+  return lines.join("\n");
+}
+
+function formatRpcParamsForPrompt(params) {
+  if (!params) {
+    return "- Planner did not return explicit rpc_params (default query flow used).";
+  }
+
+  const entries = Object.entries(params);
+  if (!entries.length) {
+    return "- Planner returned an empty rpc_params object.";
+  }
+
+  return entries.map(([key, value]) => `- ${key}: ${value === null || value === undefined ? "null" : String(value)}`).join("\n");
+}
+
+async function fetchLookupData(events, instituteId) {
+  const allEvents = normalizeArray(events);
+
+  const courseIds = uniqueIds(allEvents.map((event) => event.course_id));
+  const eventIds = uniqueIds(allEvents.map((event) => event.id));
+  const groupIds = uniqueIds(allEvents.filter((event) => String(event.from_table || "").toLowerCase() === "groups").map((event) => event.for_users));
+  const subgroupIds = uniqueIds(allEvents.filter((event) => String(event.from_table || "").toLowerCase() === "subgroups").map((event) => event.for_users));
+  const programIds = uniqueIds(allEvents.filter((event) => String(event.from_table || "").toLowerCase() === "programs").map((event) => event.for_users));
+  const operationIds = uniqueIds(allEvents.filter((event) => String(event.from_table || "").toLowerCase() === "operations").map((event) => event.for_users));
+  const departmentIds = uniqueIds(allEvents.filter((event) => String(event.from_table || "").toLowerCase() === "departments").map((event) => event.for_users));
+  const slotIds = uniqueIds(allEvents.flatMap((event) => [event.start_slot, event.end_slot]));
+
+  const [courses, groups, subgroups, programs, operations, departments, slots, eventModerators, courseModerators, teachers] = await Promise.all([
+    courseIds.length
+      ? safeSelect(() => supabase.from("courses").select("id, name").in("id", courseIds), "courses")
+      : Promise.resolve([]),
+    groupIds.length
+      ? safeSelect(() => supabase.from("groups").select("id, name").in("id", groupIds), "groups")
+      : Promise.resolve([]),
+    subgroupIds.length
+      ? safeSelect(() => supabase.from("subgroups").select("id, name").in("id", subgroupIds), "subgroups")
+      : Promise.resolve([]),
+    programIds.length
+      ? safeSelect(() => supabase.from("programs").select("id, name").in("id", programIds), "programs")
+      : Promise.resolve([]),
+    operationIds.length
+      ? safeSelect(() => supabase.from("operations").select("id, name").in("id", operationIds), "operations")
+      : Promise.resolve([]),
+    departmentIds.length
+      ? safeSelect(() => supabase.from("departments").select("id, name").in("id", departmentIds), "departments")
+      : Promise.resolve([]),
+    slotIds.length
+      ? safeSelect(() => supabase.from("slotinfo").select("id, serial_no, start, end").in("id", slotIds), "slotinfo")
+      : Promise.resolve([]),
+    eventIds.length
+      ? safeSelect(
+          () => supabase.from("event_moderators").select("event_id, user_id, users(id, name, role)").in("event_id", eventIds),
+          "event moderators"
+        )
+      : Promise.resolve([]),
+    courseIds.length
+      ? safeSelect(
+          () => supabase.from("course_moderators").select("course_id, user_id, users(id, name, role)").in("course_id", courseIds),
+          "course moderators"
+        )
+      : Promise.resolve([]),
+    instituteId
+      ? safeSelect(
+          () => supabase.from("users").select("id, name, role").eq("institute_id", instituteId).eq("role", "Teacher"),
+          "teachers"
+        )
+      : Promise.resolve([]),
+  ]);
+
+  return {
+    courses,
+    groups,
+    subgroups,
+    programs,
+    operations,
+    departments,
+    slots,
+    eventModerators,
+    courseModerators,
+    teachers,
+  };
+}
+
+async function fetchChatbotContext({
+  userId,
+  instituteId,
+  searchText,
+  plannedRpcParams = null,
+  preloadedUserProfile = null,
+  preloadedScopeFilters = null,
+  includeUserContext = true,
+}) {
+  void searchText;
+
+  const userProfile = preloadedUserProfile || (await fetchUserProfileViaRpc(userId));
+  const userScopeFilters = preloadedScopeFilters || (await fetchUserScopeFilters(userId));
+
+  let events = [];
+  let searchedEvents = [];
+
+  if (plannedRpcParams) {
+    events = await fetchEventsViaAdvancedRpc({
+      userId,
+      scopeFilters: userScopeFilters,
+      rpcOverrides: plannedRpcParams,
+      includeUserContext,
+    });
+    searchedEvents = events;
+  } else {
+    events = await fetchEventsViaAdvancedRpc({
+      userId,
+      scopeFilters: userScopeFilters,
+      includeUserContext,
+    });
+    searchedEvents = events;
+  }
+
+  const mergedEvents = dedupeEventsById([...events, ...searchedEvents]);
+  const lookups = await fetchLookupData(mergedEvents, instituteId);
+
+  return {
+    events: mergedEvents,
+    searchedEvents: dedupeEventsById(searchedEvents),
+    userProfile,
+    ...lookups,
+  };
+}
+
+function findNextClassEvent(context, slotById) {
   const now = new Date();
-  const nowMs = now.getTime();
-  const slotMap = new Map((context.slots || []).map((s) => [s.id, s]));
-
-  const candidates = (context.events || [])
-    .filter((e) => {
-      const type = String(e.type || "").toLowerCase();
-      const isClassLike = !type || !(type.includes("vacation") || type.includes("holiday"));
-      if (!isClassLike) return false;
-
-      if (e.expire_at) {
-        const expire = new Date(e.expire_at);
-        if (!Number.isNaN(expire.getTime()) && expire.getTime() < nowMs) return false;
-      }
-
-      return typeof e.day_of_week === "number";
-    })
-    .map((e) => {
-      const target = new Date(now);
-      const currentDow = now.getDay();
-      let addDays = (e.day_of_week - currentDow + 7) % 7;
-
-      const slot = slotMap.get(e.start_slot);
-      const time = parseTimeString(e.start_at) || parseTimeString(slot?.start);
-      if (!time) return null;
-
-      target.setDate(now.getDate() + addDays);
-      target.setHours(time.hours, time.minutes, 0, 0);
-
-      // If today's class time has passed, shift to next week.
-      if (target.getTime() <= nowMs) {
-        addDays += 7;
-        target.setDate(now.getDate() + addDays);
-      }
-
-      return { ...e, nextDate: target };
-    })
-    .filter(Boolean)
-    .sort((a, b) => a.nextDate - b.nextDate);
+  const candidates = normalizeArray(context.events)
+    .filter(isClassLikeEvent)
+    .map((event) => ({
+      ...event,
+      _nextStart: getEventStartDateTime(event, slotById, now),
+    }))
+    .filter((event) => event._nextStart && event._nextStart.getTime() >= now.getTime())
+    .sort((a, b) => a._nextStart.getTime() - b._nextStart.getTime());
 
   return candidates[0] || null;
 }
 
-function formatEventLine(event, context) {
-  const dayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-  const course = (context.courses || []).find((c) => c.id === event.course_id);
-  const moderators = (context.courseModerators || [])
-    .filter((m) => m.course_id === event.course_id)
-    .map((m) => m.users?.name)
-    .filter(Boolean);
+function buildSystemPrompt(context, plannedRpcParams = null) {
+  const slotById = mapById(context.slots);
+  const baseEvents = context.searchedEvents.length > 0 ? context.searchedEvents : context.events;
+  const eventsForPrompt = sortEventsByStart(baseEvents, slotById).slice(0, 100);
 
-  const when = event.nextDate
-    ? event.nextDate.toLocaleString("en-US", { weekday: "long", year: "numeric", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })
-    : `${dayNames[event.day_of_week] || "Unknown day"}`;
+  const eventLines = eventsForPrompt.map((event) => `- ${formatEventLine(event, context, slotById)}`);
+  const classCount = normalizeArray(context.events).filter(isClassLikeEvent).length;
+  const vacationCount = normalizeArray(context.events).filter(isVacationLikeEvent).length;
+  const userProfileLines = formatUserProfileForPrompt(context.userProfile);
+  const plannedParamsLines = formatRpcParamsForPrompt(plannedRpcParams);
 
-  // Get actual slot time instead of showing IDs
-  const startSlot = (context.slots || []).find((s) => s.id === event.start_slot);
-  const endSlot = (context.slots || []).find((s) => s.id === event.end_slot);
-  const slotDisplay = startSlot && endSlot && event.start_slot === event.end_slot
-    ? `${startSlot.start || "?"}–${startSlot.end || "?"}`
-    : startSlot && endSlot
-      ? `${startSlot.start || "?"} to ${endSlot.end || "?"}`
-      : "Time slot not specified";
+  return `${RPC_CHATBOT_CONTEXT}
 
-  return `${event.title || course?.name || "Untitled class"} on ${when} at ${slotDisplay}${moderators.length ? `, Teacher: ${moderators.join(", ")}` : ""}`;
-}
+Use ONLY the data below, which was fetched via get_events_advanced for the current user.
+Use CURRENT USER PROFILE to personalize and disambiguate answers.
+If the answer is not present, say that clearly.
 
-function canonicalText(value) {
-  return String(value || "").toLowerCase().replace(/[^a-z0-9]/g, "");
-}
+=== CURRENT USER PROFILE (get_user_profile) ===
+${userProfileLines}
 
-function looksLikeMatch(query, target) {
-  const q = canonicalText(query);
-  const t = canonicalText(target);
-  if (!q || !t) return false;
-  return q.includes(t) || t.includes(q);
-}
+=== PLANNER SELECTED RPC PARAMS ===
+${plannedParamsLines}
 
-function resolveTargetLabel(fromTable, forUsers, context) {
-  if (!fromTable || fromTable === "all") return "All";
-  if (fromTable === "groups") {
-    const group = (context.groups || []).find((g) => g.id === forUsers);
-    return group ? `Group ${group.name}` : "Group";
-  }
-  if (fromTable === "subgroups") {
-    const subgroup = (context.subgroups || []).find((sg) => sg.id === forUsers);
-    return subgroup ? `Subgroup ${subgroup.name}` : "Subgroup";
-  }
-  return fromTable;
+=== EVENT COUNTS ===
+- Total events: ${normalizeArray(context.events).length}
+- Class-like events: ${classCount}
+- Vacation/holiday events: ${vacationCount}
+
+=== EVENT DATA (RPC OUTPUT) ===
+${eventLines.join("\n") || "No events found from get_events_advanced."}`;
 }
 
 function localAnswerFromContext(userMessage, context, withQuotaNote = false) {
   const q = String(userMessage || "").toLowerCase();
   const prefix = withQuotaNote
-    ? "LLM quota is currently exceeded, so I am answering directly from your database.\n\n"
+    ? "LLM quota is currently exceeded, so I am answering directly from your get_events_advanced RPC data.\n\n"
     : "";
 
-  const isClassLike = (event) => {
-    const type = String(event?.type || "").toLowerCase();
-    return !type || !(type.includes("vacation") || type.includes("holiday"));
-  };
+  const slotById = mapById(context.slots);
+  const searchedEvents = context.searchedEvents.length > 0 ? context.searchedEvents : context.events;
+  const classEvents = normalizeArray(context.events).filter(isClassLikeEvent);
+  const vacationEvents = normalizeArray(context.events).filter(isVacationLikeEvent);
+  const profile = context.userProfile;
 
-  const matchedCourses = (context.courses || []).filter((course) => looksLikeMatch(q, course.name));
-  const matchedGroups = (context.groups || []).filter((group) => looksLikeMatch(q, group.name));
-  const matchedSubgroups = (context.subgroups || []).filter((subgroup) => looksLikeMatch(q, subgroup.name));
-  const scheduleIntent = q.includes("slot") || q.includes("time") || q.includes("when") || q.includes("class") || q.includes("schedule") || q.includes("routine");
-
-  if (scheduleIntent && (matchedCourses.length || matchedGroups.length || matchedSubgroups.length)) {
-    const slotById = new Map((context.slots || []).map((slot) => [slot.id, slot]));
-    const dayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-    const selectedCourseIds = new Set(matchedCourses.map((c) => c.id));
-    const selectedGroupIds = new Set(matchedGroups.map((g) => g.id));
-    const selectedSubgroupIds = new Set(matchedSubgroups.map((sg) => sg.id));
-
-    const eventMatchesAudience = (event) => {
-      const audience = String(event.from_table || "").toLowerCase();
-      if (!selectedGroupIds.size && !selectedSubgroupIds.size) return true;
-      if (audience === "groups" && selectedGroupIds.has(event.for_users)) return true;
-      if (audience === "subgroups" && selectedSubgroupIds.has(event.for_users)) return true;
-      return false;
-    };
-
-    const events = (context.events || [])
-      .filter(isClassLike)
-      .filter((event) => !selectedCourseIds.size || selectedCourseIds.has(event.course_id))
-      .filter(eventMatchesAudience)
-      .sort((a, b) => {
-        const dayDiff = (a.day_of_week ?? 99) - (b.day_of_week ?? 99);
-        if (dayDiff !== 0) return dayDiff;
-        const aSlot = slotById.get(a.start_slot)?.serial_no ?? 999;
-        const bSlot = slotById.get(b.start_slot)?.serial_no ?? 999;
-        return aSlot - bSlot;
-      });
-
-    if (!events.length) {
-      return `${prefix}I found the course/group in your data, but no matching scheduled class events were found.`;
+  if (q.includes("who am i") || q.includes("my profile") || q.includes("my info")) {
+    if (!profile) {
+      return `${prefix}I could not load your profile from get_user_profile.`;
     }
 
-    const lines = events.slice(0, 8).map((event) => {
-      const course = (context.courses || []).find((c) => c.id === event.course_id);
-      const slotStart = slotById.get(event.start_slot);
-      const slotEnd = slotById.get(event.end_slot);
-      const timeText = slotStart && slotEnd
-        ? `${slotStart.start || "?"} - ${slotEnd.end || "?"}`
-        : "Time not defined";
-      const dayText = dayNames[event.day_of_week] || `Day ${event.day_of_week}`;
-      const audienceText = resolveTargetLabel(event.from_table, event.for_users, context);
-      const teacherNames = (context.courseModerators || [])
-        .filter((m) => m.course_id === event.course_id)
-        .map((m) => m.users?.name)
-        .filter(Boolean)
-        .join(", ");
+    const infoLines = [
+      `- Name: ${profile.name || "Unknown"}`,
+      `- Role: ${profile.role || "Unknown"}`,
+    ];
 
-      return `- ${course?.name || event.title || "Untitled"}: ${dayText}, ${timeText}, For: ${audienceText}${teacherNames ? `, Teacher: ${teacherNames}` : ""}`;
-    });
+    if (profile.department_name) infoLines.push(`- Department: ${profile.department_name}`);
+    if (profile.program_name) infoLines.push(`- Program: ${profile.program_name}`);
+    if (profile.group_name) infoLines.push(`- Group: ${profile.group_name}`);
+    if (profile.subgroup_name) infoLines.push(`- Subgroup: ${profile.subgroup_name}`);
+    if (profile.codename) infoLines.push(`- Codename: ${profile.codename}`);
 
-    return `${prefix}Here is the schedule from your database:\n${lines.join("\n")}`;
+    return `${prefix}Your profile from get_user_profile:\n${infoLines.join("\n")}`;
   }
 
   if (q.includes("next class") || q.includes("next lecture") || q.includes("upcoming class")) {
-    const nextEvent = findNextClassEvent(context);
+    const nextEvent = findNextClassEvent(context, slotById);
     if (!nextEvent) {
-      return `${prefix}I could not find any upcoming class from your current routine data.`;
+      return `${prefix}I could not find any upcoming class from get_events_advanced.`;
     }
-    return `${prefix}Your next class is: ${formatEventLine(nextEvent, context)}.`;
+
+    return `${prefix}Your next class is: ${formatEventLine(nextEvent, context, slotById)}.`;
   }
 
   if (q.includes("vacation") || q.includes("holiday") || q.includes("break")) {
-    // Get vacation/holiday events from recurring events
-    const holidayEvents = (context.events || []).filter((e) => {
-      const type = String(e.type || "").toLowerCase();
-      return type.includes("vacation") || type.includes("holiday");
-    });
-
-    // Get vacations from vacations table
-    const vacations = context.vacations || [];
-    
-    // Find next upcoming vacation by date
-    const now = new Date();
-    const upcomingVacations = vacations.filter((v) => {
-      if (!v.start_day) return false;
-      const startDate = new Date(v.start_day);
-      return startDate >= now;
-    }).sort((a, b) => new Date(a.start_day) - new Date(b.start_day));
-
-    if (!holidayEvents.length && !vacations.length) {
-      return `${prefix}I could not find any vacation/holiday information in the current data.`;
+    if (!vacationEvents.length) {
+      return `${prefix}I could not find any vacation or holiday events in get_events_advanced.`;
     }
 
-    let response = `${prefix}`;
-    
-    if (upcomingVacations.length > 0) {
-      const nextVacation = upcomingVacations[0];
-      response += `📅 Next Vacation: ${nextVacation.start_day} to ${nextVacation.end_day}`;
-      if (nextVacation.description) response += ` - ${nextVacation.description}`;
-      response += `\n\n`;
+    const upcoming = sortEventsByStart(vacationEvents, slotById)
+      .filter((event) => {
+        const start = getEventStartDateTime(event, slotById);
+        return start && start.getTime() >= Date.now();
+      })
+      .slice(0, 5)
+      .map((event) => `- ${formatEventLine(event, context, slotById)}`);
+
+    if (!upcoming.length) {
+      const recent = sortEventsByStart(vacationEvents, slotById)
+        .slice(0, 5)
+        .map((event) => `- ${formatEventLine(event, context, slotById)}`);
+      return `${prefix}Vacation/holiday events found:\n${recent.join("\n")}`;
     }
 
-    if (vacations.length > 0) {
-      const vacationLines = vacations.slice(0, 5).map((v) => 
-        `- ${v.start_day} to ${v.end_day}${v.description ? `: ${v.description}` : ""}`
-      );
-      response += `All Vacations (${vacations.length}):\n${vacationLines.join("\n")}`;
+    return `${prefix}Upcoming vacations/holidays:\n${upcoming.join("\n")}`;
+  }
+
+  const scheduleIntent =
+    q.includes("slot") || q.includes("time") || q.includes("when") || q.includes("class") || q.includes("schedule") || q.includes("routine");
+
+  if (scheduleIntent) {
+    const matchedCourseIds = normalizeArray(context.courses)
+      .filter((course) => looksLikeMatch(q, course.name))
+      .map((course) => course.id);
+
+    const matchedGroupIds = normalizeArray(context.groups)
+      .filter((group) => looksLikeMatch(q, group.name))
+      .map((group) => group.id);
+
+    const matchedSubgroupIds = normalizeArray(context.subgroups)
+      .filter((subgroup) => looksLikeMatch(q, subgroup.name))
+      .map((subgroup) => subgroup.id);
+
+    let events = normalizeArray(searchedEvents).filter(isClassLikeEvent);
+
+    if (!events.length) {
+      events = classEvents;
     }
 
-    if (holidayEvents.length > 0) {
-      const eventLines = holidayEvents.slice(0, 3).map((v) => `- ${formatEventLine(v, context)}`);
-      response += `\n\nHoliday Events (${holidayEvents.length}):\n${eventLines.join("\n")}`;
+    if (matchedCourseIds.length > 0) {
+      const selected = new Set(matchedCourseIds);
+      events = events.filter((event) => selected.has(event.course_id));
     }
 
-    return response;
+    if (matchedGroupIds.length > 0 || matchedSubgroupIds.length > 0) {
+      const groupSet = new Set(matchedGroupIds);
+      const subgroupSet = new Set(matchedSubgroupIds);
+
+      events = events.filter((event) => {
+        const source = String(event.from_table || "").toLowerCase();
+        if (source === "groups" && groupSet.has(event.for_users)) return true;
+        if (source === "subgroups" && subgroupSet.has(event.for_users)) return true;
+        return false;
+      });
+    }
+
+    if (!events.length) {
+      return `${prefix}I could not find matching scheduled events in get_events_advanced.`;
+    }
+
+    const lines = sortEventsByStart(events, slotById)
+      .slice(0, 8)
+      .map((event) => `- ${formatEventLine(event, context, slotById)}`);
+
+    return `${prefix}Here is the schedule from get_events_advanced:\n${lines.join("\n")}`;
   }
 
   if (q.includes("teacher") || q.includes("faculty") || q.includes("moderator")) {
-    const teachers = (context.teachers || []).map((t) => t.name).filter(Boolean);
-    if (!teachers.length) {
-      return `${prefix}No teacher records were found for your institute.`;
+    const teacherNames = normalizeArray(context.teachers).map((teacher) => teacher.name).filter(Boolean);
+
+    if (!teacherNames.length) {
+      return `${prefix}I could not find teacher records in the available event scope.`;
     }
 
-    const courseLines = (context.courses || []).slice(0, 8).map((c) => {
-      const mods = (context.courseModerators || [])
-        .filter((m) => m.course_id === c.id)
-        .map((m) => m.users?.name)
-        .filter(Boolean);
-      return `- ${c.name}: ${mods.join(", ") || "Not assigned"}`;
+    const lines = teacherNames.slice(0, 12).map((name) => `- ${name}`);
+    return `${prefix}Teachers in your current scope (${teacherNames.length}):\n${lines.join("\n")}`;
+  }
+
+  if (q.includes("summary") || q.includes("overview")) {
+    const nextClass = findNextClassEvent(context, slotById);
+    const firstVacation = sortEventsByStart(vacationEvents, slotById).find((event) => {
+      const start = getEventStartDateTime(event, slotById);
+      return start && start.getTime() >= Date.now();
     });
 
-    return `${prefix}Total teachers: ${teachers.length}.\n${courseLines.length ? `Course assignments:\n${courseLines.join("\n")}` : "No course-teacher assignments found."}`;
+    return `${prefix}Event summary from get_events_advanced:\n- Total events: ${normalizeArray(context.events).length}\n- Class events: ${classEvents.length}\n- Vacation/holiday events: ${vacationEvents.length}\n${nextClass ? `- Next class: ${formatEventLine(nextClass, context, slotById)}\n` : "- Next class: Not found\n"}${firstVacation ? `- Next vacation/holiday: ${formatEventLine(firstVacation, context, slotById)}` : "- Next vacation/holiday: Not found"}`;
   }
 
-  if (q.includes("summary") || q.includes("routine") || q.includes("schedule")) {
-    const nextEvent = findNextClassEvent(context);
-    const upcomingVacations = (context.vacations || []).filter((v) => {
-      if (!v.start_day) return false;
-      const startDate = new Date(v.start_day);
-      return startDate >= new Date();
-    }).sort((a, b) => new Date(a.start_day) - new Date(b.start_day));
-    
-    const nextVacation = upcomingVacations[0];
-    
-    return `${prefix}Routine summary:\n- Departments: ${(context.departments || []).length}\n- Programs: ${(context.programs || []).length}\n- Active operations: ${(context.operations || []).length}\n- Courses: ${(context.courses || []).length}\n- Teachers: ${(context.teachers || []).length}\n- Groups: ${(context.groups || []).length}\n- Subgroups: ${(context.subgroups || []).length}\n- Scheduled events: ${(context.events || []).length}\n- Vacations: ${(context.vacations || []).length}\n${nextEvent ? `- Next class: ${formatEventLine(nextEvent, context)}` : "- Next class: Not found"}\n${nextVacation ? `- Next vacation: ${nextVacation.start_day} to ${nextVacation.end_day}` : ""}`;
+  const sampleLines = sortEventsByStart(searchedEvents, slotById)
+    .slice(0, 5)
+    .map((event) => `- ${formatEventLine(event, context, slotById)}`);
+
+  if (sampleLines.length > 0) {
+    return `${prefix}I found these relevant events from get_events_advanced:\n${sampleLines.join("\n")}`;
   }
 
-  return `${prefix}I can answer directly from your database for classes, course schedules, teachers, groups/subgroups, operations, and vacations. Try: "Show CSE 3220 schedule for Group B" or "When is my next vacation?"`;
-}
-
-function isQuotaOrBillingError(message) {
-  const text = String(message || "").toLowerCase();
-  return (
-    text.includes("quota") ||
-    text.includes("rate") ||
-    text.includes("billing") ||
-    text.includes("exceeded") ||
-    text.includes("429") ||
-    text.includes("403")
-  );
+  return `${prefix}I can answer using get_events_advanced for schedules, classes, vacations, teachers, and event summaries. Try asking: "When is my next class?" or "Show my course schedule."`;
 }
 
 // ─── Send message to Groq API ───
 
-export async function sendChatMessage(userMessage, conversationHistory, instituteId) {
-  // Fetch fresh context from database
-  const context = await fetchChatbotContext(instituteId);
+export async function sendChatMessage(userMessage, conversationHistory, instituteId, userId) {
+  const includeUserContext = detectNeedsUserContext(userMessage, conversationHistory);
+
+  const [userProfile, userScopeFilters] = await Promise.all([
+    fetchUserProfileViaRpc(userId),
+    fetchUserScopeFilters(userId),
+  ]);
+
+  let plannedRpcParams = null;
+  if (GROQ_API_KEY) {
+    plannedRpcParams = await planAdvancedRpcParamsWithGroq({
+      userMessage,
+      conversationHistory,
+      userProfile,
+      userScopeFilters,
+      includeUserContext,
+    });
+  }
+
+  const context = await fetchChatbotContext({
+    userId,
+    instituteId,
+    searchText: userMessage,
+    plannedRpcParams,
+    preloadedUserProfile: userProfile,
+    preloadedScopeFilters: userScopeFilters,
+    includeUserContext,
+  });
 
   if (!GROQ_API_KEY) {
     return localAnswerFromContext(userMessage, context, false);
   }
 
-  const systemPrompt = buildSystemPrompt(context);
+  const systemPrompt = buildSystemPrompt(context, plannedRpcParams);
 
   // Build conversation for Groq (OpenAI-compatible format)
   const messages = [
@@ -591,7 +966,7 @@ export async function sendChatMessage(userMessage, conversationHistory, institut
   ];
 
   // Add conversation history
-  for (const msg of conversationHistory) {
+  for (const msg of normalizeArray(conversationHistory)) {
     messages.push({
       role: msg.role === "user" ? "user" : "assistant",
       content: msg.text,
