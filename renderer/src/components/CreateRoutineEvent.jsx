@@ -240,23 +240,7 @@ export default function CreateRoutineEvent({
 
     const autoTitle = buildAutoTitle();
     const eventTitle = title.trim() || autoTitle;
-
-    // Build description with metadata for both courses
-    const descriptionData = {
-      course1: {
-        subgroup: subgroupLabel1,
-        teachers: selectedTeacherIds1,
-        teacherCodenames: teacherCodenames1
-      },
-      course2: selectedCourseId2 ? {
-        subgroup: subgroupLabel2,
-        teachers: selectedTeacherIds2,
-        teacherCodenames: teacherCodenames2
-      } : null,
-      courseId2: selectedCourseId2 || "",
-      description: actualDescription
-    };
-    const finalDescription = JSON.stringify(descriptionData);
+    const finalDescription = actualDescription.trim();
 
     // Create ONE event with both courses
     const eventData = {

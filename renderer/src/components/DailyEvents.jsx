@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useAuth } from "../contexts/AuthContext";
 import supabase from "../utils/supabase";
 import Modal from "./Modal";
-import EditEvent from "./EditEvent";
+import ViewEvent from "./ViewEvent";
 
 function formatDateLabel(dateStr) {
   if (!dateStr) return "No date selected";
@@ -73,8 +73,8 @@ export default function DailyEvents({ selectedDate }) {
   const { userData } = useAuth();
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [isEditOpen, setIsEditOpen] = useState(false);
-  const [editableEvent, setEditableEvent] = useState(null);
+  const [isViewOpen, setIsViewOpen] = useState(false);
+  const [viewEvent, setViewEvent] = useState(null);
   const [refreshTick, setRefreshTick] = useState(0);
   const [openingEventId, setOpeningEventId] = useState(null);
 
@@ -102,8 +102,8 @@ export default function DailyEvents({ selectedDate }) {
         return;
       }
 
-      setEditableEvent(data || event);
-      setIsEditOpen(true);
+        setViewEvent(data || event);
+        setIsViewOpen(true);
     } finally {
       setOpeningEventId(null);
     }
@@ -212,7 +212,7 @@ export default function DailyEvents({ selectedDate }) {
               <div className="daily-event-time">{getEventTimeRange(event)}</div>
               <div className="daily-event-title">{event?.title || "Untitled event"}</div>
               {openingEventId === getEventId(event) && (
-                <p className="daily-event-description">Opening editor...</p>
+                <p className="daily-event-description">Opening details...</p>
               )}
               {event?.description ? (
                 <p className="daily-event-description">{event.description}</p>
@@ -223,22 +223,22 @@ export default function DailyEvents({ selectedDate }) {
       )}
 
       <Modal
-        isOpen={isEditOpen}
-        title="Edit Event"
+        isOpen={isViewOpen}
+        title="View Event"
         onClose={() => {
-          setIsEditOpen(false);
-          setEditableEvent(null);
+          setIsViewOpen(false);
+          setViewEvent(null);
         }}
         contentClassName="explorer-theme-modal-content"
         bodyClassName="explorer-theme-modal-body"
       >
-        {editableEvent && (
-          <EditEvent
-            event={editableEvent}
-            onSave={() => {
-              setIsEditOpen(false);
-              setEditableEvent(null);
-              setRefreshTick((tick) => tick + 1);
+        {viewEvent && (
+          <ViewEvent
+            event={viewEvent}
+            onUpdated={() => setRefreshTick((tick) => tick + 1)}
+            onClose={() => {
+              setIsViewOpen(false);
+              setViewEvent(null);
             }}
           />
         )}

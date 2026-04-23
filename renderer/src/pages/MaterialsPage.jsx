@@ -1,5 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
-import { FiDownload, FiFileText, FiFolder } from "react-icons/fi";
+import {
+  FiChevronDown,
+  FiChevronRight,
+  FiDownload,
+  FiFileText,
+  FiFolder,
+  FiSettings,
+} from "react-icons/fi";
 import supabase from "../utils/supabase";
 import { useAuth } from "../contexts/AuthContext";
 import { hasPermission } from "../utils/types";
@@ -21,6 +28,7 @@ function buildTeacherHierarchy(materialRows) {
 
   materialRows.forEach((row) => {
     const programName = row.program_name || "Unknown Program";
+    const operationName = row.operation_name || "Unknown Operation";
     const courseName = row.course_name || "Unknown Course";
     const eventTitle = row.event_title || "Untitled Event";
     const eventDate = formatEventDate(row.event_date);
@@ -30,7 +38,12 @@ function buildTeacherHierarchy(materialRows) {
       programMap.set(programName, new Map());
     }
 
-    const courseMap = programMap.get(programName);
+    const operationMap = programMap.get(programName);
+    if (!operationMap.has(operationName)) {
+      operationMap.set(operationName, new Map());
+    }
+
+    const courseMap = operationMap.get(operationName);
     if (!courseMap.has(courseName)) {
       courseMap.set(courseName, new Map());
     }
@@ -52,8 +65,56 @@ function buildTeacherHierarchy(materialRows) {
     });
   });
 
-  return Array.from(programMap.entries()).map(([programName, courseMap]) => ({
+  return Array.from(programMap.entries()).map(([programName, operationMap]) => ({
     name: programName,
+    operations: Array.from(operationMap.entries()).map(([operationName, courseMap]) => ({
+      name: operationName,
+      courses: Array.from(courseMap.entries()).map(([courseName, eventMap]) => ({
+        name: courseName,
+        events: Array.from(eventMap.values()),
+      })),
+    })),
+  }));
+}
+
+function buildStudentHierarchy(materialRows) {
+  const operationMap = new Map();
+
+  materialRows.forEach((row) => {
+    const operationName = row.operation_name || "Unknown Operation";
+    const courseName = row.course_name || "Unknown Course";
+    const eventTitle = row.event_title || "Untitled Event";
+    const eventDate = formatEventDate(row.event_date);
+    const eventKey = `${eventTitle}-${eventDate}`;
+
+    if (!operationMap.has(operationName)) {
+      operationMap.set(operationName, new Map());
+    }
+
+    const courseMap = operationMap.get(operationName);
+    if (!courseMap.has(courseName)) {
+      courseMap.set(courseName, new Map());
+    }
+
+    const eventMap = courseMap.get(courseName);
+    if (!eventMap.has(eventKey)) {
+      eventMap.set(eventKey, {
+        title: eventTitle,
+        date: eventDate,
+        attachments: [],
+      });
+    }
+
+    eventMap.get(eventKey).attachments.push({
+      id: row.attachment_id,
+      name: row.file_name || row.file_path?.split("/").pop() || "Attachment",
+      path: row.file_path,
+      availableAt: row.available_at,
+    });
+  });
+
+  return Array.from(operationMap.entries()).map(([operationName, courseMap]) => ({
+    name: operationName,
     courses: Array.from(courseMap.entries()).map(([courseName, eventMap]) => ({
       name: courseName,
       events: Array.from(eventMap.values()),
@@ -61,54 +122,23 @@ function buildTeacherHierarchy(materialRows) {
   }));
 }
 
-function buildStudentHierarchy(materialRows) {
-  const courseMap = new Map();
-
-  materialRows.forEach((row) => {
-    const courseName = row.course_name || "Unknown Course";
-    const eventTitle = row.event_title || "Untitled Event";
-    const eventDate = formatEventDate(row.event_date);
-    const eventKey = `${eventTitle}-${eventDate}`;
-
-    if (!courseMap.has(courseName)) {
-      courseMap.set(courseName, new Map());
-    }
-
-    const eventMap = courseMap.get(courseName);
-    if (!eventMap.has(eventKey)) {
-      eventMap.set(eventKey, {
-        title: eventTitle,
-        date: eventDate,
-        attachments: [],
-      });
-    }
-
-    eventMap.get(eventKey).attachments.push({
-      id: row.attachment_id,
-      name: row.file_name || row.file_path?.split("/").pop() || "Attachment",
-      path: row.file_path,
-      availableAt: row.available_at,
-    });
-  });
-
-  return Array.from(courseMap.entries()).map(([courseName, eventMap]) => ({
-    name: courseName,
-    events: Array.from(eventMap.values()),
-  }));
-}
-
 function buildExplorerTree(materials, isStudent) {
   if (isStudent) {
-    return materials.map((courseNode, courseIndex) => ({
-      id: `course-${courseIndex}-${courseNode.name}`,
-      label: courseNode.name,
-      type: "course",
-      children: (courseNode.events || []).map((eventNode, eventIndex) => ({
-        id: `course-${courseIndex}-${courseNode.name}-event-${eventIndex}-${eventNode.title}-${eventNode.date}`,
-        label: `${eventNode.title} - ${eventNode.date}`,
-        type: "event",
-        attachments: eventNode.attachments || [],
-        children: [],
+    return materials.map((operationNode, operationIndex) => ({
+      id: `operation-${operationIndex}-${operationNode.name}`,
+      label: operationNode.name,
+      type: "operation",
+      children: (operationNode.courses || []).map((courseNode, courseIndex) => ({
+        id: `operation-${operationIndex}-${operationNode.name}-course-${courseIndex}-${courseNode.name}`,
+        label: courseNode.name,
+        type: "course",
+        children: (courseNode.events || []).map((eventNode, eventIndex) => ({
+          id: `operation-${operationIndex}-${operationNode.name}-course-${courseIndex}-${courseNode.name}-event-${eventIndex}-${eventNode.title}-${eventNode.date}`,
+          label: `${eventNode.title} - ${eventNode.date}`,
+          type: "event",
+          attachments: eventNode.attachments || [],
+          children: [],
+        })),
       })),
     }));
   }
@@ -117,16 +147,21 @@ function buildExplorerTree(materials, isStudent) {
     id: `program-${programIndex}-${programNode.name}`,
     label: programNode.name,
     type: "program",
-    children: (programNode.courses || []).map((courseNode, courseIndex) => ({
-      id: `program-${programIndex}-${programNode.name}-course-${courseIndex}-${courseNode.name}`,
-      label: courseNode.name,
-      type: "course",
-      children: (courseNode.events || []).map((eventNode, eventIndex) => ({
-        id: `program-${programIndex}-${programNode.name}-course-${courseIndex}-${courseNode.name}-event-${eventIndex}-${eventNode.title}-${eventNode.date}`,
-        label: `${eventNode.title} - ${eventNode.date}`,
-        type: "event",
-        attachments: eventNode.attachments || [],
-        children: [],
+    children: (programNode.operations || []).map((operationNode, operationIndex) => ({
+      id: `program-${programIndex}-${programNode.name}-operation-${operationIndex}-${operationNode.name}`,
+      label: operationNode.name,
+      type: "operation",
+      children: (operationNode.courses || []).map((courseNode, courseIndex) => ({
+        id: `program-${programIndex}-${programNode.name}-operation-${operationIndex}-${operationNode.name}-course-${courseIndex}-${courseNode.name}`,
+        label: courseNode.name,
+        type: "course",
+        children: (courseNode.events || []).map((eventNode, eventIndex) => ({
+          id: `program-${programIndex}-${programNode.name}-operation-${operationIndex}-${operationNode.name}-course-${courseIndex}-${courseNode.name}-event-${eventIndex}-${eventNode.title}-${eventNode.date}`,
+          label: `${eventNode.title} - ${eventNode.date}`,
+          type: "event",
+          attachments: eventNode.attachments || [],
+          children: [],
+        })),
       })),
     })),
   }));
@@ -157,6 +192,19 @@ function flattenTree(nodes, parentPath = [], result = []) {
     flattenTree(node.children || [], currentPath, result);
   });
   return result;
+}
+
+function formatDateTime(value) {
+  if (!value) return "-";
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return String(value);
+
+  return parsed.toLocaleDateString("en-US", {
+    year: "numeric",
+    month: "short",
+    day: "2-digit",
+  });
 }
 
 export default function MaterialsPage() {
@@ -226,6 +274,7 @@ export default function MaterialsPage() {
               name,
               operations!inner(
                 id,
+                name,
                 programs!inner(
                   id,
                   name,
@@ -264,6 +313,7 @@ export default function MaterialsPage() {
             event_date: event.date,
             course_id: course.id,
             course_name: course.name,
+            operation_name: operation?.name || null,
             program_id: program?.id || null,
             program_name: program?.name || null,
             institution_id: program?.institution_id || null,
@@ -313,30 +363,38 @@ export default function MaterialsPage() {
   }, [flattenedNodes, selectedNodeId, nodeById]);
 
   const totalAttachmentCount = useMemo(() => {
-    if (isStudent) {
-      return materials.reduce(
-        (sum, courseNode) =>
-          sum + courseNode.events.reduce((eventSum, eventNode) => eventSum + eventNode.attachments.length, 0),
-        0
-      );
-    }
-
-    return materials.reduce(
-      (sum, programNode) =>
-        sum +
-        programNode.courses.reduce(
-          (courseSum, courseNode) =>
-            courseSum + courseNode.events.reduce((eventSum, eventNode) => eventSum + eventNode.attachments.length, 0),
-          0
-        ),
+    return explorerTree.reduce(
+      (sum, node) => sum + collectAttachments(node).length,
       0
     );
-  }, [materials, isStudent]);
+  }, [explorerTree]);
 
   const selectedEntry = selectedNodeId ? nodeById.get(selectedNodeId) : null;
   const selectedNode = selectedEntry?.node || null;
   const selectedPath = selectedEntry?.path || [];
-  const visibleFiles = useMemo(() => collectAttachments(selectedNode), [selectedNode]);
+  const visibleItems = useMemo(() => {
+    if (!selectedNode) return [];
+
+    if (selectedNode.type === "event") {
+      return (selectedNode.attachments || []).map((attachment) => ({
+        id: `file-${attachment.id}`,
+        kind: "file",
+        name: attachment.name,
+        date: formatDateTime(attachment.availableAt),
+        actionLabel: "Download",
+        attachment,
+      }));
+    }
+
+    return (selectedNode.children || []).map((child) => ({
+      id: `folder-${child.id}`,
+      kind: "folder",
+      name: child.label,
+      date: "-",
+      actionLabel: "Open",
+      childId: child.id,
+    }));
+  }, [selectedNode]);
 
   const downloadAttachment = async (filePath, fileName) => {
     if (!filePath) return;
@@ -357,102 +415,113 @@ export default function MaterialsPage() {
 
   return (
     <div className="materials-finder-shell">
-      <div className="materials-finder-window">
-        <div className="materials-finder-titlebar">
-          <div className="materials-finder-dots" aria-hidden="true">
-            <span className="dot red" />
-            <span className="dot yellow" />
-            <span className="dot green" />
+      <div className="materials-finder-window materials-file-manager-layout">
+        <div className="materials-file-manager-pane materials-finder-sidebar">
+          <div className="materials-pane-header">
+            <div className="materials-pane-title">
+              <FiFolder size={18} />
+              <span>My Files</span>
+            </div>
+            <button type="button" className="materials-pane-icon-btn" aria-label="Settings" title="Settings">
+              <FiSettings size={15} />
+            </button>
           </div>
-          <div className="materials-finder-title">Materials</div>
+
+          {explorerTree.length === 0 && !loading && !errorMessage && (
+            <div className="materials-finder-empty">No folders found</div>
+          )}
+
+          <ul className="materials-tree-root">
+            {explorerTree.map((node) => (
+              <TreeNode
+                key={node.id}
+                node={node}
+                level={0}
+                selectedNodeId={selectedNodeId}
+                onSelect={setSelectedNodeId}
+              />
+            ))}
+          </ul>
         </div>
 
-        <div className="materials-finder-toolbar">
-          <div className="materials-finder-breadcrumbs">
-            {selectedPath.length ? selectedPath.join(" / ") : "No folder selected"}
+        <section className="materials-file-manager-pane materials-finder-main">
+          <div className="materials-pane-header">
+            <div className="materials-pane-title">
+              <FiFolder size={18} />
+              <span>{selectedPath[selectedPath.length - 1] || "My Files"}</span>
+            </div>
+            <div className="materials-pane-subtitle">{selectedPath.join(" / ") || "No folder selected"}</div>
           </div>
-          <button type="button" className="materials-finder-refresh" onClick={loadMaterials}>
-            Refresh
-          </button>
-        </div>
 
-        <div className="materials-finder-status-row">
-          <span>
-            {isStudent
-              ? "Course / Event-Date / Attachments"
-              : "Program / Course / Event-Date / Attachments"}
-          </span>
-          <span>{totalAttachmentCount} total files</span>
-        </div>
+          <div className="materials-finder-status-row">
+            <span>
+              {isStudent
+                ? "Operation / Course / Event-Date / Attachments"
+                : "Program / Operation / Course / Event-Date / Attachments"}
+            </span>
+            <div className="materials-status-actions">
+              <span>{totalAttachmentCount} total files</span>
+              <button type="button" className="materials-inline-refresh" onClick={loadMaterials}>
+                Refresh
+              </button>
+            </div>
+          </div>
 
-        <div className="materials-finder-content">
-          <aside className="materials-finder-sidebar">
-            {explorerTree.length === 0 && !loading && !errorMessage && (
-              <div className="materials-finder-empty">No folders found</div>
-            )}
+          {loading && <div className="materials-finder-placeholder">Loading materials...</div>}
+          {!loading && errorMessage && <div className="materials-finder-error">{errorMessage}</div>}
+          {!loading && !errorMessage && visibleItems.length === 0 && (
+            <div className="materials-finder-placeholder">This folder has no files.</div>
+          )}
 
-            <ul className="materials-tree-root">
-              {explorerTree.map((node) => (
-                <TreeNode
-                  key={node.id}
-                  node={node}
-                  level={0}
-                  selectedNodeId={selectedNodeId}
-                  onSelect={setSelectedNodeId}
-                />
-              ))}
-            </ul>
-          </aside>
-
-          <section className="materials-finder-main">
-            {loading && <div className="materials-finder-placeholder">Loading materials...</div>}
-            {!loading && errorMessage && <div className="materials-finder-error">{errorMessage}</div>}
-            {!loading && !errorMessage && visibleFiles.length === 0 && (
-              <div className="materials-finder-placeholder">This folder has no files.</div>
-            )}
-
-            {!loading && !errorMessage && visibleFiles.length > 0 && (
-              <div className="materials-files-table-wrap">
-                <table className="materials-files-table">
-                  <thead>
-                    <tr>
-                      <th>Name</th>
-                      <th>Available At</th>
-                      <th>Action</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {visibleFiles.map((attachment) => (
-                      <tr key={attachment.id}>
-                        <td>
-                          <span className="materials-file-name" title={attachment.name}>
-                            <FiFileText size={14} />
-                            {attachment.name}
-                          </span>
-                        </td>
-                        <td>
-                          {attachment.availableAt
-                            ? new Date(attachment.availableAt).toLocaleString()
-                            : "-"}
-                        </td>
-                        <td>
+          {!loading && !errorMessage && visibleItems.length > 0 && (
+            <div className="materials-files-table-wrap">
+              <table className="materials-files-table">
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Type</th>
+                    <th>Date</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {visibleItems.map((item) => (
+                    <tr key={item.id}>
+                      <td>
+                        <span className="materials-file-name" title={item.name}>
+                          {item.kind === "folder" ? <FiFolder size={14} /> : <FiFileText size={14} />}
+                          {item.name}
+                        </span>
+                      </td>
+                      <td>{item.kind === "folder" ? "Folder" : "File"}</td>
+                      <td>{item.date}</td>
+                      <td>
+                        {item.kind === "file" ? (
                           <button
                             type="button"
                             className="materials-file-download"
-                            onClick={() => downloadAttachment(attachment.path, attachment.name)}
+                            onClick={() => downloadAttachment(item.attachment.path, item.attachment.name)}
                           >
                             <FiDownload size={14} />
                             Download
                           </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </section>
-        </div>
+                        ) : (
+                          <button
+                            type="button"
+                            className="materials-file-open"
+                            onClick={() => setSelectedNodeId(item.childId)}
+                          >
+                            Open
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
       </div>
     </div>
   );
@@ -473,7 +542,7 @@ function TreeNode({ node, level, selectedNodeId, onSelect }) {
             onClick={() => setExpanded((prev) => !prev)}
             aria-label={expanded ? "Collapse" : "Expand"}
           >
-            {expanded ? "-" : "+"}
+            {expanded ? <FiChevronDown size={12} /> : <FiChevronRight size={12} />}
           </button>
         ) : (
           <span className="materials-tree-toggle-placeholder" />

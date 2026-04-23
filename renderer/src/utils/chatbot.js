@@ -1,5 +1,5 @@
 import supabase from "./supabase";
-import { RPC_CHATBOT_CONTEXT } from "./query";
+import { getRpcChatbotContext } from "./query";
 
 const GROQ_API_KEY = import.meta.env.VITE_GROQ_API_KEY;
 const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
@@ -754,7 +754,7 @@ function buildSystemPrompt(context, plannedRpcParams = null) {
   const userProfileLines = formatUserProfileForPrompt(context.userProfile);
   const plannedParamsLines = formatRpcParamsForPrompt(plannedRpcParams);
 
-  return `${RPC_CHATBOT_CONTEXT}
+  return `${getRpcChatbotContext()}
 
 Use ONLY the data below, which was fetched via get_events_advanced for the current user.
 Use CURRENT USER PROFILE to personalize and disambiguate answers.

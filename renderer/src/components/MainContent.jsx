@@ -3,7 +3,7 @@ import { useAuth } from "../contexts/AuthContext";
 import { fetchSlots } from "../utils/fetch";
 import Modal from "./Modal";
 import CreateEvent from "./CreateEvent";
-import EditEvent from "./EditEvent";
+import ViewEvent from "./ViewEvent";
 
 const WEEKDAY_NAMES = [
   "Sunday",
@@ -19,8 +19,8 @@ export default function MainContent({ events, startOfWeek, endOfWeek, onCreateEv
   const { userData } = useAuth();
   const [slots, setSlots] = useState([]);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
-  const [isEditOpen, setIsEditOpen] = useState(false);
-  const [editableEvent, setEditableEvent] = useState(null);
+  const [isViewOpen, setIsViewOpen] = useState(false);
+  const [viewEvent, setViewEvent] = useState(null);
   const [selectedCreateDate, setSelectedCreateDate] = useState("");
   const [selectedCreateStartSlotId, setSelectedCreateStartSlotId] = useState("");
   const [hoveredCellKey, setHoveredCellKey] = useState(null);
@@ -389,6 +389,7 @@ export default function MainContent({ events, startOfWeek, endOfWeek, onCreateEv
             const dayIndex = days.findIndex((day) => day.date === ev._date);
             const startIndex = slotIndexMap[ev.start_slot];
             const endIndex = slotIndexMap[ev.end_slot];
+            const isObsolete = Boolean(ev.isobsolete);
 
             if (dayIndex === -1 || startIndex === undefined) return null;
 
@@ -408,17 +409,20 @@ export default function MainContent({ events, startOfWeek, endOfWeek, onCreateEv
                   height: `${laneHeight}vh`,
                   position: "relative",
                   zIndex: 5,
-                  backgroundColor: ev.filterColor || "deepskyblue",
-                  color: getEventTextColor(ev.filterColor),
+                  backgroundColor: isObsolete ? "#cbd5e1" : ev.filterColor || "deepskyblue",
+                  color: isObsolete ? "#64748b" : getEventTextColor(ev.filterColor),
                   borderRadius: "8px",
-                  border: "1px solid rgba(15, 23, 42, 0.16)",
-                  boxShadow: "0 6px 14px rgba(15, 23, 42, 0.2)",
+                  border: isObsolete ? "1px solid rgba(100, 116, 139, 0.28)" : "1px solid rgba(15, 23, 42, 0.16)",
+                  boxShadow: isObsolete ? "none" : "0 6px 14px rgba(15, 23, 42, 0.2)",
                   padding: "6px 8px",
                   fontSize: "0.8em",
                   fontWeight: 700,
                   overflow: "hidden",
                   cursor: "pointer",
-                  transition: "transform 0.2s ease, box-shadow 0.2s ease",
+                  opacity: isObsolete ? 0.7 : 1,
+                  filter: isObsolete ? "grayscale(1)" : "none",
+                  textDecoration: isObsolete ? "line-through" : "none",
+                  transition: "transform 0.2s ease, box-shadow 0.2s ease, filter 0.2s ease",
                 }}
                 onMouseMove={(event) => {
                   const slotId = resolveSlotIdFromEventPointer(event, startIndex, span);
@@ -428,8 +432,8 @@ export default function MainContent({ events, startOfWeek, endOfWeek, onCreateEv
                 }}
                 onMouseLeave={() => setHoveredCellKey(null)}
                 onClick={() => {
-                  setEditableEvent({ ...ev });
-                  setIsEditOpen(true);
+                  setViewEvent({ ...ev });
+                  setIsViewOpen(true);
                 }}
               >
                 {ev.title}
@@ -511,22 +515,22 @@ export default function MainContent({ events, startOfWeek, endOfWeek, onCreateEv
       </Modal>
 
       <Modal
-        isOpen={isEditOpen}
-        title="Edit Event"
+        isOpen={isViewOpen}
+        title="View Event"
         onClose={() => {
-          setIsEditOpen(false);
-          setEditableEvent(null);
+          setIsViewOpen(false);
+          setViewEvent(null);
         }}
         contentClassName="explorer-theme-modal-content"
         bodyClassName="explorer-theme-modal-body"
       >
-        {editableEvent && (
-          <EditEvent
-            event={editableEvent}
-            onSave={() => {
-              setIsEditOpen(false);
-              setEditableEvent(null);
-              onRefreshEvents?.();
+        {viewEvent && (
+          <ViewEvent
+            event={viewEvent}
+            onUpdated={() => onRefreshEvents?.()}
+            onClose={() => {
+              setIsViewOpen(false);
+              setViewEvent(null);
             }}
           />
         )}
