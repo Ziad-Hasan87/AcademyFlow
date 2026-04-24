@@ -1,14 +1,109 @@
 const { app, BrowserWindow, ipcMain } = require("electron");
 const path = require("path");
 const crypto = require("crypto");
+const fs = require("fs");
 require("dotenv").config();
 
 let mainWindow;
+let splashWindow;
+
+function buildSplashHtml() {
+  const splashPath = path.join(__dirname, "Assets", "Splash.png");
+  let splashUrl = "";
+
+  try {
+    const imageBuffer = fs.readFileSync(splashPath);
+    const base64 = imageBuffer.toString("base64");
+    splashUrl = `data:image/png;base64,${base64}`;
+  } catch (error) {
+    console.error("[Main] Failed to read splash image:", error?.message || error);
+    splashUrl = "";
+  }
+
+  return `<!doctype html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' file: data:; img-src file: data:;" />
+    <style>
+      html, body {
+        margin: 0;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        background: #05080d;
+      }
+      .stage {
+        width: 100%;
+        height: 100%;
+        position: relative;
+      }
+      .splash-image {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display: block;
+        transform-origin: center center;
+        animation: gentleZoom 2.6s ease-in-out infinite alternate;
+        filter: saturate(1.03);
+      }
+      .shine {
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        background: linear-gradient(120deg, rgba(255,255,255,0.04) 8%, rgba(255,255,255,0.14) 18%, rgba(255,255,255,0.04) 28%);
+        transform: translateX(-120%);
+        animation: glide 2.9s ease-in-out infinite;
+      }
+      @keyframes gentleZoom {
+        from { transform: scale(1.01); }
+        to { transform: scale(1.04); }
+      }
+      @keyframes glide {
+        0% { transform: translateX(-120%); opacity: 0; }
+        25% { opacity: 1; }
+        70% { opacity: 0.85; }
+        100% { transform: translateX(120%); opacity: 0; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="stage">
+      ${splashUrl
+        ? `<img class="splash-image" src="${splashUrl}" alt="Splash" />`
+        : `<div class="splash-image" style="display:flex;align-items:center;justify-content:center;color:#dbeafe;font:600 20px Segoe UI, sans-serif;">AcademyFlow</div>`}
+      <div class="shine"></div>
+    </div>
+  </body>
+</html>`;
+}
+
+function createSplashWindow() {
+  splashWindow = new BrowserWindow({
+    width: 1200,
+    height: 800,
+    frame: false,
+    resizable: false,
+    movable: true,
+    show: true,
+    center: true,
+    alwaysOnTop: true,
+    backgroundColor: "#05080d",
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true,
+      sandbox: true,
+    },
+  });
+
+  splashWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(buildSplashHtml())}`);
+}
 
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
+    show: false,
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -21,6 +116,18 @@ function createWindow() {
   mainWindow.webContents.on("did-fail-load", (event, errorCode, errorDescription) => {
     console.error("[Main] Failed to load:", errorCode, errorDescription);
   });
+
+  // Fallback in case renderer signal never arrives.
+  setTimeout(() => {
+    if (mainWindow && !mainWindow.isVisible()) {
+      mainWindow.show();
+    }
+    if (splashWindow && !splashWindow.isDestroyed()) {
+      splashWindow.close();
+      splashWindow = null;
+    }
+  }, 15000);
+
   console.log("[Main] BrowserWindow created with preload:", path.join(__dirname, "preload.js"));
 
 }
@@ -155,7 +262,21 @@ ipcMain.handle("cloudinary:upload-profile-image", async (_event, payload) => {
   }
 });
 
-app.whenReady().then(createWindow);
+ipcMain.on("app:renderer-ready", () => {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.show();
+  }
+
+  if (splashWindow && !splashWindow.isDestroyed()) {
+    splashWindow.close();
+    splashWindow = null;
+  }
+});
+
+app.whenReady().then(() => {
+  createSplashWindow();
+  createWindow();
+});
 
 app.on("window-all-closed", () => {
   if (process.platform !== "darwin") {
