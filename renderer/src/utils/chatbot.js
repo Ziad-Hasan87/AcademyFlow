@@ -85,13 +85,38 @@ function normalizeTextParam(value) {
 
 function detectNeedsUserContext(userMessage, conversationHistory) {
   const current = String(userMessage || "").toLowerCase();
-  const history = normalizeArray(conversationHistory)
-    .slice(-4)
-    .map((message) => String(message?.text || "").toLowerCase())
-    .join(" ");
-  const corpus = `${current} ${history}`;
+  const hasCurrentPersonalPronoun = /\b(my|mine|me|for\s+me|myself|our\s+class|my\s+class|my\s+schedule)\b/.test(current);
 
-  return /\b(my|mine|me|for\s+me|myself|our\s+class|my\s+class|my\s+schedule)\b/.test(corpus);
+  if (hasCurrentPersonalPronoun) {
+    console.log("[Chatbot] Query has personal pronouns - treating as personal (include user context)");
+    return true;
+  }
+
+  // Explicit institutional targeting should never inherit personal scope from prior turns.
+  const hasInstitutionalCue = /\b(subgroup|group|program|operation|department|teacher|sir|faculty|moderator|batch|section)\b/.test(current);
+  if (hasInstitutionalCue) {
+    console.log("[Chatbot] Institutional target detected in current query - treating as institutional (no user context)");
+    return false;
+  }
+
+  // For short/ambiguous follow-ups (e.g., "and tomorrow?"), inherit intent from recent user turns.
+  const isLikelyFollowUp = current.split(/\s+/).filter(Boolean).length <= 4 || /^(and|then|also|what about|how about)\b/.test(current);
+  if (isLikelyFollowUp) {
+    const recentUserHistory = normalizeArray(conversationHistory)
+      .filter((message) => String(message?.role || "").toLowerCase() === "user")
+      .slice(-2)
+      .map((message) => String(message?.text || "").toLowerCase())
+      .join(" ");
+    const inheritPersonalContext = /\b(my|mine|me|for\s+me|myself|our\s+class|my\s+class|my\s+schedule)\b/.test(recentUserHistory);
+
+    if (inheritPersonalContext) {
+      console.log("[Chatbot] Ambiguous follow-up inherited personal context from recent user turns");
+      return true;
+    }
+  }
+
+  console.log("[Chatbot] Query has no personal pronouns - treating as institutional (no user context)");
+  return false;
 }
 
 function sanitizeAdvancedRpcParams(rawParams = {}, scopeFilters = null) {
@@ -110,6 +135,7 @@ function sanitizeAdvancedRpcParams(rawParams = {}, scopeFilters = null) {
     p_subgroup_name: hasOwn(params, "p_subgroup_name") ? normalizeTextParam(params.p_subgroup_name) : null,
     p_program_name: hasOwn(params, "p_program_name") ? normalizeTextParam(params.p_program_name) : null,
     p_operation_name: hasOwn(params, "p_operation_name") ? normalizeTextParam(params.p_operation_name) : null,
+    p_match_all: hasOwn(params, "p_match_all") ? Boolean(params.p_match_all) : false,
   };
 }
 
@@ -383,6 +409,16 @@ async function safeSelect(fetcher, label) {
   }
 }
 
+function hasInstitutionalFilters(rpcParams = {}) {
+  return !!(
+    rpcParams.p_teacher_name ||
+    rpcParams.p_group_name ||
+    rpcParams.p_subgroup_name ||
+    rpcParams.p_program_name ||
+    rpcParams.p_operation_name
+  );
+}
+
 async function fetchEventsViaAdvancedRpc({ userId, searchText = null, scopeFilters = null, rpcOverrides = null, includeUserContext = true }) {
   void searchText;
   void scopeFilters;
@@ -400,13 +436,23 @@ async function fetchEventsViaAdvancedRpc({ userId, searchText = null, scopeFilte
     p_subgroup_name: null,
     p_program_name: null,
     p_operation_name: null,
+    p_match_all: false,
   };
 
   const plannedParams = sanitizeAdvancedRpcParams(rpcOverrides || {}, scopeFilters);
+  
+  // If NO user context AND institutional filters are present (teacher, group, subgroup, etc.), 
+  // this is an institutional query—don't include user ID.
+  // But if user context IS included (e.g., "for me"), keep the user ID even with institutional filters.
+  const isInstitutionalQuery = !includeUserContext && hasInstitutionalFilters(plannedParams);
+  if (isInstitutionalQuery) {
+    console.log("[Chatbot RPC] Institutional query detected (no user context + institutional filters) - setting p_user_id to NULL");
+    defaultParams.p_user_id = null;
+  }
+
   const rpcParams = {
     ...defaultParams,
     ...plannedParams,
-    p_user_id: includeUserContext ? (userId || null) : null,
   };
 
   const { data, error } = await callRpcWithQueryLog("get_events_advanced", rpcParams);
@@ -498,34 +544,27 @@ async function planAdvancedRpcParamsWithGroq({
     {
       role: "system",
       content:
-        "You are an RPC planner for AcademyFlow. Return ONLY valid JSON with one object field named rpc_params. " +
-        "Do not include explanations, markdown, or extra keys. " +
-        "Allowed rpc_params keys: p_start_date, p_end_date, p_group_id, p_subgroup_id, p_program_id, p_operation_id, p_teacher_name, p_group_name, p_subgroup_name, p_program_name, p_operation_name. " +
-        "Dates must be YYYY-MM-DD or null. IDs must be UUID strings or null. Name keys must be plain text or null. " +
-        "ONLY include parameters required by user intent. Do not include extra filters.",
+        "Output ONLY valid JSON. " +
+        "Keys: p_start_date, p_end_date, p_group_id, p_subgroup_id, p_program_id, p_operation_id, p_teacher_name, p_group_name, p_subgroup_name, p_program_name, p_operation_name, p_match_all. " +
+        "Dates: YYYY-MM-DD or null. IDs: UUID or null. Names: text or null. " +
+        "p_match_all: true if multiple specific filters (e.g., group AND teacher AND date), false if generic/single filter search.",
     },
     {
       role: "user",
       content: [
-        "Create rpc_params for get_events_advanced based on the query and context.",
+        "Plan rpc_params for get_events_advanced.",
         "",
-        "Current user profile:",
-        formatUserProfileForPrompt(userProfile),
+        "User scope (use for personal queries with 'my'):",
+        `include_user_context: ${includeUserContext}`,
+        `program: ${userScopeFilters?.programId || "null"} / group: ${userScopeFilters?.groupId || "null"} / subgroup: ${userScopeFilters?.subgroupId || "null"}`,
         "",
-        "Available user scope IDs (prefer these for 'my' context):",
-        `- program_id: ${userScopeFilters?.programId || "null"}`,
-        `- group_id: ${userScopeFilters?.groupId || "null"}`,
-        `- subgroup_id: ${userScopeFilters?.subgroupId || "null"}`,
-        `- operation_id: ${userScopeFilters?.operationId || "null"}`,
-        `- include_user_context: ${includeUserContext ? "true" : "false"}`,
-        "",
-        "Conversation context:",
+        "Conversation:",
         conversationLines,
         "",
-        `Current user query: ${userMessage}`,
+        `Query: ${userMessage}`,
         "",
-        "Respond only in this exact JSON shape:",
-        '{"rpc_params":{"p_start_date":null,"p_end_date":null,"p_group_id":null,"p_subgroup_id":null,"p_program_id":null,"p_operation_id":null,"p_teacher_name":null,"p_group_name":null,"p_subgroup_name":null,"p_program_name":null,"p_operation_name":null}}',
+        "JSON:",
+        "{\"rpc_params\":{\"p_start_date\":null,\"p_end_date\":null,\"p_group_id\":null,\"p_subgroup_id\":null,\"p_program_id\":null,\"p_operation_id\":null,\"p_teacher_name\":null,\"p_group_name\":null,\"p_subgroup_name\":null,\"p_program_name\":null,\"p_operation_name\":null,\"p_match_all\":false}}",
       ].join("\n"),
     },
   ];
@@ -538,10 +577,10 @@ async function planAdvancedRpcParamsWithGroq({
         "Authorization": `Bearer ${GROQ_API_KEY}`,
       },
       body: JSON.stringify({
-        model: "llama-3.3-70b-versatile",
+        model: "openai/gpt-oss-120b",
         messages: plannerMessages,
         temperature: 0,
-        max_tokens: 300,
+        max_tokens: 500,
       }),
     });
 
@@ -553,11 +592,17 @@ async function planAdvancedRpcParamsWithGroq({
 
     const data = await response.json();
     const content = data.choices?.[0]?.message?.content;
+    
+    if (!content) {
+      console.warn("[Chatbot Planner] Groq response was empty. Full response:", JSON.stringify(data, null, 2));
+      return null;
+    }
+
     const parsed = extractJsonObjectCandidate(content);
     const rawParams = parsed?.rpc_params || parsed?.rpcParams || parsed?.params || parsed;
 
     if (!rawParams || typeof rawParams !== "object") {
-      console.warn("[Chatbot Planner] Unable to parse rpc_params from Groq response.", content);
+      console.warn("[Chatbot Planner] Unable to parse rpc_params from Groq response. Content:", content, "Parsed:", parsed);
       return null;
     }
 
@@ -924,6 +969,7 @@ function localAnswerFromContext(userMessage, context, withQuotaNote = false) {
 
 export async function sendChatMessage(userMessage, conversationHistory, instituteId, userId) {
   const includeUserContext = detectNeedsUserContext(userMessage, conversationHistory);
+  console.log("[Chatbot] includeUserContext:", includeUserContext, "for message:", userMessage);
 
   const [userProfile, userScopeFilters] = await Promise.all([
     fetchUserProfileViaRpc(userId),
@@ -987,7 +1033,7 @@ export async function sendChatMessage(userMessage, conversationHistory, institut
         "Authorization": `Bearer ${GROQ_API_KEY}`,
       },
       body: JSON.stringify({
-        model: "llama-3.3-70b-versatile",
+        model: "openai/gpt-oss-120b",
         messages,
         temperature: 0.25,
         max_tokens: 1024,
@@ -1128,7 +1174,7 @@ export async function generateEventNotificationFromJson({
         "Authorization": `Bearer ${GROQ_API_KEY}`,
       },
       body: JSON.stringify({
-        model: "llama-3.3-70b-versatile",
+        model: "openai/gpt-oss-120b",
         temperature: 0.2,
         max_tokens: 220,
         messages: [

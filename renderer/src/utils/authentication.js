@@ -5,11 +5,21 @@ export async function createUser({
   password,
   role,
   institute_id,
+  name,
 }) {
+  const {
+    data: { session: creatorSession },
+  } = await supabase.auth.getSession();
+
   // 1. Create auth user
   const { data: authData, error: authError } = await supabase.auth.signUp({
     email: email,
     password,
+    options: {
+      data: {
+        name: name || null,
+      },
+    },
   });
 
   if (authError) throw authError;
@@ -23,11 +33,25 @@ export async function createUser({
       {
         id: userId,
         role,
-        institute_id
+        institute_id,
+        name: name || null,
       },
     ]);
 
   if (dbError) throw dbError;
+
+  // signUp can switch the client session to the newly created user.
+  // Restore the creator's session so the current admin/moderator stays logged in.
+  if (creatorSession?.access_token && creatorSession?.refresh_token) {
+    const { error: restoreError } = await supabase.auth.setSession({
+      access_token: creatorSession.access_token,
+      refresh_token: creatorSession.refresh_token,
+    });
+
+    if (restoreError) {
+      console.error("Failed to restore creator session after user creation:", restoreError);
+    }
+  }
 
   return authData.user;
 }
@@ -55,7 +79,14 @@ export async function logOut() {
 }
 
 export async function getUserProfile() {
-  const { data: { user }, error } = await supabase.auth.getUser();
+  const {
+    data: { user },
+    error,
+  } = await supabase.auth.getUser();
+
+  if (error) throw error;
+  if (!user) return null;
+
   const { data: profile, error: profileError } = await supabase
     .from("users")
     .select(`
@@ -64,9 +95,10 @@ export async function getUserProfile() {
       institutes!inner(name)
     `)
     .eq("id", user.id)
-    .single();
+    .maybeSingle();
   
   if (profileError) throw profileError;
+  if (!profile) return null;
   
   const userData = {
     id: user.id,

@@ -218,7 +218,7 @@ export async function fetchPrograms(currentInstituteId, programQuery, setProgram
       setLoadingPrograms(true);
       const { data, error } = await supabase
         .from("programs")
-        .select("id, name, departments(name)")
+  .select("id, name, is_active, chat_id, departments(name)")
         .eq("institution_id", currentInstituteId)
         .eq("is_active", true)
         .ilike("name", `%${programQuery}%`);
@@ -488,6 +488,48 @@ export async function fetchTeachersByInstitute(instituteId, searchQuery, setResu
     setResults([]);
   } else {
     setResults(data || []);
+  }
+
+  setLoading?.(false);
+}
+
+export async function fetchInstituteDetails(instituteId) {
+  if (!instituteId) return null;
+
+  const { data, error } = await supabase
+    .from("institutes")
+    .select("id, name, code, timezone, is_active, botid, image_path")
+    .eq("id", instituteId)
+    .single();
+
+  if (error) {
+    console.error("Error fetching institute details:", error);
+    return null;
+  }
+
+  return data || null;
+}
+
+export async function fetchOperationsByInstitute(instituteId, setOperations, setLoading) {
+  if (!instituteId) {
+    setOperations?.([]);
+    setLoading?.(false);
+    return;
+  }
+
+  setLoading?.(true);
+
+  const { data, error } = await supabase
+    .from("operations")
+    .select("id, name, status, created_at, program:programs!inner(name, institution_id)")
+    .eq("program.institution_id", instituteId)
+    .order("name", { ascending: true });
+
+  if (error) {
+    console.error("Error fetching operations by institute:", error);
+    setOperations?.([]);
+  } else {
+    setOperations?.(data || []);
   }
 
   setLoading?.(false);

@@ -44,6 +44,14 @@ export default function CreateRoutineEvent({
   const [startWeek, setStartWeek] = useState(1);
   const [repeatEvery, setRepeatEvery] = useState(1);
 
+  const [departments, setDepartments] = useState([]);
+  const [selectedDepartment, setSelectedDepartment] = useState("");
+  const [teachers, setTeachers] = useState([]);
+  const [teacherSearchQuery, setTeacherSearchQuery] = useState("");
+  const [selectedTeacherToAdd, setSelectedTeacherToAdd] = useState("");
+  const [selectedModerators, setSelectedModerators] = useState([]);
+  const [showTeacherDropdown, setShowTeacherDropdown] = useState(false);
+
   useEffect(() => {
     const fetchForUsersName = async () => {
       if (!forUsers || !fromTable) return;
@@ -190,6 +198,56 @@ export default function CreateRoutineEvent({
     fetchCourses();
   }, [operationId]);
 
+  useEffect(() => {
+    if (!currentInstituteId) return;
+
+    const fetchDepartments = async () => {
+      const { data, error } = await supabase
+        .from("departments")
+        .select("id, name")
+        .eq("institute_id", currentInstituteId)
+        .order("name", { ascending: true });
+
+      if (error) {
+        console.error("Error fetching departments:", error);
+        return;
+      }
+
+      setDepartments(data || []);
+    };
+
+    fetchDepartments();
+  }, [currentInstituteId]);
+
+  useEffect(() => {
+    if (!selectedDepartment) {
+      setTeachers([]);
+      setSelectedTeacherToAdd("");
+      setTeacherSearchQuery("");
+      setShowTeacherDropdown(false);
+      return;
+    }
+
+    supabase
+      .from("staffs")
+      .select("id, codename, users:users!staffs_id_fkey(name)")
+      .eq("department_id", selectedDepartment)
+      .then(({ data, error }) => {
+        if (error) {
+          console.error("Error fetching teachers:", error);
+          return;
+        }
+
+        setTeachers(data || []);
+      });
+  }, [selectedDepartment]);
+
+  const getTeacherLabel = (teacher) => {
+    const teacherName = teacher.users?.name || teacher.name || "Unknown";
+    const codename = teacher.codename || "N/A";
+    return `${teacherName} - ${codename}`;
+  };
+
   const buildAutoTitle = useCallback(() => {
     const titleParts = [];
 
@@ -264,12 +322,32 @@ export default function CreateRoutineEvent({
       routine_id: routineId,
     };
 
-    const { data, error } = await supabase.from("recurring_events").insert(eventData);
+    const { data: insertedEvent, error } = await supabase
+      .from("recurring_events")
+      .insert(eventData)
+      .select("id")
+      .single();
 
     if (error) {
       console.error("Error creating routine events:", error);
       alert("Error creating events");
     } else {
+      if (selectedModerators.length > 0 && insertedEvent?.id) {
+        const moderatorRows = selectedModerators.map((moderator) => ({
+          user_id: moderator.id,
+          recurring_event_id: insertedEvent.id,
+        }));
+
+        const { error: moderatorError } = await supabase
+          .from("recurring_event_moderators")
+          .insert(moderatorRows);
+
+        if (moderatorError) {
+          console.error("Failed to save routine event moderators:", moderatorError);
+          alert("Routine event created, but moderators could not be saved.");
+        }
+      }
+
       const endSlot = slots.find((s) => s.id === endSlotId);
       const course1Name = courses.find(c => c.id === selectedCourseId)?.name || "";
       const course2Name = selectedCourseId2 ? courses.find(c => c.id === selectedCourseId2)?.name || "" : "";
@@ -569,6 +647,90 @@ export default function CreateRoutineEvent({
           />{" "}
           Reschedulable
         </label>
+      </div>
+
+      <div className="form-group-box">
+        <h4 className="form-section-title">Add Event Moderators</h4>
+
+        <div className="form-field">
+          <label>Department</label>
+          <select
+            className="form-select"
+            value={selectedDepartment}
+            onChange={(e) => setSelectedDepartment(e.target.value)}
+          >
+            <option value="">Select Department</option>
+            {departments.map((department) => (
+              <option key={department.id} value={department.id}>
+                {department.name}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="form-field autocomplete-container">
+          <label>Teacher</label>
+          <input
+            className="form-input"
+            placeholder="Type teacher name"
+            value={teacherSearchQuery}
+            onChange={(e) => handleTeacherSearchChange(e.target.value)}
+            onFocus={() => setShowTeacherDropdown(Boolean(teacherSearchQuery.trim()))}
+            disabled={!selectedDepartment}
+            autoComplete="off"
+          />
+
+          {showTeacherDropdown && selectedDepartment && teacherSearchQuery.trim() && (
+            <div className="autocomplete-list">
+              {filteredTeachers.length === 0 ? (
+                <div className="autocomplete-item moderator-empty-item">No teachers found</div>
+              ) : (
+                filteredTeachers.map((teacher) => (
+                  <div
+                    key={teacher.id}
+                    className="autocomplete-item"
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      handleTeacherOptionPick(teacher);
+                    }}
+                  >
+                    {getTeacherLabel(teacher)}
+                  </div>
+                ))
+              )}
+            </div>
+          )}
+        </div>
+
+        <div className="moderator-actions-row">
+          <button
+            type="button"
+            className="form-submit"
+            onClick={addSelectedModerator}
+            disabled={!selectedTeacherToAdd}
+          >
+            Add
+          </button>
+        </div>
+
+        {selectedModerators.length > 0 && (
+          <ul className="moderator-list">
+            {selectedModerators.map((moderator) => (
+              <li key={moderator.id} className="moderator-item">
+                <span className="moderator-name">{moderator.label}</span>
+                <button
+                  type="button"
+                  className="moderator-remove-btn"
+                  onClick={() => removeSelectedModerator(moderator.id)}
+                  title="Remove moderator"
+                  aria-label={`Remove ${moderator.label}`}
+                >
+                  ×
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
 
       {/* Submit and Cancel */}

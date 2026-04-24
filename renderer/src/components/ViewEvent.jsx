@@ -5,6 +5,7 @@ import supabase from "../utils/supabase";
 import { resolveEventTargetLabel } from "../utils/fetch";
 import Modal from "./Modal";
 import EditEvent from "./EditEvent";
+import ProfilePage from "../pages/ProfilePage";
 
 function formatDateLabel(value) {
   if (!value) return "N/A";
@@ -104,9 +105,13 @@ export default function ViewEvent({ event, onClose, onUpdated }) {
   const [currentEvent, setCurrentEvent] = useState(event || null);
   const [moderators, setModerators] = useState([]);
   const [isLoadingModerators, setIsLoadingModerators] = useState(false);
+  const [attachments, setAttachments] = useState([]);
+  const [isLoadingAttachments, setIsLoadingAttachments] = useState(false);
   const [audienceLabel, setAudienceLabel] = useState("N/A");
   const [slotDetails, setSlotDetails] = useState([]);
   const [isEditOpen, setIsEditOpen] = useState(false);
+  const [selectedModeratorId, setSelectedModeratorId] = useState(null);
+  const [isModeratorProfileOpen, setIsModeratorProfileOpen] = useState(false);
 
   const slotMap = useMemo(() => new Map(slotDetails.map((slot) => [slot.id, slot])), [slotDetails]);
   const isObsolete = Boolean(currentEvent?.isobsolete);
@@ -159,12 +164,14 @@ export default function ViewEvent({ event, onClose, onUpdated }) {
     const loadViewData = async () => {
       if (!currentEvent?.id) {
         setModerators([]);
+        setAttachments([]);
         setAudienceLabel("N/A");
         setSlotDetails([]);
         return;
       }
 
       setIsLoadingModerators(true);
+      setIsLoadingAttachments(true);
 
       try {
         const targetLabel = await resolveEventTargetLabel(currentEvent.from_table, currentEvent.for_users);
@@ -206,21 +213,33 @@ export default function ViewEvent({ event, onClose, onUpdated }) {
 
         const loadedModerators = await Promise.all(moderatorIds.map((userId) => fetchUserProfile(userId)));
 
+        const { data: attachmentRows, error: attachmentError } = await supabase
+          .from("attachments")
+          .select("id, file_name, file_path")
+          .eq("event_id", currentEvent.id);
+
+        if (attachmentError) {
+          console.error("Error fetching event attachments:", attachmentError);
+        }
+
         if (!isActive) return;
 
         setModerators(loadedModerators.filter(Boolean));
+        setAttachments(Array.isArray(attachmentRows) ? attachmentRows : []);
         setAudienceLabel(targetLabel || "N/A");
         setSlotDetails(nextSlotDetails);
       } catch (error) {
         console.error("Error loading event details:", error);
         if (isActive) {
           setModerators([]);
+          setAttachments([]);
           setAudienceLabel("N/A");
           setSlotDetails([]);
         }
       } finally {
         if (isActive) {
           setIsLoadingModerators(false);
+          setIsLoadingAttachments(false);
         }
       }
     };
@@ -236,6 +255,67 @@ export default function ViewEvent({ event, onClose, onUpdated }) {
 
   const scheduleLabel = getEventScheduleLabel(currentEvent, slotMap);
   const eventTypeLabel = getEventTypeLabel(currentEvent);
+
+  const openModeratorProfile = (moderatorId) => {
+    if (!moderatorId) return;
+    setSelectedModeratorId(moderatorId);
+    setIsModeratorProfileOpen(true);
+  };
+
+  const closeModeratorProfile = () => {
+    setIsModeratorProfileOpen(false);
+    setSelectedModeratorId(null);
+  };
+
+  const getAttachmentLabel = (attachment) =>
+    attachment?.file_name || attachment?.file_path?.split("/").pop() || "Attachment";
+
+  const getAttachmentBlob = async (filePath) => {
+    const { data, error } = await supabase.storage.from("attachments").download(filePath);
+
+    if (error) {
+      console.error("Error fetching attachment:", error);
+      alert("Failed to open attachment.");
+      return null;
+    }
+
+    return data;
+  };
+
+  const viewAttachment = async (attachment) => {
+    if (!attachment?.file_path) return;
+
+    const blob = await getAttachmentBlob(attachment.file_path);
+    if (!blob) return;
+
+    const url = URL.createObjectURL(blob);
+    const popup = window.open(url, "_blank", "noopener,noreferrer");
+
+    if (!popup) {
+      const fallback = document.createElement("a");
+      fallback.href = url;
+      fallback.target = "_blank";
+      fallback.rel = "noopener noreferrer";
+      fallback.click();
+    }
+
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  };
+
+  const downloadAttachment = async (attachment) => {
+    if (!attachment?.file_path) return;
+
+    const blob = await getAttachmentBlob(attachment.file_path);
+    if (!blob) return;
+
+    const url = URL.createObjectURL(blob);
+    const fileLabel = getAttachmentLabel(attachment);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = fileLabel;
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1_000);
+  };
 
   return (
     <div
@@ -421,8 +501,11 @@ export default function ViewEvent({ event, onClose, onUpdated }) {
           ) : (
             <div style={{ display: "grid", gap: "10px" }}>
               {moderators.map((moderator) => (
-                <article
+                <button
+                  type="button"
                   key={moderator.id}
+                  onClick={() => openModeratorProfile(moderator.id)}
+                  aria-label={`View profile of ${moderator.name || "moderator"}`}
                   style={{
                     display: "flex",
                     gap: "12px",
@@ -431,6 +514,9 @@ export default function ViewEvent({ event, onClose, onUpdated }) {
                     padding: "12px",
                     border: "1px solid rgba(148, 163, 184, 0.24)",
                     background: "linear-gradient(180deg, rgba(248,250,252,0.98) 0%, rgba(241,245,249,0.98) 100%)",
+                    cursor: "pointer",
+                    textAlign: "left",
+                    width: "100%",
                   }}
                 >
                   <div
@@ -490,12 +576,113 @@ export default function ViewEvent({ event, onClose, onUpdated }) {
                       <div>{moderator.subgroup_name || "Subgroup not set"}</div>
                     </div>
                   </div>
-                </article>
+                </button>
               ))}
             </div>
           )}
         </section>
       </div>
+
+      <section
+        style={{
+          borderRadius: "16px",
+          padding: "16px",
+          border: "1px solid rgba(148, 163, 184, 0.3)",
+          background: "rgba(255, 255, 255, 0.85)",
+          boxShadow: "0 8px 18px rgba(15, 23, 42, 0.06)",
+        }}
+      >
+        <h4 style={{ margin: "0 0 6px", fontSize: "1rem", color: "#0f172a" }}>Attachments</h4>
+        <p style={{ margin: "0 0 14px", color: "#64748b", fontSize: "0.88rem" }}>
+          Attachments are read-only here. You can view or download files.
+        </p>
+
+        {isLoadingAttachments ? (
+          <div style={{ color: "#64748b", fontSize: "0.92rem" }}>Loading attachments...</div>
+        ) : attachments.length === 0 ? (
+          <div
+            style={{
+              borderRadius: "12px",
+              border: "1px dashed rgba(148, 163, 184, 0.45)",
+              padding: "14px",
+              color: "#64748b",
+              background: "rgba(248, 250, 252, 0.86)",
+            }}
+          >
+            {currentEvent.has_attachments ? "No files uploaded yet." : "Attachments are disabled for this event."}
+          </div>
+        ) : (
+          <div style={{ display: "grid", gap: "10px" }}>
+            {attachments.map((attachment) => {
+              const fileLabel = getAttachmentLabel(attachment);
+
+              return (
+                <div
+                  key={attachment.id}
+                  style={{
+                    display: "flex",
+                    gap: "10px",
+                    alignItems: "center",
+                    borderRadius: "12px",
+                    padding: "10px 12px",
+                    border: "1px solid rgba(148, 163, 184, 0.24)",
+                    background: "rgba(248, 250, 252, 0.92)",
+                  }}
+                >
+                  <div
+                    title={fileLabel}
+                    style={{
+                      flex: 1,
+                      minWidth: 0,
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                      color: "#0f172a",
+                      fontSize: "0.9rem",
+                    }}
+                  >
+                    {fileLabel}
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => viewAttachment(attachment)}
+                    style={{
+                      border: "1px solid rgba(14, 116, 144, 0.3)",
+                      background: "rgba(14, 116, 144, 0.1)",
+                      color: "#0f4c5c",
+                      borderRadius: "8px",
+                      padding: "6px 10px",
+                      cursor: "pointer",
+                      fontWeight: 600,
+                      fontSize: "0.82rem",
+                    }}
+                  >
+                    View
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => downloadAttachment(attachment)}
+                    style={{
+                      border: "1px solid rgba(30, 64, 175, 0.35)",
+                      background: "rgba(59, 130, 246, 0.12)",
+                      color: "#1e3a8a",
+                      borderRadius: "8px",
+                      padding: "6px 10px",
+                      cursor: "pointer",
+                      fontWeight: 600,
+                      fontSize: "0.82rem",
+                    }}
+                  >
+                    Download
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </section>
 
       <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "2px" }}>
         <button
@@ -523,6 +710,16 @@ export default function ViewEvent({ event, onClose, onUpdated }) {
             onUpdated?.();
           }}
         />
+      </Modal>
+
+      <Modal
+        isOpen={isModeratorProfileOpen}
+        onClose={closeModeratorProfile}
+        title="Moderator Profile"
+        contentClassName="profile-modal-content"
+        bodyClassName="profile-modal-body"
+      >
+        {selectedModeratorId ? <ProfilePage userId={selectedModeratorId} /> : null}
       </Modal>
     </div>
   );

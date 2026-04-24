@@ -17,17 +17,18 @@ export default function IconSidebar({ onIconClick, activePage }) {
   const topIcons = [
     { id: "users", icon: FaRegIdCard, name: "Users", minRole: "Admin" },
     { id: "moderators", icon: FiShield, name: "Moderators", minRole: "Moderator" },
-    { id: "operations", icon: FaCog, name: "Operations" , minRole: "Moderator" },
+    { id: "operations", icon: FaCog, name: "Operations" , minRole: "Admin" },
     { id: "programs", icon: FiBook, name: "Programs", minRole: "Admin" },
     { id: "courses", icon: FiBookOpen, name: "Courses" , minRole: "Moderator"},
     { id: "materials", icon: FaLayerGroup, name: "Materials", minRole: "Student" },
-    { id: "groups", icon: GrGroup, name: "Groups", minRole: "Moderator" },
-    { id: "subgroups", icon: FaPeopleRoof , name: "Subgroups", minRole: "Moderator" },
+    { id: "groups", icon: GrGroup, name: "Groups", minRole: "Admin" },
+    { id: "subgroups", icon: FaPeopleRoof , name: "Subgroups", minRole: "Admin" },
     { id: "vacations", icon: FaRegCalendarTimes, name: "Vacations", minRole: "Moderator" },
     { id: "departments", icon: GoOrganization, name: "Departments", minRole: "Admin" },
     { id: "botinfo", icon: FaRobot, name: "Bot Info", minRole: "Admin" },
-    { id: "slotinfo", icon: MdOutlineGroupWork, name: "SlotInfo", minRole: "Moderator" },
+    { id: "slotinfo", icon: MdOutlineGroupWork, name: "SlotInfo", minRole: "Admin" },
     { id: "routines", icon: FiActivity, name: "Routines", minRole: "Moderator" },
+    { id: "viewinstitute", icon: FiSun, name: "Institute", minRole: "Student" },
     { id: "search", icon: FiSearch, name: "Search", minRole: "Student" },
   ];
   

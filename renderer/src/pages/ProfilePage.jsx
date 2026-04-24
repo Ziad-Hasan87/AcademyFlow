@@ -37,6 +37,7 @@ export default function ProfilePage({ userId }) {
   const cloudinaryCloudName = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME;
   const cloudinaryUploadPreset = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET;
   const [profileData, setProfileData] = useState(null);
+  const [currentUserProfile, setCurrentUserProfile] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("schedule");
   const [dateRange, setDateRange] = useState(getWeekRange());
@@ -51,10 +52,13 @@ export default function ProfilePage({ userId }) {
     userData?.id !== undefined &&
     userId !== undefined &&
     String(userData.id) === String(userId);
+  const isOwnProfile = canUploadProfileImage;
   const hasProfileImage = Boolean(profileData?.image_path);
   const isImageActionBusy = isUploadingImage || isDeletingImage;
   const fullSizeProfileImageUrl = profileData?.image_path || "";
   const profileImageUrl600 = withCloudinaryMaxWidth(fullSizeProfileImageUrl, 600);
+
+  const toSingleProfile = (payload) => (Array.isArray(payload) ? payload[0] : payload) || null;
 
   useEffect(() => {
     const fetchUserProfile = async () => {
@@ -74,8 +78,7 @@ export default function ProfilePage({ userId }) {
         console.error("Error fetching user profile:", error);
         setProfileData(null);
       } else {
-        const profile = Array.isArray(data) ? data[0] : data;
-        setProfileData(profile || null);
+        setProfileData(toSingleProfile(data));
       }
 
       setIsLoading(false);
@@ -83,6 +86,29 @@ export default function ProfilePage({ userId }) {
 
     fetchUserProfile();
   }, [userId]);
+
+  useEffect(() => {
+    const fetchCurrentUserProfile = async () => {
+      if (!userData?.id) {
+        setCurrentUserProfile(null);
+        return;
+      }
+
+      const { data, error } = await supabase.rpc("get_user_profile", {
+        p_user_id: userData.id,
+      });
+
+      if (error) {
+        console.error("Error fetching current user profile:", error);
+        setCurrentUserProfile(null);
+        return;
+      }
+
+      setCurrentUserProfile(toSingleProfile(data));
+    };
+
+    fetchCurrentUserProfile();
+  }, [userData?.id]);
 
   useEffect(() => {
     const fetchUserCourses = async () => {
@@ -129,6 +155,10 @@ export default function ProfilePage({ userId }) {
     }
   };
 
+  const handleDummyMessage = () => {
+    alert("Messaging is coming soon.");
+  };
+
   const hasValue = (value) => {
     if (value === null || value === undefined) return false;
     if (typeof value === "string") return value.trim().length > 0;
@@ -149,6 +179,10 @@ export default function ProfilePage({ userId }) {
   ].filter((field) => hasValue(field.value));
 
   const avatarLabel = profileData?.name?.trim()?.charAt(0)?.toUpperCase() || "?";
+  const currentUserRole = currentUserProfile?.role || userData?.role || "";
+  const viewedUserRole = profileData?.role || "";
+  const shouldHideActionButton = !isOwnProfile && currentUserRole === "Student" && viewedUserRole === "Student";
+  const shouldShowMessageButton = !isOwnProfile && !shouldHideActionButton;
 
   const shiftWeek = (direction) => {
     setDateRange((prev) => {
@@ -385,10 +419,27 @@ export default function ProfilePage({ userId }) {
                 </div>
               ))}
 
-            <button onClick={handleLogout} className="logout-button">
-              <FiLogOut size={20} />
-              Logout
-            </button>
+            {isOwnProfile && (
+              <button onClick={handleLogout} className="logout-button">
+                <FiLogOut size={20} />
+                Logout
+              </button>
+            )}
+
+            {shouldShowMessageButton && (
+              <button
+                type="button"
+                className="logout-button"
+                onClick={handleDummyMessage}
+                style={{
+                  background: "linear-gradient(120deg, #1d4ed8 0%, #2563eb 45%, #0284c7 100%)",
+                  color: "#eff6ff",
+                  border: "1px solid rgba(147, 197, 253, 0.45)",
+                }}
+              >
+                Message
+              </button>
+            )}
           </div>
         </section>
 

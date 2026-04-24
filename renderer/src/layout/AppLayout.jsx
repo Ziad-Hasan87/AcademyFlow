@@ -12,6 +12,7 @@ import IconSidebar from "../components/IconSidebar"; // ✅ import icon sidebar
 import Modal from "../components/Modal";
 import ProfilePage from "../pages/ProfilePage";
 import MaterialsPage from "../pages/MaterialsPage";
+import ViewInstitute from "../pages/ViewInstitute";
 import UserSearch from "../components/UserSearch";
 import Toast from "../components/Toast";
 import { useAuth } from "../contexts/AuthContext";
@@ -37,6 +38,7 @@ export default function AppLayout() {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isMaterialsOpen, setIsMaterialsOpen] = useState(false);
+  const [isInstituteOpen, setIsInstituteOpen] = useState(false);
   const [selectedProfileUserId, setSelectedProfileUserId] = useState(null);
   const [selectedCalendarDate, setSelectedCalendarDate] = useState(getTodayDateString());
 
@@ -69,6 +71,11 @@ export default function AppLayout() {
       return;
     }
 
+    if (pageId === "viewinstitute") {
+      setIsInstituteOpen(true);
+      return;
+    }
+
     setActivePage(pageId);
   };
 
@@ -93,6 +100,8 @@ export default function AppLayout() {
                 ? "search"
                 : isMaterialsOpen
                   ? "materials"
+                  : isInstituteOpen
+                    ? "viewinstitute"
                   : activePage
           }
         />
@@ -180,6 +189,16 @@ export default function AppLayout() {
         bodyClassName="materials-modal-body"
       >
         <MaterialsPage />
+      </Modal>
+
+      <Modal
+        isOpen={isInstituteOpen}
+        onClose={() => setIsInstituteOpen(false)}
+        title="Institute"
+        contentClassName="profile-modal-content"
+        bodyClassName="profile-modal-body"
+      >
+        <ViewInstitute />
       </Modal>
 
       {/* Toast Notifications */}

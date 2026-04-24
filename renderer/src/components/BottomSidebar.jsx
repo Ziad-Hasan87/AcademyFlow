@@ -145,31 +145,27 @@ export default function BottomSidebar({ height, startDate, endDate, onEventsFetc
         const initializeCurrentUserFilter = async () => {
             if (!currentUserId || hasInitializedFilter) return;
 
-            const { data, error } = await supabase.rpc("get_user_profile_ids", {
-                p_user_id: currentUserId,
-            });
+            if (userData?.role === "Teacher") {
+                const { data: staffProfile, error: staffError } = await supabase
+                    .from("staffs")
+                    .select("department_id")
+                    .eq("id", currentUserId)
+                    .maybeSingle();
 
-            if (error) {
-                console.error("Error fetching user profile ids:", error);
-                setHasInitializedFilter(true);
-                return;
-            }
+                if (staffError) {
+                    console.error("Error fetching teacher profile ids:", staffError);
+                    setHasInitializedFilter(true);
+                    return;
+                }
 
-            const profile = Array.isArray(data) ? data[0] : data;
-            if (!profile) {
-                setHasInitializedFilter(true);
-                return;
-            }
-
-            if (profile.role === "Teacher") {
                 setFilters((prev) => {
                     if (!prev.length) return prev;
                     const newFilters = [...prev];
                     newFilters[0] = {
                         ...newFilters[0],
                         role: "Teacher",
-                        selectedDepartment: profile.department_id || "",
-                        selectedTeacher: profile.user_id || "",
+                        selectedDepartment: staffProfile?.department_id || "",
+                        selectedTeacher: currentUserId || "",
                         selectedProgram: "",
                         selectedOperation: "",
                         selectedGroup: "",
@@ -182,17 +178,29 @@ export default function BottomSidebar({ height, startDate, endDate, onEventsFetc
                     return newFilters;
                 });
                 setAutoApplyPending(true);
-            } else if (profile.role === "Student") {
+            } else if (userData?.role === "Student") {
+                const { data: studentProfile, error: studentError } = await supabase
+                    .from("students")
+                    .select("program_id, operation_id, group_id, subgroup_id")
+                    .eq("id", currentUserId)
+                    .maybeSingle();
+
+                if (studentError) {
+                    console.error("Error fetching student profile ids:", studentError);
+                    setHasInitializedFilter(true);
+                    return;
+                }
+
                 setFilters((prev) => {
                     if (!prev.length) return prev;
                     const newFilters = [...prev];
                     newFilters[0] = {
                         ...newFilters[0],
                         role: "Student",
-                        selectedProgram: profile.program_id || "",
-                        selectedOperation: profile.operation_id || "",
-                        selectedGroup: profile.group_id || "",
-                        selectedSubgroup: profile.subgroup_id || "",
+                        selectedProgram: studentProfile?.program_id || "",
+                        selectedOperation: studentProfile?.operation_id || "",
+                        selectedGroup: studentProfile?.group_id || "",
+                        selectedSubgroup: studentProfile?.subgroup_id || "",
                         selectedDepartment: "",
                         selectedTeacher: "",
                         teachers: [],
@@ -206,7 +214,7 @@ export default function BottomSidebar({ height, startDate, endDate, onEventsFetc
         };
 
         initializeCurrentUserFilter();
-    }, [currentUserId, hasInitializedFilter]);
+    }, [currentUserId, hasInitializedFilter, userData?.role]);
 
     const addFilterRow = () => {
         setFilters((prev) => [

@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useAuth } from "../contexts/AuthContext";
 import { fetchSlots } from "../utils/fetch";
+import { hasPermission } from "../utils/types";
 import Modal from "./Modal";
 import CreateEvent from "./CreateEvent";
 import ViewEvent from "./ViewEvent";
@@ -17,6 +18,7 @@ const WEEKDAY_NAMES = [
 
 export default function MainContent({ events, startOfWeek, endOfWeek, onCreateEvent, onRefreshEvents }) {
   const { userData } = useAuth();
+  const canCreateEvent = hasPermission(userData?.role, "Observer");
   const [slots, setSlots] = useState([]);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isViewOpen, setIsViewOpen] = useState(false);
@@ -442,56 +444,58 @@ export default function MainContent({ events, startOfWeek, endOfWeek, onCreateEv
           })}
 
           {/* + BUTTON LAYER */}
-          <div
-            style={{
-              position: "absolute",
-              top: 0,
-              left: 0,
-              zIndex: 30,
-              display: "grid",
-              gridTemplateColumns: `repeat(${slots.length + 1}, 1fr)`,
-              gridTemplateRows: gridRows,
-              width: "100%",
-              height: "100%",
-              pointerEvents: "none",
-            }}
-          >
-            {days.map((day, dayIndex) =>
-              slots.map((slot) => (
-                <button
-                  key={`${day.date}-${slot.id}-btn`}
-                  className="schedule-add-btn"
-                  style={{
-                    gridRow: dayIndex + 2,
-                    gridColumn: slotIndexMap[slot.id] + 2,
-                    width: "20px",
-                    height: "20px",
-                    marginTop: "2px",
-                    marginLeft: "2px",
-                    borderRadius: "6px",
-                    border: "1px solid rgba(148, 163, 184, 0.45)",
-                    background: "linear-gradient(120deg, #d1fae5 0%, #bfdbfe 100%)",
-                    color: "#0f172a",
-                    fontWeight: 700,
-                    cursor: "pointer",
-                    zIndex: 20,
-                    boxShadow: "0 4px 10px rgba(15, 23, 42, 0.12)",
-                    opacity: hoveredCellKey === getCellKey(day.date, slot.id) ? 1 : 0,
-                    pointerEvents: hoveredCellKey === getCellKey(day.date, slot.id) ? "auto" : "none",
-                  }}
-                  onMouseEnter={() => setHoveredCellKey(getCellKey(day.date, slot.id))}
-                  onMouseLeave={() => setHoveredCellKey(null)}
-                  onClick={() => {
-                    setSelectedCreateDate(day.date);
-                    setSelectedCreateStartSlotId(slot.id);
-                    setIsCreateOpen(true);
-                  }}
-                >
-                  +
-                </button>
-              ))
-            )}
-          </div>
+          {canCreateEvent && (
+            <div
+              style={{
+                position: "absolute",
+                top: 0,
+                left: 0,
+                zIndex: 30,
+                display: "grid",
+                gridTemplateColumns: `repeat(${slots.length + 1}, 1fr)`,
+                gridTemplateRows: gridRows,
+                width: "100%",
+                height: "100%",
+                pointerEvents: "none",
+              }}
+            >
+              {days.map((day, dayIndex) =>
+                slots.map((slot) => (
+                  <button
+                    key={`${day.date}-${slot.id}-btn`}
+                    className="schedule-add-btn"
+                    style={{
+                      gridRow: dayIndex + 2,
+                      gridColumn: slotIndexMap[slot.id] + 2,
+                      width: "20px",
+                      height: "20px",
+                      marginTop: "2px",
+                      marginLeft: "2px",
+                      borderRadius: "6px",
+                      border: "1px solid rgba(148, 163, 184, 0.45)",
+                      background: "linear-gradient(120deg, #d1fae5 0%, #bfdbfe 100%)",
+                      color: "#0f172a",
+                      fontWeight: 700,
+                      cursor: "pointer",
+                      zIndex: 20,
+                      boxShadow: "0 4px 10px rgba(15, 23, 42, 0.12)",
+                      opacity: hoveredCellKey === getCellKey(day.date, slot.id) ? 1 : 0,
+                      pointerEvents: hoveredCellKey === getCellKey(day.date, slot.id) ? "auto" : "none",
+                    }}
+                    onMouseEnter={() => setHoveredCellKey(getCellKey(day.date, slot.id))}
+                    onMouseLeave={() => setHoveredCellKey(null)}
+                    onClick={() => {
+                      setSelectedCreateDate(day.date);
+                      setSelectedCreateStartSlotId(slot.id);
+                      setIsCreateOpen(true);
+                    }}
+                  >
+                    +
+                  </button>
+                ))
+              )}
+            </div>
+          )}
         </div>
       </div>
       <Modal

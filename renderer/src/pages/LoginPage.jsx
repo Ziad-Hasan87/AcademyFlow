@@ -2,7 +2,6 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { logIn } from "../utils/authentication";
 import { useAuth } from "../contexts/AuthContext";
-import supabase from "../utils/supabase";
 import "../App.css";
 
 export default function LoginPage() {
@@ -22,31 +21,9 @@ export default function LoginPage() {
     }
 
     try {
-      // 1️⃣ Authenticate user
-      const user = await logIn(email, password);
-
-      // 2️⃣ Fetch user profile from public.users along with institute name
-      const { data: profile, error: profileError } = await supabase
-        .from("users")
-        .select(`
-          id,
-          role,
-          institute_id,
-          name,
-          institutes!inner(name)  -- join with institutes table
-        `)
-        .eq("id", user.id)
-        .single();
-
-      if (profileError) throw profileError;
-
-      // 3️⃣ Store auth in browser storage & update context
-      localStorage.setItem("isAuthenticated", "true");
-      
-      // Update auth context with user data
+      await logIn(email, password);
       await login();
 
-      // 4️⃣ Redirect
       navigate("/dashboard");
     } catch (err) {
       console.error(err);

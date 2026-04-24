@@ -4,6 +4,7 @@ import { useAuth } from "../contexts/AuthContext";
 
 export default function EditRoutineEvent({ event, slots = [], maxEndSlotId, onSuccess }) {
   const { userData } = useAuth();
+  const instituteId = userData?.institute_id;
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -26,6 +27,14 @@ export default function EditRoutineEvent({ event, slots = [], maxEndSlotId, onSu
   const [selectedGroupId, setSelectedGroupId] = useState("");
   const [selectedSubgroupId, setSelectedSubgroupId] = useState("");
 
+  const [departments, setDepartments] = useState([]);
+  const [selectedDepartment, setSelectedDepartment] = useState("");
+  const [teachers, setTeachers] = useState([]);
+  const [teacherSearchQuery, setTeacherSearchQuery] = useState("");
+  const [selectedTeacherToAdd, setSelectedTeacherToAdd] = useState("");
+  const [selectedModerators, setSelectedModerators] = useState([]);
+  const [showTeacherDropdown, setShowTeacherDropdown] = useState(false);
+
   const formatTimeToAMPM = (time24) => {
     if (!time24) return "";
     const [hourStr, minute] = time24.split(":");
@@ -33,6 +42,180 @@ export default function EditRoutineEvent({ event, slots = [], maxEndSlotId, onSu
     const ampm = hour >= 12 ? "PM" : "AM";
     hour = hour % 12 || 12;
     return `${hour}:${minute} ${ampm}`;
+  };
+
+  const getTeacherLabel = (teacher) => {
+    const teacherName = teacher.users?.name || teacher.name || "Unknown";
+    const codename = teacher.codename || "N/A";
+    return `${teacherName} - ${codename}`;
+  };
+
+  const loadModeratorsFromUserIds = async (userIds) => {
+    const normalizedIds = Array.from(new Set((userIds || []).filter(Boolean)));
+
+    if (normalizedIds.length === 0) {
+      setSelectedModerators([]);
+      return;
+    }
+
+    const { data: staffRows, error: staffRowsError } = await supabase
+      .from("staffs")
+      .select("id, codename, users:users!staffs_id_fkey(name)")
+      .in("id", normalizedIds);
+
+    if (staffRowsError) {
+      console.error("Error loading routine moderator profiles:", staffRowsError);
+      setSelectedModerators([]);
+      return;
+    }
+
+    const staffById = new Map((staffRows || []).map((teacher) => [teacher.id, teacher]));
+    const mergedModerators = normalizedIds.map((id) => {
+      const teacher = staffById.get(id);
+      return {
+        id,
+        label: teacher ? getTeacherLabel(teacher) : `Unknown - ${id}`,
+      };
+    });
+
+    setSelectedModerators(mergedModerators);
+  };
+
+  const loadRoutineModerators = async (recurringEventId, fallbackCourseId = null) => {
+    if (!recurringEventId) return;
+
+    const { data: moderatorRows, error: moderatorRowsError } = await supabase
+      .from("recurring_event_moderators")
+      .select("user_id")
+      .eq("recurring_event_id", recurringEventId);
+
+    if (moderatorRowsError) {
+      console.error("Error fetching routine event moderators:", moderatorRowsError);
+      if (!fallbackCourseId) {
+        setSelectedModerators([]);
+        return;
+      }
+
+      const { data: courseModeratorRows, error: courseModeratorError } = await supabase
+        .from("course_moderators")
+        .select("user_id")
+        .eq("course_id", fallbackCourseId);
+
+      if (courseModeratorError) {
+        console.error("Error fetching fallback course moderators:", courseModeratorError);
+        setSelectedModerators([]);
+        return;
+      }
+
+      await loadModeratorsFromUserIds((courseModeratorRows || []).map((row) => row.user_id));
+      return;
+    }
+
+    const userIds = (moderatorRows || []).map((row) => row.user_id).filter(Boolean);
+
+    if (userIds.length > 0) {
+      await loadModeratorsFromUserIds(userIds);
+      return;
+    }
+
+    if (!fallbackCourseId) {
+      setSelectedModerators([]);
+      return;
+    }
+
+    const { data: courseModeratorRows, error: courseModeratorError } = await supabase
+      .from("course_moderators")
+      .select("user_id")
+      .eq("course_id", fallbackCourseId);
+
+    if (courseModeratorError) {
+      console.error("Error fetching fallback course moderators:", courseModeratorError);
+      setSelectedModerators([]);
+      return;
+    }
+
+    await loadModeratorsFromUserIds((courseModeratorRows || []).map((row) => row.user_id));
+  };
+
+  const addSelectedModerator = () => {
+    if (!selectedTeacherToAdd) return;
+
+    const teacherToAdd = teachers.find((teacher) => teacher.id === selectedTeacherToAdd);
+    if (!teacherToAdd) return;
+
+    setSelectedModerators((prev) => {
+      if (prev.some((moderator) => moderator.id === teacherToAdd.id)) return prev;
+      return [
+        ...prev,
+        {
+          id: teacherToAdd.id,
+          label: getTeacherLabel(teacherToAdd),
+        },
+      ];
+    });
+
+    setSelectedTeacherToAdd("");
+    setTeacherSearchQuery("");
+    setShowTeacherDropdown(false);
+  };
+
+  const removeSelectedModerator = (userId) => {
+    setSelectedModerators((prev) => prev.filter((moderator) => moderator.id !== userId));
+  };
+
+  const filteredTeachers = teachers.filter((teacher) => {
+    const teacherName = String(teacher.users?.name || teacher.name || "").toLowerCase();
+    const query = teacherSearchQuery.trim().toLowerCase();
+
+    if (!query) return true;
+
+    return teacherName.includes(query);
+  });
+
+  const handleTeacherSearchChange = (value) => {
+    setTeacherSearchQuery(value);
+    setSelectedTeacherToAdd("");
+    setShowTeacherDropdown(Boolean(value.trim()));
+  };
+
+  const handleTeacherOptionPick = (teacher) => {
+    setTeacherSearchQuery(getTeacherLabel(teacher));
+    setSelectedTeacherToAdd(teacher.id);
+    setShowTeacherDropdown(false);
+  };
+
+  const syncRoutineEventModerators = async (recurringEventId) => {
+    if (!recurringEventId) return false;
+
+    const { error: deleteError } = await supabase
+      .from("recurring_event_moderators")
+      .delete()
+      .eq("recurring_event_id", recurringEventId);
+
+    if (deleteError) {
+      console.error("Error clearing routine event moderators:", deleteError);
+      return false;
+    }
+
+    if (selectedModerators.length === 0) {
+      return true;
+    }
+
+    const rows = selectedModerators.map((moderator) => ({
+      user_id: moderator.id,
+      recurring_event_id: recurringEventId,
+    }));
+
+    const { error: insertError } = await supabase
+      .from("recurring_event_moderators")
+      .insert(rows);
+
+    if (insertError) {
+      console.error("Error saving routine event moderators:", insertError);
+      return false;
+    }
+
+    return true;
   };
 
   const fetchEventDetails = async () => {
@@ -123,11 +306,57 @@ export default function EditRoutineEvent({ event, slots = [], maxEndSlotId, onSu
         setSubgroups(subgroupOptions || []);
       }
     }
+
+    await loadRoutineModerators(event.id, eventData?.course_id || null);
   };
 
   useEffect(() => {
     fetchEventDetails();
   }, [event]);
+
+  useEffect(() => {
+    if (!instituteId) return;
+
+    const fetchDepartments = async () => {
+      const { data, error } = await supabase
+        .from("departments")
+        .select("id, name")
+        .eq("institute_id", instituteId)
+        .order("name", { ascending: true });
+
+      if (error) {
+        console.error("Error fetching departments:", error);
+        return;
+      }
+
+      setDepartments(data || []);
+    };
+
+    fetchDepartments();
+  }, [instituteId]);
+
+  useEffect(() => {
+    if (!selectedDepartment) {
+      setTeachers([]);
+      setSelectedTeacherToAdd("");
+      setTeacherSearchQuery("");
+      setShowTeacherDropdown(false);
+      return;
+    }
+
+    supabase
+      .from("staffs")
+      .select("id, codename, users:users!staffs_id_fkey(name)")
+      .eq("department_id", selectedDepartment)
+      .then(({ data, error }) => {
+        if (error) {
+          console.error("Error fetching teachers:", error);
+          return;
+        }
+
+        setTeachers(data || []);
+      });
+  }, [selectedDepartment]);
 
   useEffect(() => {
     if (!slots.length || !event) return;
@@ -231,6 +460,11 @@ export default function EditRoutineEvent({ event, slots = [], maxEndSlotId, onSu
       alert("Error updating event");
 
     } else {
+      const moderatorsSynced = await syncRoutineEventModerators(event.id);
+
+      if (!moderatorsSynced) {
+        alert("Routine event updated, but moderators could not be saved.");
+      }
 
       onSuccess?.();
     }
@@ -411,6 +645,90 @@ export default function EditRoutineEvent({ event, slots = [], maxEndSlotId, onSu
           />
           Reschedulable
         </label>
+      </div>
+
+      <div className="form-group-box">
+        <h4 className="form-section-title">Add Event Moderators</h4>
+
+        <div className="form-field">
+          <label>Department</label>
+          <select
+            className="form-select"
+            value={selectedDepartment}
+            onChange={(e) => setSelectedDepartment(e.target.value)}
+          >
+            <option value="">Select Department</option>
+            {departments.map((department) => (
+              <option key={department.id} value={department.id}>
+                {department.name}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="form-field autocomplete-container">
+          <label>Teacher</label>
+          <input
+            className="form-input"
+            placeholder="Type teacher name"
+            value={teacherSearchQuery}
+            onChange={(e) => handleTeacherSearchChange(e.target.value)}
+            onFocus={() => setShowTeacherDropdown(Boolean(teacherSearchQuery.trim()))}
+            disabled={!selectedDepartment}
+            autoComplete="off"
+          />
+
+          {showTeacherDropdown && selectedDepartment && teacherSearchQuery.trim() && (
+            <div className="autocomplete-list">
+              {filteredTeachers.length === 0 ? (
+                <div className="autocomplete-item moderator-empty-item">No teachers found</div>
+              ) : (
+                filteredTeachers.map((teacher) => (
+                  <div
+                    key={teacher.id}
+                    className="autocomplete-item"
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      handleTeacherOptionPick(teacher);
+                    }}
+                  >
+                    {getTeacherLabel(teacher)}
+                  </div>
+                ))
+              )}
+            </div>
+          )}
+        </div>
+
+        <div className="moderator-actions-row">
+          <button
+            type="button"
+            className="form-submit"
+            onClick={addSelectedModerator}
+            disabled={!selectedTeacherToAdd}
+          >
+            Add
+          </button>
+        </div>
+
+        {selectedModerators.length > 0 && (
+          <ul className="moderator-list">
+            {selectedModerators.map((moderator) => (
+              <li key={moderator.id} className="moderator-item">
+                <span className="moderator-name">{moderator.label}</span>
+                <button
+                  type="button"
+                  className="moderator-remove-btn"
+                  onClick={() => removeSelectedModerator(moderator.id)}
+                  title="Remove moderator"
+                  aria-label={`Remove ${moderator.label}`}
+                >
+                  ×
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
 
       <div className="form-buttons" style={{ gap: "10px" }}>

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import {
+  FiArchive,
   FiChevronDown,
   FiChevronRight,
   FiDownload,
@@ -7,6 +8,7 @@ import {
   FiFolder,
   FiSettings,
 } from "react-icons/fi";
+import JSZip from "jszip";
 import supabase from "../utils/supabase";
 import { useAuth } from "../contexts/AuthContext";
 import { hasPermission } from "../utils/types";
@@ -207,9 +209,64 @@ function formatDateTime(value) {
   });
 }
 
+function sanitizeZipSegment(value) {
+  const text = String(value || "folder").trim();
+  const sanitized = text.replace(/[<>:"/\\|?*\x00-\x1F]/g, "_");
+  return sanitized || "folder";
+}
+
+function toUniqueFileName(fileName, nameCounterMap) {
+  const input = String(fileName || "attachment").trim() || "attachment";
+  const dotIndex = input.lastIndexOf(".");
+  const hasExt = dotIndex > 0 && dotIndex < input.length - 1;
+  const base = hasExt ? input.slice(0, dotIndex) : input;
+  const ext = hasExt ? input.slice(dotIndex) : "";
+
+  const currentCount = nameCounterMap.get(input) || 0;
+  nameCounterMap.set(input, currentCount + 1);
+
+  if (currentCount === 0) return input;
+  return `${base} (${currentCount})${ext}`;
+}
+
+async function addNodeToZip(node, zipFolder, failedFiles) {
+  if (!node || !zipFolder) return;
+
+  if (node.type === "event") {
+    const fileNameCounter = new Map();
+
+    for (const attachment of node.attachments || []) {
+      const filePath = attachment?.path;
+      if (!filePath) continue;
+
+      const { data, error } = await supabase.storage.from("attachments").download(filePath);
+
+      const fallbackLabel = attachment?.name || filePath.split("/").pop() || "attachment";
+      const safeBaseName = sanitizeZipSegment(fallbackLabel);
+      const uniqueFileName = toUniqueFileName(safeBaseName, fileNameCounter);
+
+      if (error || !data) {
+        failedFiles.push(uniqueFileName);
+        continue;
+      }
+
+      zipFolder.file(uniqueFileName, data);
+    }
+
+    return;
+  }
+
+  for (const child of node.children || []) {
+    const childFolderName = sanitizeZipSegment(child.label || child.type || "folder");
+    const childFolder = zipFolder.folder(childFolderName);
+    await addNodeToZip(child, childFolder, failedFiles);
+  }
+}
+
 export default function MaterialsPage() {
   const { userData } = useAuth();
   const [loading, setLoading] = useState(false);
+  const [isDownloadingFolder, setIsDownloadingFolder] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [materials, setMaterials] = useState([]);
   const [selectedNodeId, setSelectedNodeId] = useState("");
@@ -234,14 +291,15 @@ export default function MaterialsPage() {
       let studentProgramId = null;
 
       if (isStudent) {
-        const { data: profileData, error: profileError } = await supabase.rpc("get_user_profile_ids", {
-          p_user_id: userId,
-        });
+        const { data: profileData, error: profileError } = await supabase
+          .from("students")
+          .select("program_id")
+          .eq("id", userId)
+          .maybeSingle();
 
         if (profileError) throw profileError;
 
-        const profile = Array.isArray(profileData) ? profileData[0] : profileData;
-        studentProgramId = profile?.program_id;
+        studentProgramId = profileData?.program_id;
 
         if (!studentProgramId) {
           setMaterials([]);
@@ -413,6 +471,45 @@ export default function MaterialsPage() {
     URL.revokeObjectURL(url);
   };
 
+  const downloadSelectedFolder = async () => {
+    if (!selectedNode) return;
+
+    const attachmentCount = collectAttachments(selectedNode).length;
+    if (attachmentCount === 0) {
+      alert("This folder has no files to download.");
+      return;
+    }
+
+    setIsDownloadingFolder(true);
+
+    try {
+      const zip = new JSZip();
+      const folderName = sanitizeZipSegment(selectedPath[selectedPath.length - 1] || "materials");
+      const rootFolder = zip.folder(folderName);
+      const failedFiles = [];
+
+      await addNodeToZip(selectedNode, rootFolder, failedFiles);
+
+      const zipBlob = await zip.generateAsync({ type: "blob" });
+      const zipUrl = URL.createObjectURL(zipBlob);
+      const anchor = document.createElement("a");
+      anchor.href = zipUrl;
+      anchor.download = `${folderName}.zip`;
+      anchor.click();
+      URL.revokeObjectURL(zipUrl);
+
+      if (failedFiles.length > 0) {
+        console.warn("Some files could not be added to ZIP:", failedFiles);
+        alert(`ZIP downloaded, but ${failedFiles.length} file(s) could not be included.`);
+      }
+    } catch (error) {
+      console.error("Error creating folder ZIP:", error);
+      alert("Failed to create ZIP for this folder.");
+    } finally {
+      setIsDownloadingFolder(false);
+    }
+  };
+
   return (
     <div className="materials-finder-shell">
       <div className="materials-finder-window materials-file-manager-layout">
@@ -461,6 +558,16 @@ export default function MaterialsPage() {
             </span>
             <div className="materials-status-actions">
               <span>{totalAttachmentCount} total files</span>
+              <button
+                type="button"
+                className="materials-inline-refresh"
+                onClick={downloadSelectedFolder}
+                disabled={!selectedNode || loading || isDownloadingFolder}
+                title="Download selected folder as ZIP"
+              >
+                <FiArchive size={13} />
+                {isDownloadingFolder ? "Preparing ZIP..." : "Download This Folder"}
+              </button>
               <button type="button" className="materials-inline-refresh" onClick={loadMaterials}>
                 Refresh
               </button>

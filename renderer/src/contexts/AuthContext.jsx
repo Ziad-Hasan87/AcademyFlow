@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { getUserProfile, logOut as logOutAuth } from "../utils/authentication";
+import supabase from "../utils/supabase";
 
 // Create the context
 const AuthContext = createContext();
@@ -10,30 +11,61 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Fetch user profile on component mount
   useEffect(() => {
-    const fetchUserData = async () => {
+    let isMounted = true;
+
+    const syncUserFromSession = async (session) => {
+      if (!isMounted) return;
+
       try {
         setLoading(true);
-        const isAuthenticated = localStorage.getItem("isAuthenticated") === "true";
-        
-        if (isAuthenticated) {
+
+        if (session?.user) {
           const profile = await getUserProfile();
-          setUserData(profile);
+          if (profile) {
+            setUserData(profile);
+            localStorage.setItem("isAuthenticated", "true");
+          } else {
+            setUserData(null);
+            localStorage.removeItem("isAuthenticated");
+          }
         } else {
           setUserData(null);
+          localStorage.removeItem("isAuthenticated");
         }
+
         setError(null);
       } catch (err) {
         console.error("Error fetching user profile:", err);
         setError(err.message);
         setUserData(null);
+        localStorage.removeItem("isAuthenticated");
       } finally {
-        setLoading(false);
+        if (isMounted) setLoading(false);
       }
     };
 
-    fetchUserData();
+    const initializeAuth = async () => {
+      const { data, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError) {
+        console.error("Error loading auth session:", sessionError);
+      }
+
+      await syncUserFromSession(data?.session || null);
+    };
+
+    initializeAuth();
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      void syncUserFromSession(session || null);
+    });
+
+    return () => {
+      isMounted = false;
+      subscription?.unsubscribe?.();
+    };
   }, []);
 
   // Logout function that clears context
