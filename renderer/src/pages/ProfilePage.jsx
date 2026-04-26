@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import supabase from "../utils/supabase";
 import ProfileRoutine from "../components/ProfileRoutine";
 import Modal from "../components/Modal";
+import MesageConversation from "../components/MesageConversation";
 
 const withCloudinaryMaxWidth = (imageUrl, width) => {
   if (!imageUrl) return imageUrl;
@@ -46,6 +47,8 @@ export default function ProfilePage({ userId }) {
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [isDeletingImage, setIsDeletingImage] = useState(false);
   const [isImageModalOpen, setIsImageModalOpen] = useState(false);
+  const [isConversationModalOpen, setIsConversationModalOpen] = useState(false);
+  const [activeConversationId, setActiveConversationId] = useState(null);
   const fileInputRef = useRef(null);
 
   const canUploadProfileImage =
@@ -155,8 +158,9 @@ export default function ProfilePage({ userId }) {
     }
   };
 
-  const handleDummyMessage = () => {
-    alert("Messaging is coming soon.");
+  const handleOpenMessage = () => {
+    setActiveConversationId(null);
+    setIsConversationModalOpen(true);
   };
 
   const hasValue = (value) => {
@@ -430,7 +434,7 @@ export default function ProfilePage({ userId }) {
               <button
                 type="button"
                 className="logout-button"
-                onClick={handleDummyMessage}
+                onClick={handleOpenMessage}
                 style={{
                   background: "linear-gradient(120deg, #1d4ed8 0%, #2563eb 45%, #0284c7 100%)",
                   color: "#eff6ff",
@@ -540,6 +544,20 @@ export default function ProfilePage({ userId }) {
             className="profile-image-preview-full"
           />
         )}
+      </Modal>
+
+      <Modal
+        isOpen={isConversationModalOpen && shouldShowMessageButton}
+        onClose={() => setIsConversationModalOpen(false)}
+        title="Conversation"
+        contentClassName="profile-modal-content"
+        bodyClassName="profile-modal-body"
+      >
+        <MesageConversation
+          conversationId={activeConversationId}
+          targetUserId={userId}
+          onConversationReady={setActiveConversationId}
+        />
       </Modal>
     </>
   );

@@ -34,7 +34,7 @@ export default function AppLayout() {
 
   const [showCreateRoutine, setShowCreateRoutine] = useState(false);
   const [showCreateUser, setShowCreateUser] = useState(false); // ✅ modal state
-  const [activePage, setActivePage] = useState(null); // active page state
+  const [activePage, setActivePage] = useState("messages"); // active page state
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isMaterialsOpen, setIsMaterialsOpen] = useState(false);
@@ -61,13 +61,13 @@ export default function AppLayout() {
       return;
     }
 
-    if (pageId === "search") {
-      setIsSearchOpen(true);
+    if (pageId === "materials") {
+      setIsMaterialsOpen(true);
       return;
     }
 
-    if (pageId === "materials") {
-      setIsMaterialsOpen(true);
+    if (pageId === "search") {
+      setIsSearchOpen(true);
       return;
     }
 
@@ -157,6 +157,7 @@ export default function AppLayout() {
           setWeekRange={setWeekRange}
           selectedDate={selectedCalendarDate}
           onSelectedDateChange={setSelectedCalendarDate}
+          events={events}
         />
       </div>
 

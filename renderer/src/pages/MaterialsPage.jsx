@@ -25,10 +25,10 @@ function formatEventDate(dateValue) {
   return `${year}-${month}-${day}`;
 }
 
-function buildTeacherHierarchy(materialRows) {
+function buildTeacherHierarchy(materialRows, submissionRows = []) {
   const programMap = new Map();
 
-  materialRows.forEach((row) => {
+  const ensureEventNode = (row) => {
     const programName = row.program_name || "Unknown Program";
     const operationName = row.operation_name || "Unknown Operation";
     const courseName = row.course_name || "Unknown Course";
@@ -53,17 +53,50 @@ function buildTeacherHierarchy(materialRows) {
     const eventMap = courseMap.get(courseName);
     if (!eventMap.has(eventKey)) {
       eventMap.set(eventKey, {
+        id: row.event_id,
         title: eventTitle,
         date: eventDate,
         attachments: [],
+        submissionFoldersMap: new Map(),
       });
     }
 
-    eventMap.get(eventKey).attachments.push({
+    return eventMap.get(eventKey);
+  };
+
+  materialRows.forEach((row) => {
+    const eventNode = ensureEventNode(row);
+
+    eventNode.attachments.push({
       id: row.attachment_id,
       name: row.file_name || row.file_path?.split("/").pop() || "Attachment",
       path: row.file_path,
       availableAt: row.available_at,
+      bucket: "attachments",
+    });
+  });
+
+  submissionRows.forEach((row) => {
+    const eventNode = ensureEventNode(row);
+    const userName = String(row.user_name || "Unknown User").trim() || "Unknown User";
+    const rollNo = String(row.roll_no || "NA").trim() || "NA";
+    const folderName = `${userName}_${rollNo}`;
+
+    if (!eventNode.submissionFoldersMap.has(folderName)) {
+      eventNode.submissionFoldersMap.set(folderName, {
+        name: folderName,
+        submissions: [],
+      });
+    }
+
+    eventNode.submissionFoldersMap.get(folderName).submissions.push({
+      id: row.submission_id,
+      name: row.file_name || row.file_path?.split("/").pop() || "Submission",
+      path: row.file_path,
+      availableAt: row.submitted_at,
+      status: row.status || null,
+      deadline: row.deadline || null,
+      bucket: "submissions",
     });
   });
 
@@ -73,7 +106,13 @@ function buildTeacherHierarchy(materialRows) {
       name: operationName,
       courses: Array.from(courseMap.entries()).map(([courseName, eventMap]) => ({
         name: courseName,
-        events: Array.from(eventMap.values()),
+        events: Array.from(eventMap.values()).map((eventNode) => ({
+          id: eventNode.id,
+          title: eventNode.title,
+          date: eventNode.date,
+          attachments: eventNode.attachments,
+          submissionFolders: Array.from(eventNode.submissionFoldersMap.values()),
+        })),
       })),
     })),
   }));
@@ -162,7 +201,20 @@ function buildExplorerTree(materials, isStudent) {
           label: `${eventNode.title} - ${eventNode.date}`,
           type: "event",
           attachments: eventNode.attachments || [],
-          children: [],
+          children: [
+            {
+              id: `program-${programIndex}-${programNode.name}-operation-${operationIndex}-${operationNode.name}-course-${courseIndex}-${courseNode.name}-event-${eventIndex}-submissions`,
+              label: "Submissions",
+              type: "submissions-root",
+              children: (eventNode.submissionFolders || []).map((submissionFolder, submissionFolderIndex) => ({
+                id: `program-${programIndex}-${programNode.name}-operation-${operationIndex}-${operationNode.name}-course-${courseIndex}-${courseNode.name}-event-${eventIndex}-submission-user-${submissionFolderIndex}-${submissionFolder.name}`,
+                label: submissionFolder.name,
+                type: "submission-user",
+                attachments: submissionFolder.submissions || [],
+                children: [],
+              })),
+            },
+          ],
         })),
       })),
     })),
@@ -172,13 +224,10 @@ function buildExplorerTree(materials, isStudent) {
 function collectAttachments(node) {
   if (!node) return [];
 
-  if (node.type === "event") {
-    return node.attachments || [];
-  }
-
+  const ownAttachments = node.attachments || [];
   const fromChildren = (node.children || []).flatMap((child) => collectAttachments(child));
   const dedupedMap = new Map();
-  fromChildren.forEach((item) => {
+  [...ownAttachments, ...fromChildren].forEach((item) => {
     if (!dedupedMap.has(item.id)) {
       dedupedMap.set(item.id, item);
     }
@@ -232,14 +281,15 @@ function toUniqueFileName(fileName, nameCounterMap) {
 async function addNodeToZip(node, zipFolder, failedFiles) {
   if (!node || !zipFolder) return;
 
-  if (node.type === "event") {
+  if ((node.attachments || []).length > 0) {
     const fileNameCounter = new Map();
 
-    for (const attachment of node.attachments || []) {
+    for (const attachment of node.attachments) {
       const filePath = attachment?.path;
       if (!filePath) continue;
 
-      const { data, error } = await supabase.storage.from("attachments").download(filePath);
+      const bucket = attachment?.bucket || "attachments";
+      const { data, error } = await supabase.storage.from(bucket).download(filePath);
 
       const fallbackLabel = attachment?.name || filePath.split("/").pop() || "attachment";
       const safeBaseName = sanitizeZipSegment(fallbackLabel);
@@ -252,8 +302,6 @@ async function addNodeToZip(node, zipFolder, failedFiles) {
 
       zipFolder.file(uniqueFileName, data);
     }
-
-    return;
   }
 
   for (const child of node.children || []) {
@@ -353,6 +401,103 @@ export default function MaterialsPage() {
 
       if (scopedAttachmentsError) throw scopedAttachmentsError;
 
+      let flatSubmissionRows = [];
+
+      if (!isStudent) {
+        const { data: scopedSubmissions, error: scopedSubmissionsError } = await supabase
+          .from("submissions")
+          .select(`
+            id,
+            file_name,
+            file_path,
+            submitted_at,
+            status,
+            deadline,
+            event_id,
+            user_id,
+            events!inner(
+              id,
+              title,
+              date,
+              course_id,
+              courses!inner(
+                id,
+                name,
+                operations!inner(
+                  id,
+                  name,
+                  programs!inner(
+                    id,
+                    name,
+                    institution_id
+                  )
+                )
+              )
+            )
+          `)
+          .eq("events.courses.operations.programs.institution_id", instituteId);
+
+        if (scopedSubmissionsError) throw scopedSubmissionsError;
+
+        const submissionUserIds = Array.from(
+          new Set((scopedSubmissions || []).map((row) => row.user_id).filter(Boolean))
+        );
+
+        let usersById = new Map();
+        let studentsById = new Map();
+
+        if (submissionUserIds.length > 0) {
+          const [{ data: usersData, error: usersError }, { data: studentsData, error: studentsError }] = await Promise.all([
+            supabase
+              .from("users")
+              .select("id, name")
+              .in("id", submissionUserIds),
+            supabase
+              .from("students")
+              .select("id, roll_no")
+              .in("id", submissionUserIds),
+          ]);
+
+          if (usersError) throw usersError;
+          if (studentsError) throw studentsError;
+
+          usersById = new Map((usersData || []).map((row) => [row.id, row]));
+          studentsById = new Map((studentsData || []).map((row) => [row.id, row]));
+        }
+
+        flatSubmissionRows = (scopedSubmissions || [])
+          .filter((row) => row?.events?.courses)
+          .map((row) => {
+            const event = row.events;
+            const course = event.courses;
+            const operation = course.operations;
+            const program = operation?.programs;
+            const matchedUser = usersById.get(row.user_id);
+            const matchedStudent = studentsById.get(row.user_id);
+
+            return {
+              submission_id: row.id,
+              file_name: row.file_name,
+              file_path: row.file_path,
+              submitted_at: row.submitted_at,
+              status: row.status,
+              deadline: row.deadline,
+              event_id: event.id,
+              event_title: event.title,
+              event_date: event.date,
+              course_id: course.id,
+              course_name: course.name,
+              operation_name: operation?.name || null,
+              program_id: program?.id || null,
+              program_name: program?.name || null,
+              institution_id: program?.institution_id || null,
+              user_name: matchedUser?.name || "Unknown User",
+              roll_no: matchedStudent?.roll_no || "NA",
+            };
+          })
+          .filter((row) => row.institution_id === instituteId);
+      }
+
       const flatRows = (scopedAttachments || [])
         .filter((row) => row?.events?.courses)
         .map((row) => {
@@ -382,7 +527,7 @@ export default function MaterialsPage() {
       if (isStudent) {
         setMaterials(buildStudentHierarchy(flatRows));
       } else {
-        setMaterials(buildTeacherHierarchy(flatRows));
+        setMaterials(buildTeacherHierarchy(flatRows, flatSubmissionRows));
       }
     } catch (error) {
       console.error("Error loading materials:", error);
@@ -433,7 +578,7 @@ export default function MaterialsPage() {
   const visibleItems = useMemo(() => {
     if (!selectedNode) return [];
 
-    if (selectedNode.type === "event") {
+    if (selectedNode.type === "submission-user") {
       return (selectedNode.attachments || []).map((attachment) => ({
         id: `file-${attachment.id}`,
         kind: "file",
@@ -442,6 +587,28 @@ export default function MaterialsPage() {
         actionLabel: "Download",
         attachment,
       }));
+    }
+
+    if (selectedNode.type === "event") {
+      const fileItems = (selectedNode.attachments || []).map((attachment) => ({
+        id: `file-${attachment.id}`,
+        kind: "file",
+        name: attachment.name,
+        date: formatDateTime(attachment.availableAt),
+        actionLabel: "Download",
+        attachment,
+      }));
+
+      const folderItems = (selectedNode.children || []).map((child) => ({
+        id: `folder-${child.id}`,
+        kind: "folder",
+        name: child.label,
+        date: "-",
+        actionLabel: "Open",
+        childId: child.id,
+      }));
+
+      return [...folderItems, ...fileItems];
     }
 
     return (selectedNode.children || []).map((child) => ({
@@ -454,10 +621,11 @@ export default function MaterialsPage() {
     }));
   }, [selectedNode]);
 
-  const downloadAttachment = async (filePath, fileName) => {
-    if (!filePath) return;
+  const downloadVisibleFile = async (attachment) => {
+    if (!attachment?.path) return;
 
-    const { data, error } = await supabase.storage.from("attachments").download(filePath);
+    const bucket = attachment.bucket || "attachments";
+    const { data, error } = await supabase.storage.from(bucket).download(attachment.path);
     if (error) {
       alert("Failed to download material.");
       return;
@@ -466,7 +634,7 @@ export default function MaterialsPage() {
     const url = URL.createObjectURL(data);
     const anchor = document.createElement("a");
     anchor.href = url;
-    anchor.download = fileName || "attachment";
+    anchor.download = attachment.name || "attachment";
     anchor.click();
     URL.revokeObjectURL(url);
   };
@@ -607,7 +775,7 @@ export default function MaterialsPage() {
                           <button
                             type="button"
                             className="materials-file-download"
-                            onClick={() => downloadAttachment(item.attachment.path, item.attachment.name)}
+                            onClick={() => downloadVisibleFile(item.attachment)}
                           >
                             <FiDownload size={14} />
                             Download

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "../contexts/AuthContext";
 import { hasPermission } from "../utils/types";
 import supabase from "../utils/supabase";
@@ -107,11 +107,15 @@ export default function ViewEvent({ event, onClose, onUpdated }) {
   const [isLoadingModerators, setIsLoadingModerators] = useState(false);
   const [attachments, setAttachments] = useState([]);
   const [isLoadingAttachments, setIsLoadingAttachments] = useState(false);
+  const [studentSubmission, setStudentSubmission] = useState(null);
+  const [isLoadingSubmission, setIsLoadingSubmission] = useState(false);
+  const [isUploadingSubmission, setIsUploadingSubmission] = useState(false);
   const [audienceLabel, setAudienceLabel] = useState("N/A");
   const [slotDetails, setSlotDetails] = useState([]);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [selectedModeratorId, setSelectedModeratorId] = useState(null);
   const [isModeratorProfileOpen, setIsModeratorProfileOpen] = useState(false);
+  const submissionInputRef = useRef(null);
 
   const slotMap = useMemo(() => new Map(slotDetails.map((slot) => [slot.id, slot])), [slotDetails]);
   const isObsolete = Boolean(currentEvent?.isobsolete);
@@ -165,6 +169,7 @@ export default function ViewEvent({ event, onClose, onUpdated }) {
       if (!currentEvent?.id) {
         setModerators([]);
         setAttachments([]);
+        setStudentSubmission(null);
         setAudienceLabel("N/A");
         setSlotDetails([]);
         return;
@@ -172,6 +177,7 @@ export default function ViewEvent({ event, onClose, onUpdated }) {
 
       setIsLoadingModerators(true);
       setIsLoadingAttachments(true);
+      setIsLoadingSubmission(true);
 
       try {
         const targetLabel = await resolveEventTargetLabel(currentEvent.from_table, currentEvent.for_users);
@@ -222,10 +228,32 @@ export default function ViewEvent({ event, onClose, onUpdated }) {
           console.error("Error fetching event attachments:", attachmentError);
         }
 
+        let submissionRow = null;
+        const canLoadSubmission =
+          userData?.role === "Student" &&
+          Boolean(userData?.id) &&
+          Boolean(currentEvent.has_submissions);
+
+        if (canLoadSubmission) {
+          const { data: submissionData, error: submissionError } = await supabase
+            .from("submissions")
+            .select("id, file_name, file_path, submitted_at, deadline, status")
+            .eq("event_id", currentEvent.id)
+            .eq("user_id", userData.id)
+            .maybeSingle();
+
+          if (submissionError) {
+            console.error("Error fetching student submission:", submissionError);
+          } else {
+            submissionRow = submissionData || null;
+          }
+        }
+
         if (!isActive) return;
 
         setModerators(loadedModerators.filter(Boolean));
         setAttachments(Array.isArray(attachmentRows) ? attachmentRows : []);
+        setStudentSubmission(submissionRow);
         setAudienceLabel(targetLabel || "N/A");
         setSlotDetails(nextSlotDetails);
       } catch (error) {
@@ -233,6 +261,7 @@ export default function ViewEvent({ event, onClose, onUpdated }) {
         if (isActive) {
           setModerators([]);
           setAttachments([]);
+          setStudentSubmission(null);
           setAudienceLabel("N/A");
           setSlotDetails([]);
         }
@@ -240,6 +269,7 @@ export default function ViewEvent({ event, onClose, onUpdated }) {
         if (isActive) {
           setIsLoadingModerators(false);
           setIsLoadingAttachments(false);
+          setIsLoadingSubmission(false);
         }
       }
     };
@@ -249,12 +279,42 @@ export default function ViewEvent({ event, onClose, onUpdated }) {
     return () => {
       isActive = false;
     };
-  }, [currentEvent?.id, currentEvent?.from_table, currentEvent?.for_users, currentEvent?.start_slot, currentEvent?.end_slot]);
+  }, [currentEvent?.id, currentEvent?.from_table, currentEvent?.for_users, currentEvent?.start_slot, currentEvent?.end_slot, currentEvent?.has_submissions, userData?.id, userData?.role]);
 
   if (!currentEvent) return null;
 
   const scheduleLabel = getEventScheduleLabel(currentEvent, slotMap);
   const eventTypeLabel = getEventTypeLabel(currentEvent);
+  const isStudent = userData?.role === "Student";
+  const submissionDeadlineValue = currentEvent.expire_at || studentSubmission?.deadline || null;
+  const parsedSubmissionDeadline = submissionDeadlineValue ? new Date(submissionDeadlineValue) : null;
+  const hasValidSubmissionDeadline =
+    parsedSubmissionDeadline && !Number.isNaN(parsedSubmissionDeadline.getTime());
+  const isPastSubmissionDeadline = hasValidSubmissionDeadline
+    ? Date.now() > parsedSubmissionDeadline.getTime()
+    : false;
+  const lateAllowed = Boolean(currentEvent.late_allowed);
+  const canUseSubmission = isStudent && Boolean(currentEvent.has_submissions);
+  const canUploadSubmission =
+    canUseSubmission && (!isPastSubmissionDeadline || lateAllowed);
+  const submissionDeadlineLabel = hasValidSubmissionDeadline
+    ? formatDateTimeLabel(parsedSubmissionDeadline.toISOString())
+    : "N/A";
+
+  const submissionStateLabel = (() => {
+    if (!canUseSubmission) return "Submissions disabled";
+
+    if (studentSubmission) {
+      return studentSubmission.status || (isPastSubmissionDeadline ? "Late" : "Timely");
+    }
+
+    if (!hasValidSubmissionDeadline) return "Due";
+    if (isPastSubmissionDeadline) {
+      return lateAllowed ? "Late" : "Late Submissions Not Allowed";
+    }
+
+    return "Due";
+  })();
 
   const openModeratorProfile = (moderatorId) => {
     if (!moderatorId) return;
@@ -270,17 +330,29 @@ export default function ViewEvent({ event, onClose, onUpdated }) {
   const getAttachmentLabel = (attachment) =>
     attachment?.file_name || attachment?.file_path?.split("/").pop() || "Attachment";
 
-  const getAttachmentBlob = async (filePath) => {
-    const { data, error } = await supabase.storage.from("attachments").download(filePath);
+  const getSubmissionLabel = (submission) =>
+    submission?.file_name || submission?.file_path?.split("/").pop() || "Submission";
+
+  const sanitizeFileName = (name) =>
+    String(name || "")
+      .normalize("NFKD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^\w.-]/g, "_");
+
+  const getStorageBlob = async (bucket, filePath) => {
+    const { data, error } = await supabase.storage.from(bucket).download(filePath);
 
     if (error) {
-      console.error("Error fetching attachment:", error);
-      alert("Failed to open attachment.");
+      console.error("Error fetching file:", error);
+      alert("Failed to open file.");
       return null;
     }
 
     return data;
   };
+
+  const getAttachmentBlob = async (filePath) => getStorageBlob("attachments", filePath);
+  const getSubmissionBlob = async (filePath) => getStorageBlob("submissions", filePath);
 
   const viewAttachment = async (attachment) => {
     if (!attachment?.file_path) return;
@@ -315,6 +387,115 @@ export default function ViewEvent({ event, onClose, onUpdated }) {
     link.download = fileLabel;
     link.click();
     setTimeout(() => URL.revokeObjectURL(url), 1_000);
+  };
+
+  const viewSubmission = async () => {
+    if (!studentSubmission?.file_path) return;
+
+    const blob = await getSubmissionBlob(studentSubmission.file_path);
+    if (!blob) return;
+
+    const url = URL.createObjectURL(blob);
+    const popup = window.open(url, "_blank", "noopener,noreferrer");
+
+    if (!popup) {
+      const fallback = document.createElement("a");
+      fallback.href = url;
+      fallback.target = "_blank";
+      fallback.rel = "noopener noreferrer";
+      fallback.click();
+    }
+
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  };
+
+  const downloadSubmission = async () => {
+    if (!studentSubmission?.file_path) return;
+
+    const blob = await getSubmissionBlob(studentSubmission.file_path);
+    if (!blob) return;
+
+    const url = URL.createObjectURL(blob);
+    const fileLabel = getSubmissionLabel(studentSubmission);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = fileLabel;
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1_000);
+  };
+
+  const uploadSubmission = async (file) => {
+    if (!canUseSubmission || !userData?.id || !currentEvent?.id) return;
+
+    if (!canUploadSubmission) {
+      alert("Late submissions are not allowed for this event.");
+      return;
+    }
+
+    try {
+      setIsUploadingSubmission(true);
+
+      const safeName = sanitizeFileName(file.name);
+      const storagePath = `event/${currentEvent.id}/${userData.id}/${crypto.randomUUID()}-${safeName}`;
+
+      const { error: uploadError } = await supabase
+        .storage
+        .from("submissions")
+        .upload(storagePath, file, { upsert: false });
+
+      if (uploadError) {
+        throw new Error(uploadError.message || "Submission upload failed.");
+      }
+
+      if (studentSubmission?.file_path) {
+        await supabase.storage.from("submissions").remove([studentSubmission.file_path]);
+      }
+
+      const nowIso = new Date().toISOString();
+      const deadlineIso = hasValidSubmissionDeadline ? parsedSubmissionDeadline.toISOString() : null;
+      const status = deadlineIso && new Date(nowIso).getTime() > new Date(deadlineIso).getTime()
+        ? "Late"
+        : "Timely";
+
+      const { data: upsertedSubmission, error: upsertError } = await supabase
+        .from("submissions")
+        .upsert(
+          {
+            event_id: currentEvent.id,
+            user_id: userData.id,
+            institute_id: currentEvent.institute_id || userData?.institute_id || null,
+            file_path: storagePath,
+            file_name: file.name,
+            deadline: deadlineIso,
+            status,
+            submitted_at: nowIso,
+          },
+          { onConflict: "event_id,user_id" }
+        )
+        .select("id, file_name, file_path, submitted_at, deadline, status")
+        .single();
+
+      if (upsertError) {
+        await supabase.storage.from("submissions").remove([storagePath]);
+        throw new Error(upsertError.message || "Failed to save submission record.");
+      }
+
+      setStudentSubmission(upsertedSubmission || null);
+      alert("Submission uploaded successfully.");
+    } catch (error) {
+      console.error("Error uploading submission:", error);
+      alert(error?.message || "Submission upload failed.");
+    } finally {
+      setIsUploadingSubmission(false);
+    }
+  };
+
+  const handleSubmissionFileChange = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+
+    if (!file) return;
+    await uploadSubmission(file);
   };
 
   return (
@@ -447,6 +628,9 @@ export default function ViewEvent({ event, onClose, onUpdated }) {
             <InfoRow label="Type" value={eventTypeLabel} />
             <InfoRow label="From" value={String(currentEvent.from_table || "N/A").toUpperCase()} />
             <InfoRow label="Audience" value={audienceLabel} />
+            <InfoRow label="Submissions" value={currentEvent.has_submissions ? "Enabled" : "Disabled"} />
+            <InfoRow label="Submission deadline" value={submissionDeadlineLabel} />
+            <InfoRow label="Late submission" value={currentEvent.has_submissions ? (lateAllowed ? "Allowed" : "Not allowed") : "N/A"} />
             <InfoRow label="Created" value={formatDateTimeLabel(currentEvent.created_at)} />
             <InfoRow label="Updated" value={formatDateTimeLabel(currentEvent.updated_at)} />
           </div>
@@ -683,6 +867,159 @@ export default function ViewEvent({ event, onClose, onUpdated }) {
           </div>
         )}
       </section>
+
+      {canUseSubmission ? (
+        <section
+          style={{
+            borderRadius: "16px",
+            padding: "16px",
+            border: "1px solid rgba(148, 163, 184, 0.3)",
+            background: "rgba(255, 255, 255, 0.85)",
+            boxShadow: "0 8px 18px rgba(15, 23, 42, 0.06)",
+          }}
+        >
+          <h4 style={{ margin: "0 0 6px", fontSize: "1rem", color: "#0f172a" }}>Submission</h4>
+          <p style={{ margin: "0 0 14px", color: "#64748b", fontSize: "0.88rem" }}>
+            {hasValidSubmissionDeadline
+              ? `Deadline: ${formatDateTimeLabel(parsedSubmissionDeadline.toISOString())}`
+              : "No deadline configured."}
+          </p>
+
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", marginBottom: "12px" }}>
+            <span
+              style={{
+                padding: "7px 10px",
+                borderRadius: "999px",
+                background: "rgba(14, 116, 144, 0.12)",
+                color: "#0f4c5c",
+                fontSize: "0.82rem",
+                fontWeight: 700,
+              }}
+            >
+              Status: {submissionStateLabel}
+            </span>
+          </div>
+
+          {isLoadingSubmission ? (
+            <div style={{ color: "#64748b", fontSize: "0.92rem" }}>Loading submission details...</div>
+          ) : (
+            <div style={{ display: "grid", gap: "10px" }}>
+              {studentSubmission ? (
+                <div
+                  style={{
+                    display: "flex",
+                    gap: "10px",
+                    alignItems: "center",
+                    borderRadius: "12px",
+                    padding: "10px 12px",
+                    border: "1px solid rgba(148, 163, 184, 0.24)",
+                    background: "rgba(248, 250, 252, 0.92)",
+                  }}
+                >
+                  <div
+                    title={getSubmissionLabel(studentSubmission)}
+                    style={{
+                      flex: 1,
+                      minWidth: 0,
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                      color: "#0f172a",
+                      fontSize: "0.9rem",
+                    }}
+                  >
+                    {getSubmissionLabel(studentSubmission)}
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={viewSubmission}
+                    style={{
+                      border: "1px solid rgba(14, 116, 144, 0.3)",
+                      background: "rgba(14, 116, 144, 0.1)",
+                      color: "#0f4c5c",
+                      borderRadius: "8px",
+                      padding: "6px 10px",
+                      cursor: "pointer",
+                      fontWeight: 600,
+                      fontSize: "0.82rem",
+                    }}
+                  >
+                    View
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={downloadSubmission}
+                    style={{
+                      border: "1px solid rgba(30, 64, 175, 0.35)",
+                      background: "rgba(59, 130, 246, 0.12)",
+                      color: "#1e3a8a",
+                      borderRadius: "8px",
+                      padding: "6px 10px",
+                      cursor: "pointer",
+                      fontWeight: 600,
+                      fontSize: "0.82rem",
+                    }}
+                  >
+                    Download
+                  </button>
+                </div>
+              ) : (
+                <div
+                  style={{
+                    borderRadius: "12px",
+                    border: "1px dashed rgba(148, 163, 184, 0.45)",
+                    padding: "14px",
+                    color: "#64748b",
+                    background: "rgba(248, 250, 252, 0.86)",
+                  }}
+                >
+                  No submission uploaded yet.
+                </div>
+              )}
+
+              {!canUploadSubmission ? (
+                <div style={{ color: "#b45309", fontSize: "0.86rem", fontWeight: 600 }}>
+                  Late submissions are not allowed for this event.
+                </div>
+              ) : null}
+
+              <div style={{ display: "flex", gap: "8px", justifyContent: "flex-start" }}>
+                <button
+                  type="button"
+                  onClick={() => submissionInputRef.current?.click()}
+                  disabled={isUploadingSubmission || !canUploadSubmission}
+                  style={{
+                    border: "1px solid rgba(14, 116, 144, 0.35)",
+                    background: "rgba(14, 116, 144, 0.12)",
+                    color: "#0f4c5c",
+                    borderRadius: "8px",
+                    padding: "8px 12px",
+                    cursor: isUploadingSubmission || !canUploadSubmission ? "not-allowed" : "pointer",
+                    fontWeight: 700,
+                    fontSize: "0.84rem",
+                    opacity: isUploadingSubmission || !canUploadSubmission ? 0.65 : 1,
+                  }}
+                >
+                  {isUploadingSubmission
+                    ? "Uploading..."
+                    : studentSubmission
+                      ? "Reupload Submission"
+                      : "Upload Submission"}
+                </button>
+              </div>
+
+              <input
+                ref={submissionInputRef}
+                type="file"
+                style={{ display: "none" }}
+                onChange={handleSubmissionFileChange}
+              />
+            </div>
+          )}
+        </section>
+      ) : null}
 
       <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "2px" }}>
         <button

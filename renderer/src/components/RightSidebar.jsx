@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import MonthlyCalendar from "./MonthlyCalendar";
 import DailyEvents from "./DailyEvents";
 
-export default function RightSidebar({ width, setWeekRange, selectedDate, onSelectedDateChange }) {
+export default function RightSidebar({ width, setWeekRange, selectedDate, onSelectedDateChange, events }) {
 
     const today = new Date();
     const todayDateStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
@@ -72,7 +72,7 @@ export default function RightSidebar({ width, setWeekRange, selectedDate, onSele
                 onMonthYearChange={handleMonthYearChange}
             />
 
-            <DailyEvents selectedDate={selectedDate} />
+            <DailyEvents selectedDate={selectedDate} events={events} />
 
         </div>
     );

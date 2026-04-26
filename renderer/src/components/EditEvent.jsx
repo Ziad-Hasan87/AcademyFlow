@@ -73,6 +73,9 @@ export default function EditEvent({ event, onSave }) {
     const [newFiles, setNewFiles] = useState([]);
     const [deletedAttachments, setDeletedAttachments] = useState([]);
     const [hasAttachments, setHasAttachments] = useState(false);
+    const [hasSubmissions, setHasSubmissions] = useState(false);
+    const [submissionDeadline, setSubmissionDeadline] = useState("");
+    const [lateAllowed, setLateAllowed] = useState(false);
     const [eventImageUrl, setEventImageUrl] = useState("");
     const [isUploadingImage, setIsUploadingImage] = useState(false);
     const [isDeletingImage, setIsDeletingImage] = useState(false);
@@ -193,6 +196,30 @@ export default function EditEvent({ event, onSave }) {
             : String(timeValue);
 
         const parsed = new Date(`${dateValue}T${normalizedTime}`);
+        if (Number.isNaN(parsed.getTime())) return null;
+
+        return parsed.toISOString();
+    };
+
+    const toDateTimeLocalInputValue = (value) => {
+        if (!value) return "";
+
+        const parsed = new Date(value);
+        if (Number.isNaN(parsed.getTime())) return "";
+
+        const year = parsed.getFullYear();
+        const month = String(parsed.getMonth() + 1).padStart(2, "0");
+        const day = String(parsed.getDate()).padStart(2, "0");
+        const hours = String(parsed.getHours()).padStart(2, "0");
+        const minutes = String(parsed.getMinutes()).padStart(2, "0");
+
+        return `${year}-${month}-${day}T${hours}:${minutes}`;
+    };
+
+    const toIsoDateTimeValue = (value) => {
+        if (!value) return null;
+
+        const parsed = new Date(value);
         if (Number.isNaN(parsed.getTime())) return null;
 
         return parsed.toISOString();
@@ -411,6 +438,47 @@ export default function EditEvent({ event, onSave }) {
         return true;
     };
 
+    const syncSubmissionSettings = async (eventId, deadlineIso) => {
+        if (!eventId) return true;
+
+        const { data: submissionRows, error: submissionError } = await supabase
+            .from("submissions")
+            .select("id, submitted_at")
+            .eq("event_id", eventId);
+
+        if (submissionError) {
+            console.error("Error loading submissions for sync:", submissionError);
+            return false;
+        }
+
+        const rows = Array.isArray(submissionRows) ? submissionRows : [];
+        if (rows.length === 0) return true;
+
+        const updates = rows.map((row) => {
+            const submittedAt = row.submitted_at ? new Date(row.submitted_at).getTime() : null;
+            const deadlineTime = deadlineIso ? new Date(deadlineIso).getTime() : null;
+            const status = deadlineTime && submittedAt && submittedAt > deadlineTime ? "Late" : "Timely";
+
+            return supabase
+                .from("submissions")
+                .update({
+                    deadline: deadlineIso,
+                    status,
+                })
+                .eq("id", row.id);
+        });
+
+        const updateResults = await Promise.all(updates);
+        const firstError = updateResults.find((result) => result.error)?.error;
+
+        if (firstError) {
+            console.error("Error syncing submission deadlines:", firstError);
+            return false;
+        }
+
+        return true;
+    };
+
     const addSelectedModerator = () => {
         if (!selectedTeacherToAdd) return;
 
@@ -497,6 +565,9 @@ export default function EditEvent({ event, onSave }) {
         setForUsers(event.for_users || "");
         setIsReschedulable(event.is_reschedulable ?? true);
         setHasAttachments(event.has_attachments ?? false);
+        setHasSubmissions(event.has_submissions ?? false);
+        setSubmissionDeadline(toDateTimeLocalInputValue(event.expire_at));
+        setLateAllowed(event.late_allowed ?? false);
         setEventImageUrl(event.image_path || "");
 
     }, [event]);
@@ -767,6 +838,11 @@ export default function EditEvent({ event, onSave }) {
             return;
         }
 
+        if (hasSubmissions && !submissionDeadline) {
+            alert("Submission deadline required when submissions are enabled");
+            return;
+        }
+
         if (type === "slot") {
 
             if (!startSlot || !endSlot) {
@@ -794,6 +870,13 @@ export default function EditEvent({ event, onSave }) {
 
         if (type === "time" && (!startAtValue || !endAtValue)) {
             alert("Invalid start or end time format");
+            return;
+        }
+
+        const submissionDeadlineIso = hasSubmissions ? toIsoDateTimeValue(submissionDeadline) : null;
+
+        if (hasSubmissions && !submissionDeadlineIso) {
+            alert("Invalid submission deadline");
             return;
         }
 
@@ -842,7 +925,10 @@ export default function EditEvent({ event, onSave }) {
             from_table: effectiveFromTable,
             for_users: targetForUsers,
 
-            is_reschedulable: isReschedulable
+            is_reschedulable: isReschedulable,
+            has_submissions: hasSubmissions,
+            late_allowed: hasSubmissions ? lateAllowed : false,
+            expire_at: submissionDeadlineIso
 
         };
 
@@ -857,7 +943,10 @@ export default function EditEvent({ event, onSave }) {
             end_at: event.end_at || event.end_time,
             from_table: event.from_table || effectiveFromTable,
             for_users: event.for_users || targetForUsers,
-            is_reschedulable: event.is_reschedulable
+            is_reschedulable: event.is_reschedulable,
+            has_submissions: event.has_submissions,
+            late_allowed: event.late_allowed,
+            expire_at: event.expire_at
         };
 
         const { error } = await supabase
@@ -959,6 +1048,13 @@ export default function EditEvent({ event, onSave }) {
 
             if (!moderatorSyncOk) {
                 alert("Event updated, but moderators could not be saved");
+                return;
+            }
+
+            const submissionSyncOk = await syncSubmissionSettings(event.id, submissionDeadlineIso);
+
+            if (!submissionSyncOk) {
+                alert("Event updated, but submission settings could not be fully synced");
                 return;
             }
 
@@ -1406,6 +1502,53 @@ export default function EditEvent({ event, onSave }) {
 
                 </label>
 
+            </div>
+
+            <div className="form-group-box">
+                <h4 className="form-section-title">Submissions</h4>
+
+                <div className="form-field">
+                    <label>
+                        <input
+                            type="checkbox"
+                            checked={hasSubmissions}
+                            onChange={(e) => {
+                                const nextEnabled = e.target.checked;
+                                setHasSubmissions(nextEnabled);
+                                if (!nextEnabled) {
+                                    setSubmissionDeadline("");
+                                    setLateAllowed(false);
+                                }
+                            }}
+                        />
+                        Allow Submissions
+                    </label>
+                </div>
+
+                {hasSubmissions && (
+                    <>
+                        <div className="form-field">
+                            <label>Submission Deadline</label>
+                            <input
+                                type="datetime-local"
+                                className="form-input"
+                                value={submissionDeadline}
+                                onChange={(e) => setSubmissionDeadline(e.target.value)}
+                            />
+                        </div>
+
+                        <div className="form-field">
+                            <label>
+                                <input
+                                    type="checkbox"
+                                    checked={lateAllowed}
+                                    onChange={(e) => setLateAllowed(e.target.checked)}
+                                />
+                                Allow Late Submission
+                            </label>
+                        </div>
+                    </>
+                )}
             </div>
 
             <div className="form-group-box">

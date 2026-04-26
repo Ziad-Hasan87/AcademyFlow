@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from "react";
+import React, { createContext, useContext, useState, useEffect, useRef } from "react";
 import { getUserProfile, logOut as logOutAuth } from "../utils/authentication";
 import supabase from "../utils/supabase";
 
@@ -10,27 +10,50 @@ export function AuthProvider({ children }) {
   const [userData, setUserData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const userDataRef = useRef(null);
+
+  useEffect(() => {
+    userDataRef.current = userData;
+  }, [userData]);
 
   useEffect(() => {
     let isMounted = true;
 
-    const syncUserFromSession = async (session) => {
+    const syncUserFromSession = async (
+      session,
+      { showLoader = false, forceProfileRefresh = false } = {}
+    ) => {
       if (!isMounted) return;
 
       try {
-        setLoading(true);
+        if (showLoader) {
+          setLoading(true);
+        }
 
         if (session?.user) {
+          const currentUser = userDataRef.current;
+          const sameUser =
+            currentUser?.id && session.user?.id && currentUser.id === session.user.id;
+
+          if (sameUser && !forceProfileRefresh) {
+            localStorage.setItem("isAuthenticated", "true");
+            setError(null);
+            return;
+          }
+
           const profile = await getUserProfile();
           if (profile) {
             setUserData(profile);
+            userDataRef.current = profile;
             localStorage.setItem("isAuthenticated", "true");
           } else {
             setUserData(null);
+            userDataRef.current = null;
             localStorage.removeItem("isAuthenticated");
           }
         } else {
           setUserData(null);
+          userDataRef.current = null;
           localStorage.removeItem("isAuthenticated");
         }
 
@@ -39,9 +62,10 @@ export function AuthProvider({ children }) {
         console.error("Error fetching user profile:", err);
         setError(err.message);
         setUserData(null);
+        userDataRef.current = null;
         localStorage.removeItem("isAuthenticated");
       } finally {
-        if (isMounted) setLoading(false);
+        if (isMounted && showLoader) setLoading(false);
       }
     };
 
@@ -51,15 +75,24 @@ export function AuthProvider({ children }) {
         console.error("Error loading auth session:", sessionError);
       }
 
-      await syncUserFromSession(data?.session || null);
+      await syncUserFromSession(data?.session || null, {
+        showLoader: true,
+        forceProfileRefresh: true,
+      });
     };
 
     initializeAuth();
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      void syncUserFromSession(session || null);
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      const showLoader = event === "SIGNED_OUT";
+      const forceProfileRefresh = event === "SIGNED_IN" || event === "USER_UPDATED";
+
+      void syncUserFromSession(session || null, {
+        showLoader,
+        forceProfileRefresh,
+      });
     });
 
     return () => {

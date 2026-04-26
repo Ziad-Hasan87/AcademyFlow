@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { FiCamera, FiTrash2 } from "react-icons/fi";
 import { useAuth } from "../contexts/AuthContext";
 import supabase from "../utils/supabase";
+import { hasPermission } from "../utils/types";
 import {
   fetchDepartments,
   fetchInstituteDetails,
@@ -38,6 +39,7 @@ function formatRoleLabel(value) {
 export default function ViewInstitute() {
   const { userData } = useAuth();
   const instituteId = userData?.institute_id;
+  const canEditInstituteImage = hasPermission(userData?.role, "Admin");
   const cloudinaryCloudName = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME;
   const cloudinaryUploadPreset = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET;
 
@@ -134,11 +136,13 @@ export default function ViewInstitute() {
   };
 
   const handleUploadClick = () => {
+    if (!canEditInstituteImage) return;
     if (!instituteId || isImageActionBusy) return;
     fileInputRef.current?.click();
   };
 
   const handleDeleteImage = async () => {
+    if (!canEditInstituteImage) return;
     if (!instituteId || !hasInstituteImage || isImageActionBusy) return;
 
     const isConfirmed = window.confirm("Delete institute image?");
@@ -170,6 +174,11 @@ export default function ViewInstitute() {
   };
 
   const handleImageFileChange = async (event) => {
+    if (!canEditInstituteImage) {
+      event.target.value = "";
+      return;
+    }
+
     const selectedFile = event.target.files?.[0];
     event.target.value = "";
 
@@ -363,31 +372,33 @@ export default function ViewInstitute() {
             </div>
           )}
 
-          <div className="profile-image-actions">
-            {hasInstituteImage && (
+          {canEditInstituteImage && (
+            <div className="profile-image-actions">
+              {hasInstituteImage && (
+                <button
+                  type="button"
+                  className="profile-image-delete-button"
+                  onClick={handleDeleteImage}
+                  disabled={isImageActionBusy}
+                  aria-label="Delete institute image"
+                  title="Delete institute image"
+                >
+                  <FiTrash2 size={14} />
+                </button>
+              )}
+
               <button
                 type="button"
-                className="profile-image-delete-button"
-                onClick={handleDeleteImage}
+                className="profile-image-upload-button"
+                onClick={handleUploadClick}
                 disabled={isImageActionBusy}
-                aria-label="Delete institute image"
-                title="Delete institute image"
+                aria-label={hasInstituteImage ? "Update institute image" : "Upload institute image"}
+                title={hasInstituteImage ? "Update institute image" : "Upload institute image"}
               >
-                <FiTrash2 size={14} />
+                <FiCamera size={14} />
               </button>
-            )}
-
-            <button
-              type="button"
-              className="profile-image-upload-button"
-              onClick={handleUploadClick}
-              disabled={isImageActionBusy}
-              aria-label={hasInstituteImage ? "Update institute image" : "Upload institute image"}
-              title={hasInstituteImage ? "Update institute image" : "Upload institute image"}
-            >
-              <FiCamera size={14} />
-            </button>
-          </div>
+            </div>
+          )}
 
           <input
             ref={(node) => {
@@ -437,12 +448,6 @@ export default function ViewInstitute() {
                 <div className="profile-field-content">
                   <label className="profile-field-label">Active</label>
                   <span className="profile-field-value">{instituteInfo?.is_active ? "Yes" : "No"}</span>
-                </div>
-              </div>
-              <div className="profile-field">
-                <div className="profile-field-content">
-                  <label className="profile-field-label">Bot ID</label>
-                  <span className="profile-field-value">{instituteInfo?.botid || "N/A"}</span>
                 </div>
               </div>
             </>

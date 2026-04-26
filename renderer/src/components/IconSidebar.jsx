@@ -1,18 +1,16 @@
 import React from "react";
-import { FiUsers, FiShield, FiActivity, FiBook, FiBookOpen, FiSun, FiUser, FiSearch } from "react-icons/fi";
+import { FiShield, FiActivity, FiBook, FiBookOpen, FiSun, FiMessageCircle, FiSearch } from "react-icons/fi";
 import { GoOrganization } from "react-icons/go";
-import { FaRegCalendarTimes, FaCog, FaLayerGroup,FaRegUser,FaRegIdCard, FaRobot } from "react-icons/fa";
+import { FaRegCalendarTimes, FaCog, FaLayerGroup, FaRegIdCard, FaRobot } from "react-icons/fa";
 import { FaPeopleRoof } from "react-icons/fa6";
 import { BsPersonCircle } from "react-icons/bs";
 import { MdOutlineGroupWork } from "react-icons/md";
 import { GrGroup } from "react-icons/gr";
-import { useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { hasPermission } from "../utils/types";
 
 export default function IconSidebar({ onIconClick, activePage }) {
-  const navigate = useNavigate();
-  const { userData, logout } = useAuth();
+  const { userData } = useAuth();
 
   const topIcons = [
     { id: "users", icon: FaRegIdCard, name: "Users", minRole: "Admin" },
@@ -30,6 +28,7 @@ export default function IconSidebar({ onIconClick, activePage }) {
     { id: "routines", icon: FiActivity, name: "Routines", minRole: "Moderator" },
     { id: "viewinstitute", icon: FiSun, name: "Institute", minRole: "Student" },
     { id: "search", icon: FiSearch, name: "Search", minRole: "Student" },
+    { id: "messages", icon: FiMessageCircle, name: "Messages", minRole: "Student" },
   ];
   
   const userRole = userData?.role;

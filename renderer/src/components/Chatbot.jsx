@@ -2,13 +2,6 @@ import { useState, useRef, useEffect } from "react";
 import { useAuth } from "../contexts/AuthContext";
 import { sendChatMessage } from "../utils/chatbot";
 
-const QUICK_PROMPTS = [
-  "Give me routine summary",
-  "When is my next class?",
-  "When is my next vacation?",
-  "Show CSE 3220 schedule for Group B",
-];
-
 function formatMessageTime(value) {
   if (!value) return "";
   const d = new Date(value);
@@ -83,10 +76,6 @@ export default function Chatbot() {
     }
   }
 
-  function handleQuickPrompt(prompt) {
-    setInput(prompt);
-  }
-
   function handleKeyDown(e) {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
@@ -154,20 +143,6 @@ export default function Chatbot() {
               </div>
             )}
             <div ref={messagesEndRef} />
-          </div>
-
-          <div className="chatbot-quick-prompts">
-            {QUICK_PROMPTS.map((prompt) => (
-              <button
-                key={prompt}
-                className="chatbot-prompt-chip"
-                onClick={() => handleQuickPrompt(prompt)}
-                disabled={loading}
-                type="button"
-              >
-                {prompt}
-              </button>
-            ))}
           </div>
 
           <div className="chatbot-input-area">

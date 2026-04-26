@@ -69,7 +69,30 @@ function getEventImageUrl(event) {
   return event?.image_url || event?.image_path || "";
 }
 
-export default function DailyEvents({ selectedDate }) {
+function getEventDateValue(event) {
+  if (event?.date) return String(event.date).slice(0, 10);
+
+  const startAt = getStartTimeValue(event);
+  if (!startAt) return null;
+
+  const parsed = new Date(startAt);
+  if (Number.isNaN(parsed.getTime())) return null;
+
+  const year = parsed.getFullYear();
+  const month = String(parsed.getMonth() + 1).padStart(2, "0");
+  const day = String(parsed.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function sortEventsByStartTime(items, fallbackDate) {
+  return [...items].sort((a, b) => {
+    const aTime = new Date(getStartTimeValue(a) || `${fallbackDate}T00:00:00`).getTime();
+    const bTime = new Date(getStartTimeValue(b) || `${fallbackDate}T00:00:00`).getTime();
+    return aTime - bTime;
+  });
+}
+
+export default function DailyEvents({ selectedDate, events: visibleEvents }) {
   const { userData } = useAuth();
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -111,7 +134,26 @@ export default function DailyEvents({ selectedDate }) {
 
   useEffect(() => {
     const fetchDailyTimeEvents = async () => {
-      if (!selectedDate || !userData?.id) {
+      if (!selectedDate) {
+        setEvents([]);
+        return;
+      }
+
+      if (Array.isArray(visibleEvents)) {
+        const fromSharedEvents = sortEventsByStartTime(
+          visibleEvents.filter((event) => {
+            const eventDate = getEventDateValue(event);
+            return eventDate === selectedDate && isTimeEvent(event);
+          }),
+          selectedDate
+        );
+
+        setEvents(fromSharedEvents);
+        setLoading(false);
+        return;
+      }
+
+      if (!userData?.id) {
         setEvents([]);
         return;
       }
@@ -132,20 +174,17 @@ export default function DailyEvents({ selectedDate }) {
       }
 
       const rawEvents = Array.isArray(data) ? data : [];
-      const onlyTimeEvents = rawEvents
-        .filter((event) => isTimeEvent(event))
-        .sort((a, b) => {
-          const aTime = new Date(getStartTimeValue(a) || `${selectedDate}T00:00:00`).getTime();
-          const bTime = new Date(getStartTimeValue(b) || `${selectedDate}T00:00:00`).getTime();
-          return aTime - bTime;
-        });
+      const onlyTimeEvents = sortEventsByStartTime(
+        rawEvents.filter((event) => isTimeEvent(event)),
+        selectedDate
+      );
 
       setEvents(onlyTimeEvents);
       setLoading(false);
     };
 
     fetchDailyTimeEvents();
-  }, [selectedDate, userData?.id, refreshTick]);
+  }, [selectedDate, userData?.id, visibleEvents, refreshTick]);
 
   return (
     <section className="daily-events-container">

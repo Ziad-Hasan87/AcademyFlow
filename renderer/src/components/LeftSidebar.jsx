@@ -9,6 +9,7 @@ import VacationsPage from "../pages/VacationsPage";
 import DepartmentsPage from "../pages/DepartmentsPage";
 import SlotInfoPage from "../pages/SlotInfoPage";
 import RoutinesPage from "../pages/RoutinesPage";
+import MessagesPage from "../pages/MessagesPage";
 import BotInfo from "./botinfo";
 
 export default function LeftSidebar({ width, onCreateClick, activePage }) {
@@ -38,6 +39,8 @@ export default function LeftSidebar({ width, onCreateClick, activePage }) {
         return <RoutinesPage />;
       case "botinfo":
         return <BotInfo />;
+      case "messages":
+        return <MessagesPage />;
       default:
         return null;
     }
