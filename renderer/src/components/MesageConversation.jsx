@@ -3,6 +3,8 @@ import { FiPaperclip, FiSend, FiX } from "react-icons/fi";
 import supabase from "../utils/supabase";
 import { useAuth } from "../contexts/AuthContext";
 
+const MESSAGE_PAGE_SIZE = 20;
+
 function formatMessageTime(value) {
   if (!value) return "";
 
@@ -39,7 +41,12 @@ export default function MesageConversation({
   const [draft, setDraft] = useState("");
   const [selectedFile, setSelectedFile] = useState(null);
   const [participantNameMap, setParticipantNameMap] = useState(new Map());
+  const [peerName, setPeerName] = useState("User");
+  const [hasMoreOlderMessages, setHasMoreOlderMessages] = useState(true);
+  const [isLoadingOlderMessages, setIsLoadingOlderMessages] = useState(false);
+  const [shouldAutoScrollToBottom, setShouldAutoScrollToBottom] = useState(false);
   const fileInputRef = useRef(null);
+  const messageListRef = useRef(null);
 
   const currentUserId = userData?.id || null;
 
@@ -47,9 +54,33 @@ export default function MesageConversation({
     setResolvedConversationId(conversationId || null);
   }, [conversationId]);
 
+  const loadParticipantNames = async (userIds) => {
+    const uniqueIds = Array.from(new Set((userIds || []).filter(Boolean)));
+    if (uniqueIds.length === 0) return;
+
+    const { data: userRows, error: userError } = await supabase
+      .from("users")
+      .select("id, name")
+      .in("id", uniqueIds);
+
+    if (userError) {
+      console.error("Error loading participant names:", userError);
+      return;
+    }
+
+    setParticipantNameMap((prev) => {
+      const next = new Map(prev);
+      (userRows || []).forEach((row) => {
+        next.set(row.id, row.name || "Unknown");
+      });
+      return next;
+    });
+  };
+
   const loadMessages = async () => {
     if (!resolvedConversationId) {
       setMessages([]);
+      setHasMoreOlderMessages(false);
       return;
     }
 
@@ -73,26 +104,18 @@ export default function MesageConversation({
           )
         `)
         .eq("conversation_id", resolvedConversationId)
-        .order("created_at", { ascending: true });
+        .order("created_at", { ascending: false })
+        .limit(MESSAGE_PAGE_SIZE);
 
       if (messageError) throw messageError;
 
-      const senderIds = Array.from(new Set((messageRows || []).map((row) => row.sender_id).filter(Boolean)));
-      let nextNameMap = new Map();
+      const latestRowsAsc = Array.isArray(messageRows) ? [...messageRows].reverse() : [];
+      const senderIds = latestRowsAsc.map((row) => row.sender_id).filter(Boolean);
 
-      if (senderIds.length > 0) {
-        const { data: userRows, error: userError } = await supabase
-          .from("users")
-          .select("id, name")
-          .in("id", senderIds);
-
-        if (userError) throw userError;
-
-        nextNameMap = new Map((userRows || []).map((row) => [row.id, row.name || "Unknown"]));
-      }
-
-      setParticipantNameMap(nextNameMap);
-      setMessages(Array.isArray(messageRows) ? messageRows : []);
+      await loadParticipantNames(senderIds);
+      setMessages(latestRowsAsc);
+      setHasMoreOlderMessages((messageRows || []).length === MESSAGE_PAGE_SIZE);
+      setShouldAutoScrollToBottom(true);
     } catch (error) {
       console.error("Error loading conversation messages:", error);
       setErrorMessage(error?.message || "Failed to load messages.");
@@ -102,9 +125,154 @@ export default function MesageConversation({
     }
   };
 
+  const loadOlderMessages = async () => {
+    if (!resolvedConversationId) return;
+    if (isLoadingOlderMessages || !hasMoreOlderMessages) return;
+    if (!messages.length) return;
+
+    const oldestCreatedAt = messages[0]?.created_at;
+    if (!oldestCreatedAt) return;
+
+    const listEl = messageListRef.current;
+    const prevScrollHeight = listEl?.scrollHeight || 0;
+    const prevScrollTop = listEl?.scrollTop || 0;
+
+    setIsLoadingOlderMessages(true);
+
+    try {
+      const { data: olderRowsDesc, error: olderRowsError } = await supabase
+        .from("messages")
+        .select(`
+          id,
+          content,
+          created_at,
+          sender_id,
+          message_type,
+          attachment_id,
+          attachments:attachments!messages_attachment_id_fkey(
+            id,
+            file_name,
+            file_path
+          )
+        `)
+        .eq("conversation_id", resolvedConversationId)
+        .lt("created_at", oldestCreatedAt)
+        .order("created_at", { ascending: false })
+        .limit(MESSAGE_PAGE_SIZE);
+
+      if (olderRowsError) throw olderRowsError;
+
+      const olderRowsAsc = Array.isArray(olderRowsDesc) ? [...olderRowsDesc].reverse() : [];
+      const senderIds = olderRowsAsc.map((row) => row.sender_id).filter(Boolean);
+      await loadParticipantNames(senderIds);
+
+      setMessages((prev) => {
+        const existingIds = new Set(prev.map((row) => row.id));
+        const uniqueOlderRows = olderRowsAsc.filter((row) => !existingIds.has(row.id));
+        return [...uniqueOlderRows, ...prev];
+      });
+
+      setHasMoreOlderMessages((olderRowsDesc || []).length === MESSAGE_PAGE_SIZE);
+
+      requestAnimationFrame(() => {
+        const nextListEl = messageListRef.current;
+        if (!nextListEl) return;
+        const nextScrollHeight = nextListEl.scrollHeight;
+        nextListEl.scrollTop = nextScrollHeight - prevScrollHeight + prevScrollTop;
+      });
+    } catch (error) {
+      console.error("Error loading older messages:", error);
+    } finally {
+      setIsLoadingOlderMessages(false);
+    }
+  };
+
   useEffect(() => {
     loadMessages();
   }, [resolvedConversationId]);
+
+  useEffect(() => {
+    const listEl = messageListRef.current;
+    if (!listEl) return undefined;
+
+    const onScroll = () => {
+      if (listEl.scrollTop <= 80) {
+        loadOlderMessages();
+      }
+    };
+
+    listEl.addEventListener("scroll", onScroll);
+    return () => {
+      listEl.removeEventListener("scroll", onScroll);
+    };
+  }, [resolvedConversationId, messages, hasMoreOlderMessages, isLoadingOlderMessages]);
+
+  useEffect(() => {
+    if (!shouldAutoScrollToBottom) return;
+
+    requestAnimationFrame(() => {
+      const listEl = messageListRef.current;
+      if (!listEl) return;
+      listEl.scrollTop = listEl.scrollHeight;
+      setShouldAutoScrollToBottom(false);
+    });
+  }, [messages, shouldAutoScrollToBottom]);
+
+  useEffect(() => {
+    const loadPeerName = async () => {
+      if (targetUserId) {
+        const { data: targetUser, error: targetUserError } = await supabase
+          .from("users")
+          .select("id, name")
+          .eq("id", targetUserId)
+          .maybeSingle();
+
+        if (!targetUserError && targetUser?.name) {
+          setPeerName(targetUser.name);
+          return;
+        }
+      }
+
+      if (!resolvedConversationId || !currentUserId) {
+        setPeerName("Conversation");
+        return;
+      }
+
+      const { data: participantRows, error: participantError } = await supabase
+        .from("conversation_participants")
+        .select("user_id")
+        .eq("conversation_id", resolvedConversationId)
+        .neq("user_id", currentUserId);
+
+      if (participantError) {
+        console.error("Error loading conversation participants:", participantError);
+        setPeerName("Conversation");
+        return;
+      }
+
+      const peerUserId = participantRows?.[0]?.user_id;
+      if (!peerUserId) {
+        setPeerName("Conversation");
+        return;
+      }
+
+      const { data: peerUser, error: peerUserError } = await supabase
+        .from("users")
+        .select("id, name")
+        .eq("id", peerUserId)
+        .maybeSingle();
+
+      if (peerUserError) {
+        console.error("Error loading peer user:", peerUserError);
+        setPeerName("Conversation");
+        return;
+      }
+
+      setPeerName(peerUser?.name || "Conversation");
+    };
+
+    loadPeerName();
+  }, [resolvedConversationId, targetUserId, currentUserId]);
 
   useEffect(() => {
     if (!resolvedConversationId) return undefined;
@@ -123,6 +291,11 @@ export default function MesageConversation({
           const newMessage = payload?.new;
           if (!newMessage?.id) return;
 
+          const listEl = messageListRef.current;
+          const isNearBottom = !listEl
+            ? true
+            : listEl.scrollHeight - listEl.scrollTop - listEl.clientHeight < 140;
+
           setMessages((prev) => {
             const alreadyExists = prev.some((message) => message.id === newMessage.id);
             if (alreadyExists) return prev;
@@ -135,6 +308,10 @@ export default function MesageConversation({
               },
             ];
           });
+
+          if (isNearBottom || String(newMessage.sender_id) === String(currentUserId)) {
+            setShouldAutoScrollToBottom(true);
+          }
 
           if (newMessage.sender_id) {
             setParticipantNameMap((prev) => {
@@ -184,12 +361,13 @@ export default function MesageConversation({
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [resolvedConversationId]);
+  }, [resolvedConversationId, currentUserId]);
 
   const conversationTitle = useMemo(() => {
+    if (peerName) return peerName;
     if (!resolvedConversationId && targetUserId) return "New conversation";
     return "Conversation";
-  }, [resolvedConversationId, targetUserId]);
+  }, [peerName, resolvedConversationId, targetUserId]);
 
   const conversationInitial = useMemo(() => {
     const trimmed = String(conversationTitle || "C").trim();
@@ -370,7 +548,7 @@ export default function MesageConversation({
 
       setDraft("");
       setSelectedFile(null);
-      await loadMessages();
+      setShouldAutoScrollToBottom(true);
       await Promise.resolve(onMessageSent?.());
     } catch (error) {
       console.error("Error sending message:", error);
@@ -454,23 +632,27 @@ export default function MesageConversation({
 
         <div style={{ minWidth: 0 }}>
           <div style={{ fontSize: "0.96rem", fontWeight: 700, color: "#0f172a" }}>{conversationTitle}</div>
-          <div style={{ fontSize: "0.76rem", color: "#64748b" }}>
-            {resolvedConversationId ? "Messages refresh every 5s" : "Conversation starts when you send"}
-          </div>
+          <div style={{ fontSize: "0.76rem", color: "#64748b" }}>Direct message</div>
         </div>
       </div>
 
       <div
+        ref={messageListRef}
         style={{
           flex: 1,
           minHeight: 0,
           overflowY: "auto",
           padding: "16px 14px",
           background: "#edf4fc",
-          display: "grid",
+          display: "flex",
+          flexDirection: "column",
           gap: "11px",
         }}
       >
+        {isLoadingOlderMessages ? (
+          <div style={{ color: "#64748b", fontSize: "0.82rem", textAlign: "center" }}>Loading older messages...</div>
+        ) : null}
+
         {loadingMessages ? (
           <div style={{ color: "#64748b", fontSize: "0.9rem" }}>Loading messages...</div>
         ) : null}
@@ -495,7 +677,8 @@ export default function MesageConversation({
             <div
               key={message.id}
               style={{
-                justifySelf: isOwn ? "end" : "start",
+                alignSelf: isOwn ? "flex-end" : "flex-start",
+                width: "fit-content",
                 maxWidth: "80%",
                 borderRadius: isOwn ? "14px 14px 6px 14px" : "14px 14px 14px 6px",
                 border: isOwn
@@ -508,6 +691,7 @@ export default function MesageConversation({
                 display: "grid",
                 gap: "6px",
                 boxShadow: "0 6px 14px rgba(15, 23, 42, 0.06)",
+                overflowWrap: "anywhere",
               }}
             >
               <div style={{ display: "flex", justifyContent: "space-between", gap: "10px", alignItems: "center" }}>
@@ -516,7 +700,7 @@ export default function MesageConversation({
               </div>
 
               {message.content ? (
-                <div style={{ color: "#0f172a", fontSize: "0.88rem", whiteSpace: "pre-wrap" }}>
+                <div style={{ color: "#0f172a", fontSize: "0.88rem", whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
                   {message.content}
                 </div>
               ) : null}
