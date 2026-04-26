@@ -400,15 +400,27 @@ export default function MesageConversation({
 
   const hasPendingContent = Boolean(draft.trim() || selectedFile);
 
+  const handleDraftKeyDown = (event) => {
+    if (event.key !== "Enter") return;
+    if (event.nativeEvent?.isComposing) return;
+    if (event.shiftKey) return;
+
+    event.preventDefault();
+
+    if (isSending || !hasPendingContent) return;
+    sendMessage();
+  };
+
   return (
     <div
       style={{
         display: "flex",
         flexDirection: "column",
+        height: "100%",
         minHeight: "520px",
         border: "1px solid rgba(148, 163, 184, 0.25)",
         borderRadius: "14px",
-        background: "#f4f7fb",
+        background: "linear-gradient(180deg, #f8fbff 0%, #f1f6fd 100%)",
         overflow: "hidden",
       }}
     >
@@ -451,13 +463,12 @@ export default function MesageConversation({
       <div
         style={{
           flex: 1,
-          minHeight: "300px",
-          maxHeight: "520px",
+          minHeight: 0,
           overflowY: "auto",
-          padding: "14px",
-          background: "#edf3fb",
+          padding: "16px 14px",
+          background: "#edf4fc",
           display: "grid",
-          gap: "10px",
+          gap: "11px",
         }}
       >
         {loadingMessages ? (
@@ -485,16 +496,18 @@ export default function MesageConversation({
               key={message.id}
               style={{
                 justifySelf: isOwn ? "end" : "start",
-                maxWidth: "82%",
-                borderRadius: "12px",
-                border: "1px solid rgba(148, 163, 184, 0.2)",
+                maxWidth: "80%",
+                borderRadius: isOwn ? "14px 14px 6px 14px" : "14px 14px 14px 6px",
+                border: isOwn
+                  ? "1px solid rgba(14, 116, 144, 0.28)"
+                  : "1px solid rgba(148, 163, 184, 0.24)",
                 background: isOwn
-                  ? "linear-gradient(180deg, rgba(217, 236, 255, 0.98) 0%, rgba(237, 247, 255, 0.98) 100%)"
-                  : "#ffffff",
-                padding: "10px 11px",
+                  ? "linear-gradient(180deg, rgba(224, 242, 254, 0.98) 0%, rgba(207, 250, 254, 0.97) 100%)"
+                  : "linear-gradient(180deg, rgba(255, 255, 255, 1) 0%, rgba(248, 250, 252, 1) 100%)",
+                padding: "10px 12px",
                 display: "grid",
                 gap: "6px",
-                boxShadow: "0 2px 6px rgba(15, 23, 42, 0.04)",
+                boxShadow: "0 6px 14px rgba(15, 23, 42, 0.06)",
               }}
             >
               <div style={{ display: "flex", justifyContent: "space-between", gap: "10px", alignItems: "center" }}>
@@ -539,6 +552,7 @@ export default function MesageConversation({
             borderBottom: "1px solid rgba(148, 163, 184, 0.2)",
             padding: "8px 12px",
             background: "#ffffff",
+            flexShrink: 0,
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
@@ -580,7 +594,17 @@ export default function MesageConversation({
         </div>
       ) : null}
 
-      <div style={{ padding: "12px", background: "#ffffff" }}>
+      <div
+        style={{
+          padding: "12px",
+          background: "#ffffff",
+          borderTop: "1px solid rgba(148, 163, 184, 0.2)",
+          flexShrink: 0,
+          position: "sticky",
+          bottom: 0,
+          zIndex: 2,
+        }}
+      >
         <div
           style={{
             display: "grid",
@@ -612,6 +636,7 @@ export default function MesageConversation({
         <textarea
           value={draft}
           onChange={(event) => setDraft(event.target.value)}
+          onKeyDown={handleDraftKeyDown}
           placeholder="Write a message..."
           rows={2}
           style={{
